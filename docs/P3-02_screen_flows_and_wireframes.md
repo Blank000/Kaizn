@@ -1,0 +1,414 @@
+# P3-02 — Screen Flows & Wireframes
+
+Covers the 3 critical user journeys in v1. Each flow includes a step-by-step description and a lo-fi ASCII wireframe of every screen involved.
+
+---
+
+## Journey 1 — App Open → Streak Popup → Quick Log an Entry
+
+### Steps
+1. Alok opens the app
+2. Streak popup slides up automatically
+3. Alok dismisses it with a tap
+4. Home screen is visible — Today's Summary is shown
+5. Alok taps Quick Log
+6. Smart suggestions appear (what hasn't been logged today)
+7. Alok selects a project/metric
+8. Alok fills in the value and submits
+9. Points float up, green checkmark bursts — entry saved
+
+---
+
+### Screen 1A — Streak Popup (Modal)
+
+```
+┌─────────────────────────────────┐
+│                                 │
+│         🔥 (animated)           │
+│                                 │
+│           42                    │
+│        DAY STREAK               │
+│                                 │
+│   Personal Best: 67 days        │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   Keep it going, Alok!   │  │
+│  └───────────────────────────┘  │
+│                                 │
+│      Tap anywhere to close      │
+└─────────────────────────────────┘
+```
+
+- Slides up from bottom on every app open
+- Flame icon pulses slowly
+- If milestone hit → replace with full-screen confetti version (see 1A-M)
+
+---
+
+### Screen 1A-M — Milestone Celebration (Modal, full screen)
+
+```
+┌─────────────────────────────────┐
+│  🎉 🎉 🎉 🎉 🎉 🎉 🎉 🎉 🎉   │  ← confetti raining
+│                                 │
+│         🔥                      │
+│                                 │
+│     YOU HIT 30 DAYS!            │
+│                                 │
+│   That's a new milestone.       │
+│   You're unstoppable, Alok.     │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │        AWESOME!           │  │  ← primary CTA button
+│  └───────────────────────────┘  │
+│                                 │
+└─────────────────────────────────┘
+```
+
+---
+
+### Screen 1B — Home Screen
+
+```
+┌─────────────────────────────────┐
+│  Good morning, Alok  🔥 42      │  ← streak inline top right
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   TODAY'S SUMMARY         │  │
+│  │                           │  │
+│  │   ⭐ 340 pts earned today  │  │
+│  │   📋 2 / 4 projects done  │  │
+│  │                           │  │
+│  │   Next reward:            │  │
+│  │   🍕 Cheat Meal           │  │
+│  │   [████████░░░] 680/800   │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   + QUICK LOG             │  │  ← primary CTA
+│  └───────────────────────────┘  │
+│                                 │
+│  NOT LOGGED TODAY               │
+│  ┌───────────┐ ┌───────────┐    │
+│  │ 🌿 Habits │ │ ✅ Tasks  │    │
+│  └───────────┘ └───────────┘    │
+│                                 │
+├─────────┬─────────┬──────┬──────┤
+│  Home   │Projects │Reward│Stats │
+└─────────┴─────────┴──────┴──────┘
+```
+
+---
+
+### Screen 1C — Quick Log Sheet (Bottom Sheet)
+
+```
+┌─────────────────────────────────┐
+│  ╌╌╌╌╌╌╌╌╌  (drag handle)      │
+│                                 │
+│  QUICK LOG                      │
+│                                 │
+│  Select a project:              │
+│  ┌───────────────────────────┐  │
+│  │ 🌿  Habit Routine    >    │  │
+│  ├───────────────────────────┤  │
+│  │ ✅  Task Board       >    │  │
+│  ├───────────────────────────┤  │
+│  │ 💼  Job Hunt         >    │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  SUGGESTED (not logged today)   │
+│  ┌───────────────────────────┐  │
+│  │ ⏰ Wake-up Time           │  │
+│  │ 🧘 Meditation             │  │
+│  └───────────────────────────┘  │
+│                                 │
+└─────────────────────────────────┘
+```
+
+---
+
+### Screen 1D — Log Entry Form (after selecting metric)
+
+```
+┌─────────────────────────────────┐
+│  ╌╌╌╌╌╌╌╌╌                     │
+│                                 │
+│  🧘 Meditation                  │
+│  Habit Routine                  │
+│                                 │
+│  How long did you meditate?     │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   20          mins        │  │  ← inline unit label
+│  └───────────────────────────┘  │
+│                                 │
+│  Target: 20 mins  ✅ On track   │  ← live threshold feedback
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │         LOG IT            │  │  ← primary CTA
+│  └───────────────────────────┘  │
+│                                 │
+└─────────────────────────────────┘
+```
+
+- On submit → "+50 pts" floats up, green checkmark bursts
+- Sheet closes, Home updates
+
+---
+
+## Journey 2 — Set Up a New Project from a Template
+
+### Steps
+1. Alok taps Projects tab
+2. Taps "+ Create New Project"
+3. Chooses a template
+4. Names the project
+5. Reviews and edits default metrics
+6. Configures the points formula
+7. Saves — project appears in the list
+
+---
+
+### Screen 2A — Project List
+
+```
+┌─────────────────────────────────┐
+│  My Projects                    │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │ 🌿 Habit Routine          │  │
+│  │ Logged today  ●           │  │
+│  │ 🔥 12 day streak          │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ ✅ Task Board             │  │
+│  │ 3 tasks in progress       │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 💼 Job Hunt               │  │
+│  │ 4 applications tracked    │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   + CREATE NEW PROJECT    │  │
+│  └───────────────────────────┘  │
+│                                 │
+├─────────┬─────────┬──────┬──────┤
+│  Home   │Projects │Reward│Stats │
+└─────────┴─────────┴──────┴──────┘
+```
+
+---
+
+### Screen 2B — Choose Template
+
+```
+┌─────────────────────────────────┐
+│  ← New Project                  │
+│                                 │
+│  Start with a template          │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │ 🌿  Habit Routine         │  │
+│  │ Track daily habits with   │  │
+│  │ targets & skip days       │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ ✅  Task Board            │  │
+│  │ Manage tasks with         │  │
+│  │ priority & completion     │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 📅  Weekly Review         │  │
+│  │ Auto-summary of your      │  │
+│  │ weekly progress           │  │
+│  └───────────────────────────┘  │
+│  ┌───────────────────────────┐  │
+│  │ 💼  Job Hunt              │  │
+│  │ Track applications,       │  │
+│  │ recruiters & portals      │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+---
+
+### Screen 2C — Name & Configure Metrics
+
+```
+┌─────────────────────────────────┐
+│  ← Habit Routine                │
+│                                 │
+│  Project Name                   │
+│  ┌───────────────────────────┐  │
+│  │  Alok Daily Habits        │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  METRICS  (swipe to reorder)    │
+│  ┌───────────────────────────┐  │
+│  │ ⏰ Wake-up Time  [edit]   │  │
+│  │    Unit: Time  Target: 4:45AM│
+│  ├───────────────────────────┤  │
+│  │ 🧘 Meditation   [edit]   │  │
+│  │    Unit: mins  Target: 20 │  │
+│  ├───────────────────────────┤  │
+│  │ 🛏️  Make Bed    [edit]   │  │
+│  │    Unit: count  Target: 1 │  │
+│  ├───────────────────────────┤  │
+│  │ + Add metric              │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │         NEXT →            │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+---
+
+### Screen 2D — Configure Points
+
+```
+┌─────────────────────────────────┐
+│  ← Points Setup                 │
+│                                 │
+│  How should this project        │
+│  earn points?                   │
+│                                 │
+│  Points per log entry           │
+│  ┌───────────────────────────┐  │
+│  │  10                       │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  Bonus for hitting threshold    │
+│  ┌───────────────────────────┐  │
+│  │  20                       │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  Project multiplier             │
+│  ┌───────────────────────────┐  │
+│  │  1.5 ×                    │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  Preview: a perfect day =       │
+│  ⭐ ~450 pts                    │  ← live preview
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │       CREATE PROJECT      │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+---
+
+## Journey 3 — Earn Points → Claim a Reward
+
+### Steps
+1. Alok opens Rewards tab
+2. Sees his point balance and list of rewards
+3. Notices "Cheat Meal" is now claimable (balance ≥ threshold)
+4. Taps the reward
+5. Confirmation dialog appears
+6. Alok confirms → reward claimed, points deducted, celebration shown
+7. Reward moves to Claimed History
+
+---
+
+### Screen 3A — Rewards Dashboard
+
+```
+┌─────────────────────────────────┐
+│  Rewards                        │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   ⭐ 820 pts              │  │  ← bold, prominent balance
+│  │   Total balance           │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  READY TO CLAIM                 │
+│  ┌───────────────────────────┐  │
+│  │ 🍕  Cheat Meal    ✨      │  │  ← glowing gold border
+│  │     800 pts               │  │
+│  │  ┌──────────────────────┐ │  │
+│  │  │      CLAIM!          │ │  │  ← pulsing green button
+│  │  └──────────────────────┘ │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  LOCKED                         │
+│  ┌───────────────────────────┐  │
+│  │ 🎬  Movie Night   🔒      │  │
+│  │     [████████░░] 820/1500 │  │
+│  ├───────────────────────────┤  │
+│  │ 📚  Buy a Book    🔒      │  │
+│  │     [██░░░░░░░░] 820/2000 │  │
+│  └───────────────────────────┘  │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │   + ADD NEW REWARD        │  │
+│  └───────────────────────────┘  │
+│                                 │
+├─────────┬─────────┬──────┬──────┤
+│  Home   │Projects │Reward│Stats │
+└─────────┴─────────┴──────┴──────┘
+```
+
+---
+
+### Screen 3B — Confirm Claim (Modal)
+
+```
+┌─────────────────────────────────┐
+│                                 │
+│            🍕                   │
+│                                 │
+│     Claim Cheat Meal?           │
+│                                 │
+│   This will use 800 pts.        │
+│   Remaining balance: 20 pts     │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │       YES, CLAIM IT!      │  │
+│  └───────────────────────────┘  │
+│                                 │
+│        cancel                   │
+│                                 │
+└─────────────────────────────────┘
+```
+
+---
+
+### Screen 3C — Reward Claimed Celebration
+
+```
+┌─────────────────────────────────┐
+│  🎉 🎉 🎉 🎉 🎉 🎉 🎉 🎉 🎉   │  ← confetti
+│                                 │
+│            🍕                   │
+│                                 │
+│      YOU EARNED IT!             │
+│                                 │
+│      Cheat Meal                 │
+│      Claimed today              │
+│                                 │
+│   Remaining balance: 20 pts     │
+│                                 │
+│  ┌───────────────────────────┐  │
+│  │          ENJOY!           │  │
+│  └───────────────────────────┘  │
+└─────────────────────────────────┘
+```
+
+- Confetti animation plays for ~1.5s
+- Tapping "ENJOY!" dismisses and returns to Rewards Dashboard
+- Claimed reward disappears from main list, appears in Claimed History
+
+---
+
+## Flow Summary
+
+| Journey | Screens | Max taps to complete |
+|---|---|---|
+| App open → Quick log | 4 screens (popup → home → sheet → form) | 4 taps |
+| Create new project | 4 screens (list → template → metrics → points) | Linear wizard |
+| Claim a reward | 3 screens (dashboard → confirm → celebration) | 2 taps |
