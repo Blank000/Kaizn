@@ -39,10 +39,22 @@ class NotificationService {
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: androidSettings);
+    const iosSettings = DarwinInitializationSettings(
+      // Defer prompting for permission until the user actually enables a
+      // notification toggle in Settings, so the system dialog doesn't fire
+      // on first launch.
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
     await _plugin.initialize(settings);
 
-    // Request permission on Android 13+
+    // Request permission on Android 13+. iOS prompts are handled when the
+    // user actually enables a reminder toggle (see notification_settings_sheet).
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
