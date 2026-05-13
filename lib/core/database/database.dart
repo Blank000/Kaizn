@@ -180,6 +180,21 @@ class AppDatabase extends _$AppDatabase {
     return (delete(tasks)..where((t) => t.id.equals(id))).go();
   }
 
+  /// Set the timeline start time for a task. Pass null to unschedule (move
+  /// to the Anytime tray).
+  Future<void> setTaskStartMinute(String taskId, int? minute) {
+    return (update(tasks)..where((t) => t.id.equals(taskId))).write(
+      TasksCompanion(startMinute: Value(minute)),
+    );
+  }
+
+  /// Set the timeline duration for a task (in minutes).
+  Future<void> setTaskDurationMinutes(String taskId, int minutes) {
+    return (update(tasks)..where((t) => t.id.equals(taskId))).write(
+      TasksCompanion(durationMinutes: Value(minutes)),
+    );
+  }
+
   /// Delete a task and all its completions.
   Future<void> deleteTaskCascade(String id) {
     return transaction(() async {

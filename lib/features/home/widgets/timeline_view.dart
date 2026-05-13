@@ -18,11 +18,16 @@ import '../../../shared/widgets/task_tile.dart'
     show TaskRowState, taskRowStateFor;
 import '../../rewards/reward_unlock_service.dart';
 
-const double _pxPerMinute = 1.0; // 60 px per hour
+const double _pxPerMinute = 1.0;
 const double _hourLabelWidth = 56;
 const double _gridTopPadding = 8;
 const double _gridBottomPadding = 24;
 const double _totalGridHeight = 24 * 60 * _pxPerMinute;
+const int _snapMin = 15;
+const int _minDurationMin = 15;
+const int _maxDurationMin = 480;
+const double _resizeHandleHeight = 14;
+const double _minResizableCardHeight = 40;
 
 class TimelineView extends ConsumerStatefulWidget {
   const TimelineView({super.key});
@@ -33,9 +38,15 @@ class TimelineView extends ConsumerStatefulWidget {
 
 class _TimelineViewState extends ConsumerState<TimelineView> {
   final ScrollController _scrollCtrl = ScrollController();
+  final GlobalKey _gridKey = GlobalKey();
   Timer? _nowTicker;
   DateTime _now = DateTime.now();
   bool _autoScrolled = false;
+
+  // Active resize gesture (single task at a time).
+  String? _resizeTaskId;
+  int? _resizeOriginalMin;
+  double _resizeDeltaPx = 0;
 
   @override
   void initState() {
@@ -53,13 +64,73 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
   }
 
   void _maybeAutoScroll() {
-    if (_autoScrolled) return;
-    if (!_scrollCtrl.hasClients) return;
+    if (_autoScrolled || !_scrollCtrl.hasClients) return;
     _autoScrolled = true;
     final nowMin = _now.hour * 60 + _now.minute;
     final target = (nowMin - 60) * _pxPerMinute;
-    final max = _scrollCtrl.position.maxScrollExtent;
-    _scrollCtrl.jumpTo(target.clamp(0.0, max));
+    _scrollCtrl.jumpTo(
+        target.clamp(0.0, _scrollCtrl.position.maxScrollExtent));
+  }
+
+  Future<void> _scheduleTask(Task task, Offset globalDropOffset) async {
+    final box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(globalDropOffset);
+    final rawMin = ((local.dy - _gridTopPadding) / _pxPerMinute).round();
+    final snapped = (rawMin / _snapMin).round() * _snapMin;
+    final clamped = snapped.clamp(0, 24 * 60 - task.durationMinutes);
+    final db = ref.read(databaseProvider);
+    await db.setTaskStartMinute(task.id, clamped);
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> _unscheduleTask(Task task) async {
+    if (task.startMinute == null) return;
+    final db = ref.read(databaseProvider);
+    await db.setTaskStartMinute(task.id, null);
+    HapticFeedback.lightImpact();
+  }
+
+  void _onResizeStart(Task task) {
+    setState(() {
+      _resizeTaskId = task.id;
+      _resizeOriginalMin = task.durationMinutes;
+      _resizeDeltaPx = 0;
+    });
+    HapticFeedback.selectionClick();
+  }
+
+  void _onResizeUpdate(double dy) {
+    setState(() => _resizeDeltaPx += dy);
+  }
+
+  Future<void> _onResizeEnd() async {
+    final taskId = _resizeTaskId;
+    final originalMin = _resizeOriginalMin;
+    final deltaPx = _resizeDeltaPx;
+    setState(() {
+      _resizeTaskId = null;
+      _resizeOriginalMin = null;
+      _resizeDeltaPx = 0;
+    });
+    if (taskId == null || originalMin == null) return;
+    final deltaMin = (deltaPx / _pxPerMinute).round();
+    final rawDuration = originalMin + deltaMin;
+    final snapped = (rawDuration / _snapMin).round() * _snapMin;
+    final clamped = snapped.clamp(_minDurationMin, _maxDurationMin);
+    if (clamped == originalMin) return;
+    final db = ref.read(databaseProvider);
+    await db.setTaskDurationMinutes(taskId, clamped);
+    HapticFeedback.lightImpact();
+  }
+
+  int _effectiveDuration(Task task) {
+    if (_resizeTaskId == task.id && _resizeOriginalMin != null) {
+      final deltaMin = (_resizeDeltaPx / _pxPerMinute).round();
+      return (_resizeOriginalMin! + deltaMin)
+          .clamp(_minDurationMin, _maxDurationMin);
+    }
+    return task.durationMinutes;
   }
 
   @override
@@ -98,12 +169,24 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (anytime.isNotEmpty) _AnytimeTray(entries: anytime),
+        // Anytime tray is always rendered so it can accept "drag-to-unschedule"
+        // even when there are currently no untimed tasks.
+        _AnytimeTray(
+          entries: anytime,
+          onAccept: _unscheduleTask,
+        ),
         Expanded(
           child: _TimeGrid(
             scheduled: scheduled,
             now: _now,
             scrollCtrl: _scrollCtrl,
+            gridKey: _gridKey,
+            resizeTaskId: _resizeTaskId,
+            effectiveDuration: _effectiveDuration,
+            onTaskDrop: _scheduleTask,
+            onResizeStart: _onResizeStart,
+            onResizeUpdate: _onResizeUpdate,
+            onResizeEnd: _onResizeEnd,
           ),
         ),
       ],
@@ -168,44 +251,93 @@ class _EmptyTimeline extends StatelessWidget {
 
 class _AnytimeTray extends StatelessWidget {
   final List<_TimelineEntry> entries;
-  const _AnytimeTray({required this.entries});
+  final Future<void> Function(Task task) onAccept;
+  const _AnytimeTray({required this.entries, required this.onAccept});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.appPageBackground,
-        border: Border(bottom: BorderSide(color: context.appBorder)),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.inbox_rounded,
-                  size: 14, color: context.appTextSecondary),
-              const SizedBox(width: 4),
-              Text('ANYTIME · ${entries.length}',
-                  style: AppTypography.caption.copyWith(
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                    color: context.appTextSecondary,
-                  )),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: entries.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (_, i) => _AnytimeChip(entry: entries[i]),
+    return DragTarget<Task>(
+      onWillAcceptWithDetails: (d) => d.data.startMinute != null,
+      onAcceptWithDetails: (d) => onAccept(d.data),
+      builder: (context, candidate, rejected) {
+        final highlighted = candidate.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          decoration: BoxDecoration(
+            color: highlighted
+                ? AppColors.primary.withValues(alpha: 0.12)
+                : context.appPageBackground,
+            border: Border(
+              bottom: BorderSide(
+                color: highlighted
+                    ? AppColors.primary
+                    : context.appBorder,
+                width: highlighted ? 2 : 1,
+              ),
             ),
           ),
-        ],
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.inbox_rounded,
+                      size: 14, color: context.appTextSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    highlighted
+                        ? 'DROP TO UNSCHEDULE'
+                        : 'ANYTIME · ${entries.length}',
+                    style: AppTypography.caption.copyWith(
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                      color: highlighted
+                          ? AppColors.primary
+                          : context.appTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 36,
+                child: entries.isEmpty
+                    ? _EmptyTrayHint(highlighted: highlighted)
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: entries.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 8),
+                        itemBuilder: (_, i) =>
+                            _AnytimeChip(entry: entries[i]),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EmptyTrayHint extends StatelessWidget {
+  final bool highlighted;
+  const _EmptyTrayHint({required this.highlighted});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        highlighted
+            ? 'Release to remove its time'
+            : 'No untimed tasks. Drag one here to unschedule.',
+        style: AppTypography.caption.copyWith(
+          color: context.appTextTertiary,
+          fontStyle: FontStyle.italic,
+        ),
       ),
     );
   }
@@ -219,41 +351,67 @@ class _AnytimeChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = entry.rowState;
     final isChecked = state.isChecked;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => _toggleTask(context, ref, entry),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isChecked
-              ? AppColors.primary
-              : context.appCardSurface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isChecked ? AppColors.primary : context.appBorder,
+    final body = _AnytimeChipBody(entry: entry, isChecked: isChecked);
+
+    return LongPressDraggable<Task>(
+      data: entry.task,
+      hapticFeedbackOnStart: true,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Opacity(
+          opacity: 0.85,
+          child: _AnytimeChipBody(entry: entry, isChecked: isChecked),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: body),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _toggleTask(context, ref, entry),
+        child: body,
+      ),
+    );
+  }
+}
+
+class _AnytimeChipBody extends StatelessWidget {
+  final _TimelineEntry entry;
+  final bool isChecked;
+  const _AnytimeChipBody({required this.entry, required this.isChecked});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isChecked
+            ? AppColors.primary
+            : context.appCardSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isChecked ? AppColors.primary : context.appBorder,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isChecked
+                ? Icons.check_circle_rounded
+                : Icons.circle_outlined,
+            size: 16,
+            color: isChecked ? Colors.white : context.appTextSecondary,
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isChecked
-                  ? Icons.check_circle_rounded
-                  : Icons.circle_outlined,
-              size: 16,
-              color: isChecked ? Colors.white : context.appTextSecondary,
+          const SizedBox(width: 6),
+          Text(
+            entry.task.name,
+            style: AppTypography.caption.copyWith(
+              color: isChecked ? Colors.white : context.appTextPrimary,
+              fontWeight: FontWeight.w600,
+              decoration:
+                  isChecked ? TextDecoration.lineThrough : null,
             ),
-            const SizedBox(width: 6),
-            Text(
-              entry.task.name,
-              style: AppTypography.caption.copyWith(
-                color: isChecked ? Colors.white : context.appTextPrimary,
-                fontWeight: FontWeight.w600,
-                decoration:
-                    isChecked ? TextDecoration.lineThrough : null,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -265,10 +423,25 @@ class _TimeGrid extends StatelessWidget {
   final List<_TimelineEntry> scheduled;
   final DateTime now;
   final ScrollController scrollCtrl;
+  final GlobalKey gridKey;
+  final String? resizeTaskId;
+  final int Function(Task task) effectiveDuration;
+  final Future<void> Function(Task task, Offset globalDrop) onTaskDrop;
+  final void Function(Task task) onResizeStart;
+  final void Function(double dy) onResizeUpdate;
+  final Future<void> Function() onResizeEnd;
+
   const _TimeGrid({
     required this.scheduled,
     required this.now,
     required this.scrollCtrl,
+    required this.gridKey,
+    required this.resizeTaskId,
+    required this.effectiveDuration,
+    required this.onTaskDrop,
+    required this.onResizeStart,
+    required this.onResizeUpdate,
+    required this.onResizeEnd,
   });
 
   @override
@@ -278,36 +451,52 @@ class _TimeGrid extends StatelessWidget {
       controller: scrollCtrl,
       child: SizedBox(
         height: _totalGridHeight + _gridTopPadding + _gridBottomPadding,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _HourLinesPainter(
-                  textStyle: AppTypography.caption.copyWith(
-                    color: context.appTextSecondary,
-                    fontSize: 11,
+        child: DragTarget<Task>(
+          onWillAcceptWithDetails: (_) => true,
+          onAcceptWithDetails: (d) => onTaskDrop(d.data, d.offset),
+          builder: (context, candidate, rejected) {
+            return Stack(
+              key: gridKey,
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _HourLinesPainter(
+                      textStyle: AppTypography.caption.copyWith(
+                        color: context.appTextSecondary,
+                        fontSize: 11,
+                      ),
+                      lineColor:
+                          context.appBorder.withValues(alpha: 0.6),
+                    ),
                   ),
-                  lineColor: context.appBorder.withValues(alpha: 0.6),
                 ),
-              ),
-            ),
-            for (final e in scheduled)
-              Positioned(
-                left: _hourLabelWidth,
-                right: 12,
-                top: _gridTopPadding +
-                    (e.task.startMinute ?? 0) * _pxPerMinute,
-                height: (e.task.durationMinutes * _pxPerMinute)
-                    .clamp(28.0, double.infinity),
-                child: _TimelineTaskCard(entry: e),
-              ),
-            Positioned(
-              left: 0,
-              right: 12,
-              top: _gridTopPadding + nowMin * _pxPerMinute - 1,
-              child: const _NowIndicator(),
-            ),
-          ],
+                for (final e in scheduled)
+                  Positioned(
+                    left: _hourLabelWidth,
+                    right: 12,
+                    top: _gridTopPadding +
+                        (e.task.startMinute ?? 0) * _pxPerMinute,
+                    height: (effectiveDuration(e.task) * _pxPerMinute)
+                        .clamp(28.0, double.infinity),
+                    child: _TimelineTaskCard(
+                      entry: e,
+                      isResizing: resizeTaskId == e.task.id,
+                      effectiveDurationMinutes: effectiveDuration(e.task),
+                      onResizeStart: () => onResizeStart(e.task),
+                      onResizeUpdate: onResizeUpdate,
+                      onResizeEnd: onResizeEnd,
+                    ),
+                  ),
+                Positioned(
+                  left: 0,
+                  right: 12,
+                  top: _gridTopPadding + nowMin * _pxPerMinute - 1,
+                  child: const _NowIndicator(),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -395,103 +584,126 @@ class _NowIndicator extends StatelessWidget {
 
 // ── Card ───────────────────────────────────────────────────────────────────
 
-class _TimelineTaskCard extends ConsumerStatefulWidget {
+class _TimelineTaskCard extends ConsumerWidget {
   final _TimelineEntry entry;
-  const _TimelineTaskCard({required this.entry});
+  final bool isResizing;
+  final int effectiveDurationMinutes;
+  final VoidCallback onResizeStart;
+  final void Function(double dy) onResizeUpdate;
+  final Future<void> Function() onResizeEnd;
+
+  const _TimelineTaskCard({
+    required this.entry,
+    required this.isResizing,
+    required this.effectiveDurationMinutes,
+    required this.onResizeStart,
+    required this.onResizeUpdate,
+    required this.onResizeEnd,
+  });
+
+  Task get task => entry.task;
+  TaskRowState get rowState => entry.rowState;
 
   @override
-  ConsumerState<_TimelineTaskCard> createState() => _TimelineTaskCardState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardHeight = constraints.maxHeight;
+        final canShowHandle = cardHeight >= _minResizableCardHeight;
+
+        final surface = _CardSurface(
+          entry: entry,
+          isResizing: isResizing,
+          effectiveDurationMinutes: effectiveDurationMinutes,
+        );
+
+        return LongPressDraggable<Task>(
+          data: task,
+          hapticFeedbackOnStart: true,
+          feedback: Material(
+            color: Colors.transparent,
+            elevation: 8,
+            child: SizedBox(
+              width: constraints.maxWidth,
+              height: cardHeight,
+              child: Opacity(
+                opacity: 0.92,
+                child: _CardSurface(
+                  entry: entry,
+                  isResizing: false,
+                  effectiveDurationMinutes: effectiveDurationMinutes,
+                ),
+              ),
+            ),
+          ),
+          childWhenDragging: Opacity(opacity: 0.25, child: surface),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _toggleTask(context, ref, entry),
+            onLongPress: rowState.isUnchecked
+                ? () => _showSkipMissedSheet(
+                      context,
+                      taskName: task.name,
+                      onSkip: () async {
+                        final db = ref.read(databaseProvider);
+                        await db.skipTaskNow(task);
+                        await StreakService.recordSkipDay(db);
+                        HapticFeedback.lightImpact();
+                      },
+                      onMissed: () async {
+                        final db = ref.read(databaseProvider);
+                        await db.markTaskMissed(task);
+                        HapticFeedback.lightImpact();
+                      },
+                    )
+                : null,
+            child: Stack(
+              children: [
+                surface,
+                if (canShowHandle)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: _resizeHandleHeight,
+                    child: _ResizeHandle(
+                      onStart: () => onResizeStart(),
+                      onUpdate: onResizeUpdate,
+                      onEnd: onResizeEnd,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _TimelineTaskCardState extends ConsumerState<_TimelineTaskCard> {
-  Task get task => widget.entry.task;
-  TaskRowState get rowState => widget.entry.rowState;
+class _CardSurface extends StatelessWidget {
+  final _TimelineEntry entry;
+  final bool isResizing;
+  final int effectiveDurationMinutes;
+  const _CardSurface({
+    required this.entry,
+    required this.isResizing,
+    required this.effectiveDurationMinutes,
+  });
 
-  Future<void> _toggle() async {
-    await _toggleTask(context, ref, widget.entry);
-  }
+  Task get task => entry.task;
+  TaskRowState get rowState => entry.rowState;
 
-  void _showActions() {
-    if (!rowState.isUnchecked) return;
-    _showSkipMissedSheet(
-      context,
-      taskName: task.name,
-      onSkip: () async {
-        final db = ref.read(databaseProvider);
-        await db.skipTaskNow(task);
-        await StreakService.recordSkipDay(db);
-        HapticFeedback.lightImpact();
-      },
-      onMissed: () async {
-        final db = ref.read(databaseProvider);
-        await db.markTaskMissed(task);
-        HapticFeedback.lightImpact();
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = _bgColor(context);
-    final accent = _accentColor(context);
-    final timeRange = _formatTimeRange(task.startMinute!, task.durationMinutes);
-    return GestureDetector(
-      onTap: _toggle,
-      onLongPress: _showActions,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 1),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border(left: BorderSide(color: accent, width: 4)),
-        ),
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-        child: ClipRect(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                task.name,
-                style: AppTypography.body.copyWith(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: rowState.isChecked
-                      ? context.appTextSecondary
-                      : context.appTextPrimary,
-                  decoration: rowState.isChecked
-                      ? TextDecoration.lineThrough
-                      : null,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                timeRange,
-                style: AppTypography.caption.copyWith(
-                  color: context.appTextSecondary,
-                  fontSize: 11,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _accentColor(BuildContext context) {
+  Color _accent(BuildContext context) {
     if (rowState.isChecked) return AppColors.primary;
     if (rowState.isMissed) return Colors.red.shade400;
     if (rowState.isSkipped) return context.appTextTertiary;
-    final mi = widget.entry.milestone;
+    final mi = entry.milestone;
     if (mi != null) return AppColors.milestoneColor(mi.colorIndex);
     return AppColors.primary;
   }
 
-  Color _bgColor(BuildContext context) {
+  Color _bg(BuildContext context) {
     if (rowState.isChecked) {
       return AppColors.primary.withValues(alpha: 0.12);
     }
@@ -504,18 +716,108 @@ class _TimelineTaskCardState extends ConsumerState<_TimelineTaskCard> {
     return context.appCardSurface;
   }
 
-  String _formatTimeRange(int startMin, int duration) {
-    final endMin = startMin + duration;
-    return '${_fmt(startMin)} – ${_fmt(endMin)}';
+  @override
+  Widget build(BuildContext context) {
+    final accent = _accent(context);
+    final bg = _bg(context);
+    final start = task.startMinute ?? 0;
+    final timeRange =
+        '${_fmt(start)} – ${_fmt(start + effectiveDurationMinutes)}';
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: accent, width: 4)),
+        boxShadow: isResizing
+            ? [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                ),
+              ]
+            : null,
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      child: ClipRect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              task.name,
+              style: AppTypography.body.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: rowState.isChecked
+                    ? context.appTextSecondary
+                    : context.appTextPrimary,
+                decoration: rowState.isChecked
+                    ? TextDecoration.lineThrough
+                    : null,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              timeRange,
+              style: AppTypography.caption.copyWith(
+                color: context.appTextSecondary,
+                fontSize: 11,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _fmt(int min) {
-    final h = (min ~/ 60) % 24;
-    final m = min % 60;
+    final wrapped = min % (24 * 60);
+    final h = wrapped ~/ 60;
+    final m = wrapped % 60;
     final hh = h == 0 ? 12 : (h > 12 ? h - 12 : h);
     final ampm = h < 12 ? 'AM' : 'PM';
     final mm = m.toString().padLeft(2, '0');
     return '$hh:$mm $ampm';
+  }
+}
+
+class _ResizeHandle extends StatelessWidget {
+  final VoidCallback onStart;
+  final void Function(double dy) onUpdate;
+  final Future<void> Function() onEnd;
+  const _ResizeHandle({
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeRow,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragStart: (_) => onStart(),
+        onVerticalDragUpdate: (d) => onUpdate(d.delta.dy),
+        onVerticalDragEnd: (_) => onEnd(),
+        onVerticalDragCancel: () => onEnd(),
+        child: Align(
+          alignment: Alignment.center,
+          child: Container(
+            width: 28,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.appTextTertiary.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
