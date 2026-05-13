@@ -18,6 +18,9 @@ import '../../shared/widgets/task_tile.dart';
 import '../milestones/widgets/task_form_sheet.dart';
 import '../rewards/claim_flow.dart';
 import 'widgets/streak_popup.dart';
+import 'widgets/timeline_view.dart';
+
+enum HomeViewMode { list, timeline }
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -28,11 +31,20 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _allDoneCelebrationFiredThisSession = false;
+  late HomeViewMode _viewMode;
 
   @override
   void initState() {
     super.initState();
+    _viewMode = AppPrefs.homeViewModeSync == 'timeline'
+        ? HomeViewMode.timeline
+        : HomeViewMode.list;
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStreakPopup());
+  }
+
+  void _switchView(HomeViewMode mode) {
+    setState(() => _viewMode = mode);
+    AppPrefs.setHomeViewMode(mode == HomeViewMode.timeline ? 'timeline' : 'list');
   }
 
   Future<void> _maybeAllDoneCelebration(int doneCount, int pointsToday) async {
@@ -169,9 +181,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('ADD TASK'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      body: Column(
         children: [
+          _ViewToggle(value: _viewMode, onChanged: _switchView),
+          Expanded(
+            child: _viewMode == HomeViewMode.timeline
+                ? const TimelineView()
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                    children: [
           _StatsHeader(
             totalPoints: totalPoints,
             currentStreak: streak?.currentStreak ?? 0,
@@ -246,6 +264,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   )),
             ],
           ],
+                    ],
+                  ),
+          ),
         ],
       ),
     );
@@ -574,6 +595,40 @@ class _NothingTodayState extends StatelessWidget {
             label: const Text('ADD TASK'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ViewToggle extends StatelessWidget {
+  final HomeViewMode value;
+  final ValueChanged<HomeViewMode> onChanged;
+  const _ViewToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: SegmentedButton<HomeViewMode>(
+        segments: const [
+          ButtonSegment(
+            value: HomeViewMode.list,
+            label: Text('List'),
+            icon: Icon(Icons.view_agenda_outlined, size: 18),
+          ),
+          ButtonSegment(
+            value: HomeViewMode.timeline,
+            label: Text('Timeline'),
+            icon: Icon(Icons.view_timeline_outlined, size: 18),
+          ),
+        ],
+        selected: {value},
+        onSelectionChanged: (s) => onChanged(s.first),
+        showSelectedIcon: false,
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
       ),
     );
   }

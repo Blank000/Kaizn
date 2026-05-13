@@ -94,12 +94,16 @@ class AppPrefs {
   static const _themeModeKey = 'theme_mode';
   static String _themeModeCache = 'system'; // 'system' | 'light' | 'dark'
 
+  static const _homeViewModeKey = 'home_view_mode';
+  static String _homeViewModeCache = 'list'; // 'list' | 'timeline'
+
   /// Loads sync-cached prefs at app startup. Call from `main()` before
   /// `runApp`.
   static Future<void> hydrate() async {
     final p = await SharedPreferences.getInstance();
     _onboardingCompleteCache = p.getBool(_onboardingCompleteKey) ?? false;
     _themeModeCache = p.getString(_themeModeKey) ?? 'system';
+    _homeViewModeCache = p.getString(_homeViewModeKey) ?? 'list';
   }
 
   static bool get isOnboardingCompleteSync => _onboardingCompleteCache;
@@ -116,6 +120,14 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setString(_themeModeKey, mode);
     _themeModeCache = mode;
+  }
+
+  static String get homeViewModeSync => _homeViewModeCache;
+
+  static Future<void> setHomeViewMode(String mode) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_homeViewModeKey, mode);
+    _homeViewModeCache = mode;
   }
 
   // ── Announced reward IDs (so each reward unlock fires its snackbar once) ─

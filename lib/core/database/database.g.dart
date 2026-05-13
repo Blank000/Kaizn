@@ -727,6 +727,29 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _startMinuteMeta = const VerificationMeta(
+    'startMinute',
+  );
+  @override
+  late final GeneratedColumn<int> startMinute = GeneratedColumn<int>(
+    'start_minute',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _durationMinutesMeta = const VerificationMeta(
+    'durationMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> durationMinutes = GeneratedColumn<int>(
+    'duration_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(30),
+  );
   @override
   late final GeneratedColumnWithTypeConverter<TaskStatus, String> status =
       GeneratedColumn<String>(
@@ -771,6 +794,8 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     recurrence,
     recurrenceConfig,
     dueDate,
+    startMinute,
+    durationMinutes,
     status,
     createdAt,
     completedAt,
@@ -848,6 +873,24 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         dueDate.isAcceptableOrUnknown(data['due_date']!, _dueDateMeta),
       );
     }
+    if (data.containsKey('start_minute')) {
+      context.handle(
+        _startMinuteMeta,
+        startMinute.isAcceptableOrUnknown(
+          data['start_minute']!,
+          _startMinuteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('duration_minutes')) {
+      context.handle(
+        _durationMinutesMeta,
+        durationMinutes.isAcceptableOrUnknown(
+          data['duration_minutes']!,
+          _durationMinutesMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -910,6 +953,14 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}due_date'],
       ),
+      startMinute: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}start_minute'],
+      ),
+      durationMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_minutes'],
+      )!,
       status: $TasksTable.$converterstatus.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -950,6 +1001,8 @@ class Task extends DataClass implements Insertable<Task> {
   final TaskRecurrence recurrence;
   final String? recurrenceConfig;
   final DateTime? dueDate;
+  final int? startMinute;
+  final int durationMinutes;
   final TaskStatus status;
   final DateTime createdAt;
   final DateTime? completedAt;
@@ -963,6 +1016,8 @@ class Task extends DataClass implements Insertable<Task> {
     required this.recurrence,
     this.recurrenceConfig,
     this.dueDate,
+    this.startMinute,
+    required this.durationMinutes,
     required this.status,
     required this.createdAt,
     this.completedAt,
@@ -991,6 +1046,10 @@ class Task extends DataClass implements Insertable<Task> {
     if (!nullToAbsent || dueDate != null) {
       map['due_date'] = Variable<DateTime>(dueDate);
     }
+    if (!nullToAbsent || startMinute != null) {
+      map['start_minute'] = Variable<int>(startMinute);
+    }
+    map['duration_minutes'] = Variable<int>(durationMinutes);
     {
       map['status'] = Variable<String>(
         $TasksTable.$converterstatus.toSql(status),
@@ -1022,6 +1081,10 @@ class Task extends DataClass implements Insertable<Task> {
       dueDate: dueDate == null && nullToAbsent
           ? const Value.absent()
           : Value(dueDate),
+      startMinute: startMinute == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startMinute),
+      durationMinutes: Value(durationMinutes),
       status: Value(status),
       createdAt: Value(createdAt),
       completedAt: completedAt == null && nullToAbsent
@@ -1049,6 +1112,8 @@ class Task extends DataClass implements Insertable<Task> {
       ),
       recurrenceConfig: serializer.fromJson<String?>(json['recurrenceConfig']),
       dueDate: serializer.fromJson<DateTime?>(json['dueDate']),
+      startMinute: serializer.fromJson<int?>(json['startMinute']),
+      durationMinutes: serializer.fromJson<int>(json['durationMinutes']),
       status: $TasksTable.$converterstatus.fromJson(
         serializer.fromJson<String>(json['status']),
       ),
@@ -1071,6 +1136,8 @@ class Task extends DataClass implements Insertable<Task> {
       ),
       'recurrenceConfig': serializer.toJson<String?>(recurrenceConfig),
       'dueDate': serializer.toJson<DateTime?>(dueDate),
+      'startMinute': serializer.toJson<int?>(startMinute),
+      'durationMinutes': serializer.toJson<int>(durationMinutes),
       'status': serializer.toJson<String>(
         $TasksTable.$converterstatus.toJson(status),
       ),
@@ -1089,6 +1156,8 @@ class Task extends DataClass implements Insertable<Task> {
     TaskRecurrence? recurrence,
     Value<String?> recurrenceConfig = const Value.absent(),
     Value<DateTime?> dueDate = const Value.absent(),
+    Value<int?> startMinute = const Value.absent(),
+    int? durationMinutes,
     TaskStatus? status,
     DateTime? createdAt,
     Value<DateTime?> completedAt = const Value.absent(),
@@ -1104,6 +1173,8 @@ class Task extends DataClass implements Insertable<Task> {
         ? recurrenceConfig.value
         : this.recurrenceConfig,
     dueDate: dueDate.present ? dueDate.value : this.dueDate,
+    startMinute: startMinute.present ? startMinute.value : this.startMinute,
+    durationMinutes: durationMinutes ?? this.durationMinutes,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
@@ -1129,6 +1200,12 @@ class Task extends DataClass implements Insertable<Task> {
           ? data.recurrenceConfig.value
           : this.recurrenceConfig,
       dueDate: data.dueDate.present ? data.dueDate.value : this.dueDate,
+      startMinute: data.startMinute.present
+          ? data.startMinute.value
+          : this.startMinute,
+      durationMinutes: data.durationMinutes.present
+          ? data.durationMinutes.value
+          : this.durationMinutes,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       completedAt: data.completedAt.present
@@ -1149,6 +1226,8 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('recurrence: $recurrence, ')
           ..write('recurrenceConfig: $recurrenceConfig, ')
           ..write('dueDate: $dueDate, ')
+          ..write('startMinute: $startMinute, ')
+          ..write('durationMinutes: $durationMinutes, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt')
@@ -1167,6 +1246,8 @@ class Task extends DataClass implements Insertable<Task> {
     recurrence,
     recurrenceConfig,
     dueDate,
+    startMinute,
+    durationMinutes,
     status,
     createdAt,
     completedAt,
@@ -1184,6 +1265,8 @@ class Task extends DataClass implements Insertable<Task> {
           other.recurrence == this.recurrence &&
           other.recurrenceConfig == this.recurrenceConfig &&
           other.dueDate == this.dueDate &&
+          other.startMinute == this.startMinute &&
+          other.durationMinutes == this.durationMinutes &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
           other.completedAt == this.completedAt);
@@ -1199,6 +1282,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<TaskRecurrence> recurrence;
   final Value<String?> recurrenceConfig;
   final Value<DateTime?> dueDate;
+  final Value<int?> startMinute;
+  final Value<int> durationMinutes;
   final Value<TaskStatus> status;
   final Value<DateTime> createdAt;
   final Value<DateTime?> completedAt;
@@ -1213,6 +1298,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.recurrence = const Value.absent(),
     this.recurrenceConfig = const Value.absent(),
     this.dueDate = const Value.absent(),
+    this.startMinute = const Value.absent(),
+    this.durationMinutes = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1228,6 +1315,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.recurrence = const Value.absent(),
     this.recurrenceConfig = const Value.absent(),
     this.dueDate = const Value.absent(),
+    this.startMinute = const Value.absent(),
+    this.durationMinutes = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1244,6 +1333,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<String>? recurrence,
     Expression<String>? recurrenceConfig,
     Expression<DateTime>? dueDate,
+    Expression<int>? startMinute,
+    Expression<int>? durationMinutes,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? completedAt,
@@ -1260,6 +1351,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (recurrence != null) 'recurrence': recurrence,
       if (recurrenceConfig != null) 'recurrence_config': recurrenceConfig,
       if (dueDate != null) 'due_date': dueDate,
+      if (startMinute != null) 'start_minute': startMinute,
+      if (durationMinutes != null) 'duration_minutes': durationMinutes,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (completedAt != null) 'completed_at': completedAt,
@@ -1277,6 +1370,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<TaskRecurrence>? recurrence,
     Value<String?>? recurrenceConfig,
     Value<DateTime?>? dueDate,
+    Value<int?>? startMinute,
+    Value<int>? durationMinutes,
     Value<TaskStatus>? status,
     Value<DateTime>? createdAt,
     Value<DateTime?>? completedAt,
@@ -1292,6 +1387,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       recurrence: recurrence ?? this.recurrence,
       recurrenceConfig: recurrenceConfig ?? this.recurrenceConfig,
       dueDate: dueDate ?? this.dueDate,
+      startMinute: startMinute ?? this.startMinute,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt ?? this.completedAt,
@@ -1331,6 +1428,12 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (dueDate.present) {
       map['due_date'] = Variable<DateTime>(dueDate.value);
     }
+    if (startMinute.present) {
+      map['start_minute'] = Variable<int>(startMinute.value);
+    }
+    if (durationMinutes.present) {
+      map['duration_minutes'] = Variable<int>(durationMinutes.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(
         $TasksTable.$converterstatus.toSql(status.value),
@@ -1360,6 +1463,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('recurrence: $recurrence, ')
           ..write('recurrenceConfig: $recurrenceConfig, ')
           ..write('dueDate: $dueDate, ')
+          ..write('startMinute: $startMinute, ')
+          ..write('durationMinutes: $durationMinutes, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt, ')
@@ -3856,6 +3961,8 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<TaskRecurrence> recurrence,
       Value<String?> recurrenceConfig,
       Value<DateTime?> dueDate,
+      Value<int?> startMinute,
+      Value<int> durationMinutes,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -3872,6 +3979,8 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<TaskRecurrence> recurrence,
       Value<String?> recurrenceConfig,
       Value<DateTime?> dueDate,
+      Value<int?> startMinute,
+      Value<int> durationMinutes,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -3992,6 +4101,16 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<DateTime> get dueDate => $composableBuilder(
     column: $table.dueDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get startMinute => $composableBuilder(
+    column: $table.startMinute,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4134,6 +4253,16 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get startMinute => $composableBuilder(
+    column: $table.startMinute,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -4214,6 +4343,16 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get dueDate =>
       $composableBuilder(column: $table.dueDate, builder: (column) => column);
+
+  GeneratedColumn<int> get startMinute => $composableBuilder(
+    column: $table.startMinute,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => column,
+  );
 
   GeneratedColumnWithTypeConverter<TaskStatus, String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
@@ -4342,6 +4481,8 @@ class $$TasksTableTableManager
                 Value<TaskRecurrence> recurrence = const Value.absent(),
                 Value<String?> recurrenceConfig = const Value.absent(),
                 Value<DateTime?> dueDate = const Value.absent(),
+                Value<int?> startMinute = const Value.absent(),
+                Value<int> durationMinutes = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -4356,6 +4497,8 @@ class $$TasksTableTableManager
                 recurrence: recurrence,
                 recurrenceConfig: recurrenceConfig,
                 dueDate: dueDate,
+                startMinute: startMinute,
+                durationMinutes: durationMinutes,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,
@@ -4372,6 +4515,8 @@ class $$TasksTableTableManager
                 Value<TaskRecurrence> recurrence = const Value.absent(),
                 Value<String?> recurrenceConfig = const Value.absent(),
                 Value<DateTime?> dueDate = const Value.absent(),
+                Value<int?> startMinute = const Value.absent(),
+                Value<int> durationMinutes = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -4386,6 +4531,8 @@ class $$TasksTableTableManager
                 recurrence: recurrence,
                 recurrenceConfig: recurrenceConfig,
                 dueDate: dueDate,
+                startMinute: startMinute,
+                durationMinutes: durationMinutes,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,

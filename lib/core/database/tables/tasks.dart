@@ -50,6 +50,15 @@ class Tasks extends Table {
   // For one-shot tasks; null for habits.
   DateTimeColumn get dueDate => dateTime().nullable()();
 
+  // Optional scheduled time for timeline view. Minutes from midnight (0..1439).
+  // Null = "anytime" — task is not on the timeline grid.
+  IntColumn get startMinute => integer().nullable()();
+
+  // Block length on the timeline in minutes. Defaults to 30; only meaningful
+  // when startMinute is non-null.
+  IntColumn get durationMinutes =>
+      integer().withDefault(const Constant(30))();
+
   TextColumn get status =>
       textEnum<TaskStatus>().withDefault(Constant(TaskStatus.active.value))();
 

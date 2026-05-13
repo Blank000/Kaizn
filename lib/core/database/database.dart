@@ -32,8 +32,9 @@ class AppDatabase extends _$AppDatabase {
 
   // 1 → 2 was the milestone-centric schema rewrite (destructive, pre-launch).
   // 2 → 3 adds `color_index` to milestones (non-destructive).
+  // 3 → 4 adds `start_minute` + `duration_minutes` to tasks for timeline view.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -55,6 +56,11 @@ class AppDatabase extends _$AppDatabase {
         if (from < 3) {
           // v2 → v3: add the color_index column to milestones, default 0.
           await m.addColumn(milestones, milestones.colorIndex);
+        }
+        if (from < 4) {
+          // v3 → v4: add scheduling columns to tasks.
+          await m.addColumn(tasks, tasks.startMinute);
+          await m.addColumn(tasks, tasks.durationMinutes);
         }
       },
     );

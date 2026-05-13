@@ -56,6 +56,11 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   DateTime? _anchor;
 
   DateTime? _dueDate;
+
+  // Optional timeline scheduling
+  TimeOfDay? _startTime;
+  int _durationMinutes = 30;
+
   bool _saving = false;
 
   bool get _isEdit => widget.task != null;
@@ -76,6 +81,13 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     if (t != null) {
       _frequency = t.recurrence;
       _dueDate = t.dueDate;
+      if (t.startMinute != null) {
+        _startTime = TimeOfDay(
+          hour: t.startMinute! ~/ 60,
+          minute: t.startMinute! % 60,
+        );
+      }
+      _durationMinutes = t.durationMinutes;
       if (_frequency != TaskRecurrence.none) {
         final rule = RecurrenceRule.fromTask(t);
         _interval = rule.interval;
@@ -207,6 +219,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final dueDate = _frequency == TaskRecurrence.none ? _dueDate : null;
     final rule = _buildRule();
     final cfg = rule?.toJsonString();
+    final startMin =
+        _startTime == null ? null : _startTime!.hour * 60 + _startTime!.minute;
 
     if (_isEdit) {
       final t = widget.task!;
@@ -217,6 +231,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         recurrence: _frequency,
         recurrenceConfig: Value(cfg),
         dueDate: Value(dueDate),
+        startMinute: Value(startMin),
+        durationMinutes: _durationMinutes,
       ));
     } else {
       await db.insertTask(TasksCompanion.insert(
@@ -227,6 +243,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         recurrence: Value(_frequency),
         recurrenceConfig: Value(cfg),
         dueDate: Value(dueDate),
+        startMinute: Value(startMin),
+        durationMinutes: Value(_durationMinutes),
       ));
     }
     await AppPrefs.setLastUsedMilestoneId(_selectedMilestoneId!);
@@ -325,6 +343,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 const SizedBox(height: 12),
                 _SchedulePreview(rule: _buildRule()!),
               ],
+              const SizedBox(height: 24),
+              _buildScheduleTimeRow(),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -531,6 +551,69 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     );
   }
 
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime ?? const TimeOfDay(hour: 9, minute: 0),
+    );
+    if (picked != null) {
+      // Snap minute to nearest 5 to keep the picker readable.
+      final snapped = TimeOfDay(
+        hour: picked.hour,
+        minute: (picked.minute ~/ 5) * 5,
+      );
+      setState(() => _startTime = snapped);
+    }
+  }
+
+  Widget _buildScheduleTimeRow() {
+    final has = _startTime != null;
+    final timeLabel = has
+        ? _startTime!.format(context)
+        : 'No time — shows in Anytime tray';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Schedule on timeline', style: AppTypography.caption),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _pickStartTime,
+          borderRadius: BorderRadius.circular(8),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Start time',
+              suffixIcon: has
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _startTime = null),
+                    )
+                  : const Icon(Icons.schedule_rounded),
+            ),
+            child: Text(
+              timeLabel,
+              style: AppTypography.body.copyWith(
+                color: has ? context.appTextPrimary : context.appTextSecondary,
+              ),
+            ),
+          ),
+        ),
+        if (has) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text('Duration', style: AppTypography.body),
+              const SizedBox(width: 12),
+              _DurationStepper(
+                minutes: _durationMinutes,
+                onChanged: (v) => setState(() => _durationMinutes = v),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildDueDatePicker() {
     return InkWell(
       onTap: _pickDueDate,
@@ -638,6 +721,59 @@ class _Stepper extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: value < max ? () => onChanged(value + 1) : null,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DurationStepper extends StatelessWidget {
+  final int minutes;
+  final ValueChanged<int> onChanged;
+  static const _step = 15;
+  static const _min = 15;
+  static const _max = 480;
+
+  const _DurationStepper({required this.minutes, required this.onChanged});
+
+  String _label(int m) {
+    if (m < 60) return '${m}m';
+    final h = m ~/ 60;
+    final rem = m % 60;
+    return rem == 0 ? '${h}h' : '${h}h ${rem}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.appPageBackground,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove),
+            onPressed:
+                minutes > _min ? () => onChanged(minutes - _step) : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          SizedBox(
+            width: 56,
+            child: Text(
+              _label(minutes),
+              textAlign: TextAlign.center,
+              style:
+                  AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed:
+                minutes < _max ? () => onChanged(minutes + _step) : null,
             visualDensity: VisualDensity.compact,
           ),
         ],
