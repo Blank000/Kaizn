@@ -76,6 +76,9 @@ dependencies:
   googleapis_auth: ^1.6.0
   http: ^1.2.2
 
+  # Home screen widget (Android AppWidget + iOS WidgetKit).
+  home_widget: ^0.7.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

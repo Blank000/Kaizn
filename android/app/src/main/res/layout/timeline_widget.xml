@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Timeline home-screen widget layout.
+
+  Row child ids follow the pattern accent_N / time_N / name_N / state_N (N = 0..5)
+  and the row containers are row_0..row_5. TimelineWidgetProvider resolves these
+  ids by index (via reflection) so each of the 6 fixed slots is addressable.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_background"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/header_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="Today" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="6dp"
+        android:background="@color/widget_divider" />
+
+    <!-- Shown only when there are no tasks today. -->
+    <TextView
+        android:id="@+id/empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:visibility="gone"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="13sp"
+        android:text="Nothing scheduled today" />
+
+    <!-- Task rows. Visibility is toggled per slot by the provider. -->
+    <LinearLayout
+        android:id="@+id/row_0"
+        style="@style/WidgetRow">
+        <View android:id="@+id/accent_0" style="@style/WidgetRowAccent" />
+        <TextView android:id="@+id/time_0" style="@style/WidgetRowTime" />
+        <TextView android:id="@+id/name_0" style="@style/WidgetRowName" />
+        <TextView android:id="@+id/state_0" style="@style/WidgetRowState" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_1"
+        style="@style/WidgetRow">
+        <View android:id="@+id/accent_1" style="@style/WidgetRowAccent" />
+        <TextView android:id="@+id/time_1" style="@style/WidgetRowTime" />
+        <TextView android:id="@+id/name_1" style="@style/WidgetRowName" />
+        <TextView android:id="@+id/state_1" style="@style/WidgetRowState" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_2"
+        style="@style/WidgetRow">
+        <View android:id="@+id/accent_2" style="@style/WidgetRowAccent" />
+        <TextView android:id="@+id/time_2" style="@style/WidgetRowTime" />
+        <TextView android:id="@+id/name_2" style="@style/WidgetRowName" />
+        <TextView android:id="@+id/state_2" style="@style/WidgetRowState" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_3"
+        style="@style/WidgetRow">
+        <View android:id="@+id/accent_3" style="@style/WidgetRowAccent" />
+        <TextView android:id="@+id/time_3" style="@style/WidgetRowTime" />
+        <TextView android:id="@+id/name_3" style="@style/WidgetRowName" />
+        <TextView android:id="@+id/state_3" style="@style/WidgetRowState" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_4"
+        style="@style/WidgetRow">
+        <View android:id="@+id/accent_4" style="@style/WidgetRowAccent" />
+        <TextView android:id="@+id/time_4" style="@style/WidgetRowTime" />
+        <TextView android:id="@+id/name_4" style="@style/WidgetRowName" />
+        <TextView android:id="@+id/state_4" style="@style/WidgetRowState" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_5"
+        style="@style/WidgetRow">
+        <View android:id="@+id/accent_5" style="@style/WidgetRowAccent" />
+        <TextView android:id="@+id/time_5" style="@style/WidgetRowTime" />
+        <TextView android:id="@+id/name_5" style="@style/WidgetRowName" />
+        <TextView android:id="@+id/state_5" style="@style/WidgetRowState" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/footer_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="end"
+        android:visibility="gone"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="11sp"
+        android:text="+ 0 more" />
+
+</LinearLayout>

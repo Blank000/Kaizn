@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#58CC02</color>
+
+    <!-- Timeline home-screen widget (light) -->
+    <color name="widget_background">#FFFFFFFF</color>
+    <color name="widget_text_primary">#FF1A1A1A</color>
+    <color name="widget_text_secondary">#FF6B7280</color>
+    <color name="widget_divider">#14000000</color>
 </resources>
