@@ -75,6 +75,12 @@ class Tasks extends Table {
   // reminder follows the recurrence (fires on every day the task is due).
   DateTimeColumn get reminderDate => dateTime().nullable()();
 
+  // Habit stacking ("After [that task], I will [this task]"): id of the
+  // anchor task this one follows. PLAIN text column, deliberately no
+  // references() — self-referential FKs are awkward in Drift; dangling ids
+  // (deleted anchors, restored backups) are null-checked in code.
+  TextColumn get stackedAfterTaskId => text().nullable()();
+
   TextColumn get status =>
       textEnum<TaskStatus>().withDefault(Constant(TaskStatus.active.value))();
 

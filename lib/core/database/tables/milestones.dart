@@ -22,6 +22,12 @@ class Milestones extends Table {
   TextColumn get name => text()();
   TextColumn get description => text().nullable()();
 
+  // Identity-based habits (Atomic Habits): who the user is becoming by
+  // working this milestone — "a runner", "a writer". Normalized on save
+  // (no leading "becoming"); surfaced as "Becoming a runner" subtitles and
+  // every-3rd-completion "vote" snackbars.
+  TextColumn get identity => text().nullable()();
+
   TextColumn get status =>
       textEnum<MilestoneStatus>().withDefault(Constant(MilestoneStatus.active.value))();
 

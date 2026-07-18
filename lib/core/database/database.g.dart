@@ -48,6 +48,17 @@ class $MilestonesTable extends Milestones
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _identityMeta = const VerificationMeta(
+    'identity',
+  );
+  @override
+  late final GeneratedColumn<String> identity = GeneratedColumn<String>(
+    'identity',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   late final GeneratedColumnWithTypeConverter<MilestoneStatus, String> status =
       GeneratedColumn<String>(
@@ -122,6 +133,7 @@ class $MilestonesTable extends Milestones
     userId,
     name,
     description,
+    identity,
     status,
     colorIndex,
     targetDate,
@@ -167,6 +179,12 @@ class $MilestonesTable extends Milestones
           data['description']!,
           _descriptionMeta,
         ),
+      );
+    }
+    if (data.containsKey('identity')) {
+      context.handle(
+        _identityMeta,
+        identity.isAcceptableOrUnknown(data['identity']!, _identityMeta),
       );
     }
     if (data.containsKey('color_index')) {
@@ -230,6 +248,10 @@ class $MilestonesTable extends Milestones
         DriftSqlType.string,
         data['${effectivePrefix}description'],
       ),
+      identity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}identity'],
+      ),
       status: $MilestonesTable.$converterstatus.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -273,6 +295,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
   final String userId;
   final String name;
   final String? description;
+  final String? identity;
   final MilestoneStatus status;
   final int colorIndex;
   final DateTime? targetDate;
@@ -284,6 +307,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
     required this.userId,
     required this.name,
     this.description,
+    this.identity,
     required this.status,
     required this.colorIndex,
     this.targetDate,
@@ -299,6 +323,9 @@ class Milestone extends DataClass implements Insertable<Milestone> {
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || identity != null) {
+      map['identity'] = Variable<String>(identity);
     }
     {
       map['status'] = Variable<String>(
@@ -325,6 +352,9 @@ class Milestone extends DataClass implements Insertable<Milestone> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
+      identity: identity == null && nullToAbsent
+          ? const Value.absent()
+          : Value(identity),
       status: Value(status),
       colorIndex: Value(colorIndex),
       targetDate: targetDate == null && nullToAbsent
@@ -348,6 +378,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
       userId: serializer.fromJson<String>(json['userId']),
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
+      identity: serializer.fromJson<String?>(json['identity']),
       status: $MilestonesTable.$converterstatus.fromJson(
         serializer.fromJson<String>(json['status']),
       ),
@@ -366,6 +397,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
       'userId': serializer.toJson<String>(userId),
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
+      'identity': serializer.toJson<String?>(identity),
       'status': serializer.toJson<String>(
         $MilestonesTable.$converterstatus.toJson(status),
       ),
@@ -382,6 +414,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
     String? userId,
     String? name,
     Value<String?> description = const Value.absent(),
+    Value<String?> identity = const Value.absent(),
     MilestoneStatus? status,
     int? colorIndex,
     Value<DateTime?> targetDate = const Value.absent(),
@@ -393,6 +426,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
     userId: userId ?? this.userId,
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
+    identity: identity.present ? identity.value : this.identity,
     status: status ?? this.status,
     colorIndex: colorIndex ?? this.colorIndex,
     targetDate: targetDate.present ? targetDate.value : this.targetDate,
@@ -408,6 +442,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
       description: data.description.present
           ? data.description.value
           : this.description,
+      identity: data.identity.present ? data.identity.value : this.identity,
       status: data.status.present ? data.status.value : this.status,
       colorIndex: data.colorIndex.present
           ? data.colorIndex.value
@@ -432,6 +467,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
           ..write('userId: $userId, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
+          ..write('identity: $identity, ')
           ..write('status: $status, ')
           ..write('colorIndex: $colorIndex, ')
           ..write('targetDate: $targetDate, ')
@@ -448,6 +484,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
     userId,
     name,
     description,
+    identity,
     status,
     colorIndex,
     targetDate,
@@ -463,6 +500,7 @@ class Milestone extends DataClass implements Insertable<Milestone> {
           other.userId == this.userId &&
           other.name == this.name &&
           other.description == this.description &&
+          other.identity == this.identity &&
           other.status == this.status &&
           other.colorIndex == this.colorIndex &&
           other.targetDate == this.targetDate &&
@@ -476,6 +514,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
   final Value<String> userId;
   final Value<String> name;
   final Value<String?> description;
+  final Value<String?> identity;
   final Value<MilestoneStatus> status;
   final Value<int> colorIndex;
   final Value<DateTime?> targetDate;
@@ -488,6 +527,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
     this.userId = const Value.absent(),
     this.name = const Value.absent(),
     this.description = const Value.absent(),
+    this.identity = const Value.absent(),
     this.status = const Value.absent(),
     this.colorIndex = const Value.absent(),
     this.targetDate = const Value.absent(),
@@ -501,6 +541,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
     this.userId = const Value.absent(),
     required String name,
     this.description = const Value.absent(),
+    this.identity = const Value.absent(),
     this.status = const Value.absent(),
     this.colorIndex = const Value.absent(),
     this.targetDate = const Value.absent(),
@@ -515,6 +556,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
     Expression<String>? userId,
     Expression<String>? name,
     Expression<String>? description,
+    Expression<String>? identity,
     Expression<String>? status,
     Expression<int>? colorIndex,
     Expression<DateTime>? targetDate,
@@ -528,6 +570,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
       if (userId != null) 'user_id': userId,
       if (name != null) 'name': name,
       if (description != null) 'description': description,
+      if (identity != null) 'identity': identity,
       if (status != null) 'status': status,
       if (colorIndex != null) 'color_index': colorIndex,
       if (targetDate != null) 'target_date': targetDate,
@@ -543,6 +586,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
     Value<String>? userId,
     Value<String>? name,
     Value<String?>? description,
+    Value<String?>? identity,
     Value<MilestoneStatus>? status,
     Value<int>? colorIndex,
     Value<DateTime?>? targetDate,
@@ -556,6 +600,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
       userId: userId ?? this.userId,
       name: name ?? this.name,
       description: description ?? this.description,
+      identity: identity ?? this.identity,
       status: status ?? this.status,
       colorIndex: colorIndex ?? this.colorIndex,
       targetDate: targetDate ?? this.targetDate,
@@ -580,6 +625,9 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
+    }
+    if (identity.present) {
+      map['identity'] = Variable<String>(identity.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(
@@ -614,6 +662,7 @@ class MilestonesCompanion extends UpdateCompanion<Milestone> {
           ..write('userId: $userId, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
+          ..write('identity: $identity, ')
           ..write('status: $status, ')
           ..write('colorIndex: $colorIndex, ')
           ..write('targetDate: $targetDate, ')
@@ -787,6 +836,17 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _stackedAfterTaskIdMeta =
+      const VerificationMeta('stackedAfterTaskId');
+  @override
+  late final GeneratedColumn<String> stackedAfterTaskId =
+      GeneratedColumn<String>(
+        'stacked_after_task_id',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   @override
   late final GeneratedColumnWithTypeConverter<TaskStatus, String> status =
       GeneratedColumn<String>(
@@ -836,6 +896,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     reminderEnabled,
     reminderMinute,
     reminderDate,
+    stackedAfterTaskId,
     status,
     createdAt,
     completedAt,
@@ -958,6 +1019,15 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         ),
       );
     }
+    if (data.containsKey('stacked_after_task_id')) {
+      context.handle(
+        _stackedAfterTaskIdMeta,
+        stackedAfterTaskId.isAcceptableOrUnknown(
+          data['stacked_after_task_id']!,
+          _stackedAfterTaskIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1040,6 +1110,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}reminder_date'],
       ),
+      stackedAfterTaskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stacked_after_task_id'],
+      ),
       status: $TasksTable.$converterstatus.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -1085,6 +1159,7 @@ class Task extends DataClass implements Insertable<Task> {
   final bool reminderEnabled;
   final int? reminderMinute;
   final DateTime? reminderDate;
+  final String? stackedAfterTaskId;
   final TaskStatus status;
   final DateTime createdAt;
   final DateTime? completedAt;
@@ -1103,6 +1178,7 @@ class Task extends DataClass implements Insertable<Task> {
     required this.reminderEnabled,
     this.reminderMinute,
     this.reminderDate,
+    this.stackedAfterTaskId,
     required this.status,
     required this.createdAt,
     this.completedAt,
@@ -1141,6 +1217,9 @@ class Task extends DataClass implements Insertable<Task> {
     }
     if (!nullToAbsent || reminderDate != null) {
       map['reminder_date'] = Variable<DateTime>(reminderDate);
+    }
+    if (!nullToAbsent || stackedAfterTaskId != null) {
+      map['stacked_after_task_id'] = Variable<String>(stackedAfterTaskId);
     }
     {
       map['status'] = Variable<String>(
@@ -1184,6 +1263,9 @@ class Task extends DataClass implements Insertable<Task> {
       reminderDate: reminderDate == null && nullToAbsent
           ? const Value.absent()
           : Value(reminderDate),
+      stackedAfterTaskId: stackedAfterTaskId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stackedAfterTaskId),
       status: Value(status),
       createdAt: Value(createdAt),
       completedAt: completedAt == null && nullToAbsent
@@ -1216,6 +1298,9 @@ class Task extends DataClass implements Insertable<Task> {
       reminderEnabled: serializer.fromJson<bool>(json['reminderEnabled']),
       reminderMinute: serializer.fromJson<int?>(json['reminderMinute']),
       reminderDate: serializer.fromJson<DateTime?>(json['reminderDate']),
+      stackedAfterTaskId: serializer.fromJson<String?>(
+        json['stackedAfterTaskId'],
+      ),
       status: $TasksTable.$converterstatus.fromJson(
         serializer.fromJson<String>(json['status']),
       ),
@@ -1243,6 +1328,7 @@ class Task extends DataClass implements Insertable<Task> {
       'reminderEnabled': serializer.toJson<bool>(reminderEnabled),
       'reminderMinute': serializer.toJson<int?>(reminderMinute),
       'reminderDate': serializer.toJson<DateTime?>(reminderDate),
+      'stackedAfterTaskId': serializer.toJson<String?>(stackedAfterTaskId),
       'status': serializer.toJson<String>(
         $TasksTable.$converterstatus.toJson(status),
       ),
@@ -1266,6 +1352,7 @@ class Task extends DataClass implements Insertable<Task> {
     bool? reminderEnabled,
     Value<int?> reminderMinute = const Value.absent(),
     Value<DateTime?> reminderDate = const Value.absent(),
+    Value<String?> stackedAfterTaskId = const Value.absent(),
     TaskStatus? status,
     DateTime? createdAt,
     Value<DateTime?> completedAt = const Value.absent(),
@@ -1288,6 +1375,9 @@ class Task extends DataClass implements Insertable<Task> {
         ? reminderMinute.value
         : this.reminderMinute,
     reminderDate: reminderDate.present ? reminderDate.value : this.reminderDate,
+    stackedAfterTaskId: stackedAfterTaskId.present
+        ? stackedAfterTaskId.value
+        : this.stackedAfterTaskId,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
@@ -1328,6 +1418,9 @@ class Task extends DataClass implements Insertable<Task> {
       reminderDate: data.reminderDate.present
           ? data.reminderDate.value
           : this.reminderDate,
+      stackedAfterTaskId: data.stackedAfterTaskId.present
+          ? data.stackedAfterTaskId.value
+          : this.stackedAfterTaskId,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       completedAt: data.completedAt.present
@@ -1353,6 +1446,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('reminderEnabled: $reminderEnabled, ')
           ..write('reminderMinute: $reminderMinute, ')
           ..write('reminderDate: $reminderDate, ')
+          ..write('stackedAfterTaskId: $stackedAfterTaskId, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt')
@@ -1376,6 +1470,7 @@ class Task extends DataClass implements Insertable<Task> {
     reminderEnabled,
     reminderMinute,
     reminderDate,
+    stackedAfterTaskId,
     status,
     createdAt,
     completedAt,
@@ -1398,6 +1493,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.reminderEnabled == this.reminderEnabled &&
           other.reminderMinute == this.reminderMinute &&
           other.reminderDate == this.reminderDate &&
+          other.stackedAfterTaskId == this.stackedAfterTaskId &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
           other.completedAt == this.completedAt);
@@ -1418,6 +1514,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<bool> reminderEnabled;
   final Value<int?> reminderMinute;
   final Value<DateTime?> reminderDate;
+  final Value<String?> stackedAfterTaskId;
   final Value<TaskStatus> status;
   final Value<DateTime> createdAt;
   final Value<DateTime?> completedAt;
@@ -1437,6 +1534,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.reminderEnabled = const Value.absent(),
     this.reminderMinute = const Value.absent(),
     this.reminderDate = const Value.absent(),
+    this.stackedAfterTaskId = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1457,6 +1555,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.reminderEnabled = const Value.absent(),
     this.reminderMinute = const Value.absent(),
     this.reminderDate = const Value.absent(),
+    this.stackedAfterTaskId = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1478,6 +1577,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<bool>? reminderEnabled,
     Expression<int>? reminderMinute,
     Expression<DateTime>? reminderDate,
+    Expression<String>? stackedAfterTaskId,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? completedAt,
@@ -1499,6 +1599,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (reminderEnabled != null) 'reminder_enabled': reminderEnabled,
       if (reminderMinute != null) 'reminder_minute': reminderMinute,
       if (reminderDate != null) 'reminder_date': reminderDate,
+      if (stackedAfterTaskId != null)
+        'stacked_after_task_id': stackedAfterTaskId,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (completedAt != null) 'completed_at': completedAt,
@@ -1521,6 +1623,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<bool>? reminderEnabled,
     Value<int?>? reminderMinute,
     Value<DateTime?>? reminderDate,
+    Value<String?>? stackedAfterTaskId,
     Value<TaskStatus>? status,
     Value<DateTime>? createdAt,
     Value<DateTime?>? completedAt,
@@ -1541,6 +1644,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
       reminderMinute: reminderMinute ?? this.reminderMinute,
       reminderDate: reminderDate ?? this.reminderDate,
+      stackedAfterTaskId: stackedAfterTaskId ?? this.stackedAfterTaskId,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt ?? this.completedAt,
@@ -1595,6 +1699,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (reminderDate.present) {
       map['reminder_date'] = Variable<DateTime>(reminderDate.value);
     }
+    if (stackedAfterTaskId.present) {
+      map['stacked_after_task_id'] = Variable<String>(stackedAfterTaskId.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(
         $TasksTable.$converterstatus.toSql(status.value),
@@ -1629,6 +1736,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('reminderEnabled: $reminderEnabled, ')
           ..write('reminderMinute: $reminderMinute, ')
           ..write('reminderDate: $reminderDate, ')
+          ..write('stackedAfterTaskId: $stackedAfterTaskId, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt, ')
@@ -1698,6 +1806,17 @@ class $TaskCompletionsTable extends TaskCompletions
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _durationSecondsMeta = const VerificationMeta(
+    'durationSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> durationSeconds = GeneratedColumn<int>(
+    'duration_seconds',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isSkipMeta = const VerificationMeta('isSkip');
   @override
   late final GeneratedColumn<bool> isSkip = GeneratedColumn<bool>(
@@ -1752,6 +1871,7 @@ class $TaskCompletionsTable extends TaskCompletions
     userId,
     completedOn,
     pointsEarned,
+    durationSeconds,
     isSkip,
     isNd,
     note,
@@ -1808,6 +1928,15 @@ class $TaskCompletionsTable extends TaskCompletions
         ),
       );
     }
+    if (data.containsKey('duration_seconds')) {
+      context.handle(
+        _durationSecondsMeta,
+        durationSeconds.isAcceptableOrUnknown(
+          data['duration_seconds']!,
+          _durationSecondsMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_skip')) {
       context.handle(
         _isSkipMeta,
@@ -1861,6 +1990,10 @@ class $TaskCompletionsTable extends TaskCompletions
         DriftSqlType.int,
         data['${effectivePrefix}points_earned'],
       )!,
+      durationSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_seconds'],
+      ),
       isSkip: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_skip'],
@@ -1892,6 +2025,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
   final String userId;
   final DateTime completedOn;
   final int pointsEarned;
+  final int? durationSeconds;
   final bool isSkip;
   final bool isNd;
   final String? note;
@@ -1902,6 +2036,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     required this.userId,
     required this.completedOn,
     required this.pointsEarned,
+    this.durationSeconds,
     required this.isSkip,
     required this.isNd,
     this.note,
@@ -1915,6 +2050,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     map['user_id'] = Variable<String>(userId);
     map['completed_on'] = Variable<DateTime>(completedOn);
     map['points_earned'] = Variable<int>(pointsEarned);
+    if (!nullToAbsent || durationSeconds != null) {
+      map['duration_seconds'] = Variable<int>(durationSeconds);
+    }
     map['is_skip'] = Variable<bool>(isSkip);
     map['is_nd'] = Variable<bool>(isNd);
     if (!nullToAbsent || note != null) {
@@ -1931,6 +2069,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       userId: Value(userId),
       completedOn: Value(completedOn),
       pointsEarned: Value(pointsEarned),
+      durationSeconds: durationSeconds == null && nullToAbsent
+          ? const Value.absent()
+          : Value(durationSeconds),
       isSkip: Value(isSkip),
       isNd: Value(isNd),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
@@ -1949,6 +2090,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       userId: serializer.fromJson<String>(json['userId']),
       completedOn: serializer.fromJson<DateTime>(json['completedOn']),
       pointsEarned: serializer.fromJson<int>(json['pointsEarned']),
+      durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
       isSkip: serializer.fromJson<bool>(json['isSkip']),
       isNd: serializer.fromJson<bool>(json['isNd']),
       note: serializer.fromJson<String?>(json['note']),
@@ -1964,6 +2106,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       'userId': serializer.toJson<String>(userId),
       'completedOn': serializer.toJson<DateTime>(completedOn),
       'pointsEarned': serializer.toJson<int>(pointsEarned),
+      'durationSeconds': serializer.toJson<int?>(durationSeconds),
       'isSkip': serializer.toJson<bool>(isSkip),
       'isNd': serializer.toJson<bool>(isNd),
       'note': serializer.toJson<String?>(note),
@@ -1977,6 +2120,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     String? userId,
     DateTime? completedOn,
     int? pointsEarned,
+    Value<int?> durationSeconds = const Value.absent(),
     bool? isSkip,
     bool? isNd,
     Value<String?> note = const Value.absent(),
@@ -1987,6 +2131,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     userId: userId ?? this.userId,
     completedOn: completedOn ?? this.completedOn,
     pointsEarned: pointsEarned ?? this.pointsEarned,
+    durationSeconds: durationSeconds.present
+        ? durationSeconds.value
+        : this.durationSeconds,
     isSkip: isSkip ?? this.isSkip,
     isNd: isNd ?? this.isNd,
     note: note.present ? note.value : this.note,
@@ -2003,6 +2150,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       pointsEarned: data.pointsEarned.present
           ? data.pointsEarned.value
           : this.pointsEarned,
+      durationSeconds: data.durationSeconds.present
+          ? data.durationSeconds.value
+          : this.durationSeconds,
       isSkip: data.isSkip.present ? data.isSkip.value : this.isSkip,
       isNd: data.isNd.present ? data.isNd.value : this.isNd,
       note: data.note.present ? data.note.value : this.note,
@@ -2018,6 +2168,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
           ..write('userId: $userId, ')
           ..write('completedOn: $completedOn, ')
           ..write('pointsEarned: $pointsEarned, ')
+          ..write('durationSeconds: $durationSeconds, ')
           ..write('isSkip: $isSkip, ')
           ..write('isNd: $isNd, ')
           ..write('note: $note, ')
@@ -2033,6 +2184,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     userId,
     completedOn,
     pointsEarned,
+    durationSeconds,
     isSkip,
     isNd,
     note,
@@ -2047,6 +2199,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
           other.userId == this.userId &&
           other.completedOn == this.completedOn &&
           other.pointsEarned == this.pointsEarned &&
+          other.durationSeconds == this.durationSeconds &&
           other.isSkip == this.isSkip &&
           other.isNd == this.isNd &&
           other.note == this.note &&
@@ -2059,6 +2212,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
   final Value<String> userId;
   final Value<DateTime> completedOn;
   final Value<int> pointsEarned;
+  final Value<int?> durationSeconds;
   final Value<bool> isSkip;
   final Value<bool> isNd;
   final Value<String?> note;
@@ -2070,6 +2224,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     this.userId = const Value.absent(),
     this.completedOn = const Value.absent(),
     this.pointsEarned = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
     this.isSkip = const Value.absent(),
     this.isNd = const Value.absent(),
     this.note = const Value.absent(),
@@ -2082,6 +2237,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     this.userId = const Value.absent(),
     required DateTime completedOn,
     this.pointsEarned = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
     this.isSkip = const Value.absent(),
     this.isNd = const Value.absent(),
     this.note = const Value.absent(),
@@ -2096,6 +2252,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     Expression<String>? userId,
     Expression<DateTime>? completedOn,
     Expression<int>? pointsEarned,
+    Expression<int>? durationSeconds,
     Expression<bool>? isSkip,
     Expression<bool>? isNd,
     Expression<String>? note,
@@ -2108,6 +2265,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
       if (userId != null) 'user_id': userId,
       if (completedOn != null) 'completed_on': completedOn,
       if (pointsEarned != null) 'points_earned': pointsEarned,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
       if (isSkip != null) 'is_skip': isSkip,
       if (isNd != null) 'is_nd': isNd,
       if (note != null) 'note': note,
@@ -2122,6 +2280,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     Value<String>? userId,
     Value<DateTime>? completedOn,
     Value<int>? pointsEarned,
+    Value<int?>? durationSeconds,
     Value<bool>? isSkip,
     Value<bool>? isNd,
     Value<String?>? note,
@@ -2134,6 +2293,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
       userId: userId ?? this.userId,
       completedOn: completedOn ?? this.completedOn,
       pointsEarned: pointsEarned ?? this.pointsEarned,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
       isSkip: isSkip ?? this.isSkip,
       isNd: isNd ?? this.isNd,
       note: note ?? this.note,
@@ -2159,6 +2319,9 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     }
     if (pointsEarned.present) {
       map['points_earned'] = Variable<int>(pointsEarned.value);
+    }
+    if (durationSeconds.present) {
+      map['duration_seconds'] = Variable<int>(durationSeconds.value);
     }
     if (isSkip.present) {
       map['is_skip'] = Variable<bool>(isSkip.value);
@@ -2186,6 +2349,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
           ..write('userId: $userId, ')
           ..write('completedOn: $completedOn, ')
           ..write('pointsEarned: $pointsEarned, ')
+          ..write('durationSeconds: $durationSeconds, ')
           ..write('isSkip: $isSkip, ')
           ..write('isNd: $isNd, ')
           ..write('note: $note, ')
@@ -3682,6 +3846,504 @@ class StreakTableCompanion extends UpdateCompanion<Streak> {
   }
 }
 
+class $ChangeLogTable extends ChangeLog
+    with TableInfo<$ChangeLogTable, ChangeLogEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ChangeLogTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _seqMeta = const VerificationMeta('seq');
+  @override
+  late final GeneratedColumn<int> seq = GeneratedColumn<int>(
+    'seq',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _opMeta = const VerificationMeta('op');
+  @override
+  late final GeneratedColumn<String> op = GeneratedColumn<String>(
+    'op',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
+    'deviceId',
+  );
+  @override
+  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
+    'device_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('local'),
+  );
+  static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
+  @override
+  late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
+    'synced',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("synced" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    seq,
+    entityType,
+    entityId,
+    op,
+    payloadJson,
+    at,
+    deviceId,
+    synced,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'change_log';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ChangeLogEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('seq')) {
+      context.handle(
+        _seqMeta,
+        seq.isAcceptableOrUnknown(data['seq']!, _seqMeta),
+      );
+    }
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('op')) {
+      context.handle(_opMeta, op.isAcceptableOrUnknown(data['op']!, _opMeta));
+    } else if (isInserting) {
+      context.missing(_opMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    }
+    if (data.containsKey('device_id')) {
+      context.handle(
+        _deviceIdMeta,
+        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
+      );
+    }
+    if (data.containsKey('synced')) {
+      context.handle(
+        _syncedMeta,
+        synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {seq};
+  @override
+  ChangeLogEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ChangeLogEntry(
+      seq: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}seq'],
+      )!,
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      op: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}op'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      ),
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}at'],
+      )!,
+      deviceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}device_id'],
+      )!,
+      synced: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}synced'],
+      )!,
+    );
+  }
+
+  @override
+  $ChangeLogTable createAlias(String alias) {
+    return $ChangeLogTable(attachedDatabase, alias);
+  }
+}
+
+class ChangeLogEntry extends DataClass implements Insertable<ChangeLogEntry> {
+  final int seq;
+  final String entityType;
+  final String entityId;
+  final String op;
+  final String? payloadJson;
+  final DateTime at;
+  final String deviceId;
+  final bool synced;
+  const ChangeLogEntry({
+    required this.seq,
+    required this.entityType,
+    required this.entityId,
+    required this.op,
+    this.payloadJson,
+    required this.at,
+    required this.deviceId,
+    required this.synced,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['seq'] = Variable<int>(seq);
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['op'] = Variable<String>(op);
+    if (!nullToAbsent || payloadJson != null) {
+      map['payload_json'] = Variable<String>(payloadJson);
+    }
+    map['at'] = Variable<DateTime>(at);
+    map['device_id'] = Variable<String>(deviceId);
+    map['synced'] = Variable<bool>(synced);
+    return map;
+  }
+
+  ChangeLogCompanion toCompanion(bool nullToAbsent) {
+    return ChangeLogCompanion(
+      seq: Value(seq),
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      op: Value(op),
+      payloadJson: payloadJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payloadJson),
+      at: Value(at),
+      deviceId: Value(deviceId),
+      synced: Value(synced),
+    );
+  }
+
+  factory ChangeLogEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ChangeLogEntry(
+      seq: serializer.fromJson<int>(json['seq']),
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      op: serializer.fromJson<String>(json['op']),
+      payloadJson: serializer.fromJson<String?>(json['payloadJson']),
+      at: serializer.fromJson<DateTime>(json['at']),
+      deviceId: serializer.fromJson<String>(json['deviceId']),
+      synced: serializer.fromJson<bool>(json['synced']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'seq': serializer.toJson<int>(seq),
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'op': serializer.toJson<String>(op),
+      'payloadJson': serializer.toJson<String?>(payloadJson),
+      'at': serializer.toJson<DateTime>(at),
+      'deviceId': serializer.toJson<String>(deviceId),
+      'synced': serializer.toJson<bool>(synced),
+    };
+  }
+
+  ChangeLogEntry copyWith({
+    int? seq,
+    String? entityType,
+    String? entityId,
+    String? op,
+    Value<String?> payloadJson = const Value.absent(),
+    DateTime? at,
+    String? deviceId,
+    bool? synced,
+  }) => ChangeLogEntry(
+    seq: seq ?? this.seq,
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    op: op ?? this.op,
+    payloadJson: payloadJson.present ? payloadJson.value : this.payloadJson,
+    at: at ?? this.at,
+    deviceId: deviceId ?? this.deviceId,
+    synced: synced ?? this.synced,
+  );
+  ChangeLogEntry copyWithCompanion(ChangeLogCompanion data) {
+    return ChangeLogEntry(
+      seq: data.seq.present ? data.seq.value : this.seq,
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      op: data.op.present ? data.op.value : this.op,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      at: data.at.present ? data.at.value : this.at,
+      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
+      synced: data.synced.present ? data.synced.value : this.synced,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChangeLogEntry(')
+          ..write('seq: $seq, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('op: $op, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('at: $at, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    seq,
+    entityType,
+    entityId,
+    op,
+    payloadJson,
+    at,
+    deviceId,
+    synced,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ChangeLogEntry &&
+          other.seq == this.seq &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.op == this.op &&
+          other.payloadJson == this.payloadJson &&
+          other.at == this.at &&
+          other.deviceId == this.deviceId &&
+          other.synced == this.synced);
+}
+
+class ChangeLogCompanion extends UpdateCompanion<ChangeLogEntry> {
+  final Value<int> seq;
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<String> op;
+  final Value<String?> payloadJson;
+  final Value<DateTime> at;
+  final Value<String> deviceId;
+  final Value<bool> synced;
+  const ChangeLogCompanion({
+    this.seq = const Value.absent(),
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.op = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.at = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.synced = const Value.absent(),
+  });
+  ChangeLogCompanion.insert({
+    this.seq = const Value.absent(),
+    required String entityType,
+    required String entityId,
+    required String op,
+    this.payloadJson = const Value.absent(),
+    this.at = const Value.absent(),
+    this.deviceId = const Value.absent(),
+    this.synced = const Value.absent(),
+  }) : entityType = Value(entityType),
+       entityId = Value(entityId),
+       op = Value(op);
+  static Insertable<ChangeLogEntry> custom({
+    Expression<int>? seq,
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<String>? op,
+    Expression<String>? payloadJson,
+    Expression<DateTime>? at,
+    Expression<String>? deviceId,
+    Expression<bool>? synced,
+  }) {
+    return RawValuesInsertable({
+      if (seq != null) 'seq': seq,
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (op != null) 'op': op,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (at != null) 'at': at,
+      if (deviceId != null) 'device_id': deviceId,
+      if (synced != null) 'synced': synced,
+    });
+  }
+
+  ChangeLogCompanion copyWith({
+    Value<int>? seq,
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<String>? op,
+    Value<String?>? payloadJson,
+    Value<DateTime>? at,
+    Value<String>? deviceId,
+    Value<bool>? synced,
+  }) {
+    return ChangeLogCompanion(
+      seq: seq ?? this.seq,
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      op: op ?? this.op,
+      payloadJson: payloadJson ?? this.payloadJson,
+      at: at ?? this.at,
+      deviceId: deviceId ?? this.deviceId,
+      synced: synced ?? this.synced,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (seq.present) {
+      map['seq'] = Variable<int>(seq.value);
+    }
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (op.present) {
+      map['op'] = Variable<String>(op.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<DateTime>(at.value);
+    }
+    if (deviceId.present) {
+      map['device_id'] = Variable<String>(deviceId.value);
+    }
+    if (synced.present) {
+      map['synced'] = Variable<bool>(synced.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ChangeLogCompanion(')
+          ..write('seq: $seq, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('op: $op, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('at: $at, ')
+          ..write('deviceId: $deviceId, ')
+          ..write('synced: $synced')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3694,6 +4356,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $PointsHistoryTableTable(this);
   late final $RewardsTable rewards = $RewardsTable(this);
   late final $StreakTableTable streakTable = $StreakTableTable(this);
+  late final $ChangeLogTable changeLog = $ChangeLogTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3705,6 +4368,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     pointsHistoryTable,
     rewards,
     streakTable,
+    changeLog,
   ];
 }
 
@@ -3714,6 +4378,7 @@ typedef $$MilestonesTableCreateCompanionBuilder =
       Value<String> userId,
       required String name,
       Value<String?> description,
+      Value<String?> identity,
       Value<MilestoneStatus> status,
       Value<int> colorIndex,
       Value<DateTime?> targetDate,
@@ -3728,6 +4393,7 @@ typedef $$MilestonesTableUpdateCompanionBuilder =
       Value<String> userId,
       Value<String> name,
       Value<String?> description,
+      Value<String?> identity,
       Value<MilestoneStatus> status,
       Value<int> colorIndex,
       Value<DateTime?> targetDate,
@@ -3787,6 +4453,11 @@ class $$MilestonesTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get identity => $composableBuilder(
+    column: $table.identity,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3876,6 +4547,11 @@ class $$MilestonesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get identity => $composableBuilder(
+    column: $table.identity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -3929,6 +4605,9 @@ class $$MilestonesTableAnnotationComposer
     column: $table.description,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get identity =>
+      $composableBuilder(column: $table.identity, builder: (column) => column);
 
   GeneratedColumnWithTypeConverter<MilestoneStatus, String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
@@ -4014,6 +4693,7 @@ class $$MilestonesTableTableManager
                 Value<String> userId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String?> identity = const Value.absent(),
                 Value<MilestoneStatus> status = const Value.absent(),
                 Value<int> colorIndex = const Value.absent(),
                 Value<DateTime?> targetDate = const Value.absent(),
@@ -4026,6 +4706,7 @@ class $$MilestonesTableTableManager
                 userId: userId,
                 name: name,
                 description: description,
+                identity: identity,
                 status: status,
                 colorIndex: colorIndex,
                 targetDate: targetDate,
@@ -4040,6 +4721,7 @@ class $$MilestonesTableTableManager
                 Value<String> userId = const Value.absent(),
                 required String name,
                 Value<String?> description = const Value.absent(),
+                Value<String?> identity = const Value.absent(),
                 Value<MilestoneStatus> status = const Value.absent(),
                 Value<int> colorIndex = const Value.absent(),
                 Value<DateTime?> targetDate = const Value.absent(),
@@ -4052,6 +4734,7 @@ class $$MilestonesTableTableManager
                 userId: userId,
                 name: name,
                 description: description,
+                identity: identity,
                 status: status,
                 colorIndex: colorIndex,
                 targetDate: targetDate,
@@ -4130,6 +4813,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<bool> reminderEnabled,
       Value<int?> reminderMinute,
       Value<DateTime?> reminderDate,
+      Value<String?> stackedAfterTaskId,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -4151,6 +4835,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<bool> reminderEnabled,
       Value<int?> reminderMinute,
       Value<DateTime?> reminderDate,
+      Value<String?> stackedAfterTaskId,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -4296,6 +4981,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<DateTime> get reminderDate => $composableBuilder(
     column: $table.reminderDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stackedAfterTaskId => $composableBuilder(
+    column: $table.stackedAfterTaskId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4463,6 +5153,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get stackedAfterTaskId => $composableBuilder(
+    column: $table.stackedAfterTaskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -4566,6 +5261,11 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get reminderDate => $composableBuilder(
     column: $table.reminderDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get stackedAfterTaskId => $composableBuilder(
+    column: $table.stackedAfterTaskId,
     builder: (column) => column,
   );
 
@@ -4701,6 +5401,7 @@ class $$TasksTableTableManager
                 Value<bool> reminderEnabled = const Value.absent(),
                 Value<int?> reminderMinute = const Value.absent(),
                 Value<DateTime?> reminderDate = const Value.absent(),
+                Value<String?> stackedAfterTaskId = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -4720,6 +5421,7 @@ class $$TasksTableTableManager
                 reminderEnabled: reminderEnabled,
                 reminderMinute: reminderMinute,
                 reminderDate: reminderDate,
+                stackedAfterTaskId: stackedAfterTaskId,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,
@@ -4741,6 +5443,7 @@ class $$TasksTableTableManager
                 Value<bool> reminderEnabled = const Value.absent(),
                 Value<int?> reminderMinute = const Value.absent(),
                 Value<DateTime?> reminderDate = const Value.absent(),
+                Value<String?> stackedAfterTaskId = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -4760,6 +5463,7 @@ class $$TasksTableTableManager
                 reminderEnabled: reminderEnabled,
                 reminderMinute: reminderMinute,
                 reminderDate: reminderDate,
+                stackedAfterTaskId: stackedAfterTaskId,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,
@@ -4892,6 +5596,7 @@ typedef $$TaskCompletionsTableCreateCompanionBuilder =
       Value<String> userId,
       required DateTime completedOn,
       Value<int> pointsEarned,
+      Value<int?> durationSeconds,
       Value<bool> isSkip,
       Value<bool> isNd,
       Value<String?> note,
@@ -4905,6 +5610,7 @@ typedef $$TaskCompletionsTableUpdateCompanionBuilder =
       Value<String> userId,
       Value<DateTime> completedOn,
       Value<int> pointsEarned,
+      Value<int?> durationSeconds,
       Value<bool> isSkip,
       Value<bool> isNd,
       Value<String?> note,
@@ -4993,6 +5699,11 @@ class $$TaskCompletionsTableFilterComposer
 
   ColumnFilters<int> get pointsEarned => $composableBuilder(
     column: $table.pointsEarned,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5094,6 +5805,11 @@ class $$TaskCompletionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isSkip => $composableBuilder(
     column: $table.isSkip,
     builder: (column) => ColumnOrderings(column),
@@ -5160,6 +5876,11 @@ class $$TaskCompletionsTableAnnotationComposer
 
   GeneratedColumn<int> get pointsEarned => $composableBuilder(
     column: $table.pointsEarned,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get durationSeconds => $composableBuilder(
+    column: $table.durationSeconds,
     builder: (column) => column,
   );
 
@@ -5260,6 +5981,7 @@ class $$TaskCompletionsTableTableManager
                 Value<String> userId = const Value.absent(),
                 Value<DateTime> completedOn = const Value.absent(),
                 Value<int> pointsEarned = const Value.absent(),
+                Value<int?> durationSeconds = const Value.absent(),
                 Value<bool> isSkip = const Value.absent(),
                 Value<bool> isNd = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -5271,6 +5993,7 @@ class $$TaskCompletionsTableTableManager
                 userId: userId,
                 completedOn: completedOn,
                 pointsEarned: pointsEarned,
+                durationSeconds: durationSeconds,
                 isSkip: isSkip,
                 isNd: isNd,
                 note: note,
@@ -5284,6 +6007,7 @@ class $$TaskCompletionsTableTableManager
                 Value<String> userId = const Value.absent(),
                 required DateTime completedOn,
                 Value<int> pointsEarned = const Value.absent(),
+                Value<int?> durationSeconds = const Value.absent(),
                 Value<bool> isSkip = const Value.absent(),
                 Value<bool> isNd = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -5295,6 +6019,7 @@ class $$TaskCompletionsTableTableManager
                 userId: userId,
                 completedOn: completedOn,
                 pointsEarned: pointsEarned,
+                durationSeconds: durationSeconds,
                 isSkip: isSkip,
                 isNd: isNd,
                 note: note,
@@ -6350,6 +7075,261 @@ typedef $$StreakTableTableProcessedTableManager =
       Streak,
       PrefetchHooks Function()
     >;
+typedef $$ChangeLogTableCreateCompanionBuilder =
+    ChangeLogCompanion Function({
+      Value<int> seq,
+      required String entityType,
+      required String entityId,
+      required String op,
+      Value<String?> payloadJson,
+      Value<DateTime> at,
+      Value<String> deviceId,
+      Value<bool> synced,
+    });
+typedef $$ChangeLogTableUpdateCompanionBuilder =
+    ChangeLogCompanion Function({
+      Value<int> seq,
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<String> op,
+      Value<String?> payloadJson,
+      Value<DateTime> at,
+      Value<String> deviceId,
+      Value<bool> synced,
+    });
+
+class $$ChangeLogTableFilterComposer
+    extends Composer<_$AppDatabase, $ChangeLogTable> {
+  $$ChangeLogTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get seq => $composableBuilder(
+    column: $table.seq,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get op => $composableBuilder(
+    column: $table.op,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ChangeLogTableOrderingComposer
+    extends Composer<_$AppDatabase, $ChangeLogTable> {
+  $$ChangeLogTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get seq => $composableBuilder(
+    column: $table.seq,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get op => $composableBuilder(
+    column: $table.op,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deviceId => $composableBuilder(
+    column: $table.deviceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get synced => $composableBuilder(
+    column: $table.synced,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ChangeLogTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ChangeLogTable> {
+  $$ChangeLogTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get seq =>
+      $composableBuilder(column: $table.seq, builder: (column) => column);
+
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get op =>
+      $composableBuilder(column: $table.op, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get at =>
+      $composableBuilder(column: $table.at, builder: (column) => column);
+
+  GeneratedColumn<String> get deviceId =>
+      $composableBuilder(column: $table.deviceId, builder: (column) => column);
+
+  GeneratedColumn<bool> get synced =>
+      $composableBuilder(column: $table.synced, builder: (column) => column);
+}
+
+class $$ChangeLogTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ChangeLogTable,
+          ChangeLogEntry,
+          $$ChangeLogTableFilterComposer,
+          $$ChangeLogTableOrderingComposer,
+          $$ChangeLogTableAnnotationComposer,
+          $$ChangeLogTableCreateCompanionBuilder,
+          $$ChangeLogTableUpdateCompanionBuilder,
+          (
+            ChangeLogEntry,
+            BaseReferences<_$AppDatabase, $ChangeLogTable, ChangeLogEntry>,
+          ),
+          ChangeLogEntry,
+          PrefetchHooks Function()
+        > {
+  $$ChangeLogTableTableManager(_$AppDatabase db, $ChangeLogTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ChangeLogTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ChangeLogTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ChangeLogTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> seq = const Value.absent(),
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> op = const Value.absent(),
+                Value<String?> payloadJson = const Value.absent(),
+                Value<DateTime> at = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+              }) => ChangeLogCompanion(
+                seq: seq,
+                entityType: entityType,
+                entityId: entityId,
+                op: op,
+                payloadJson: payloadJson,
+                at: at,
+                deviceId: deviceId,
+                synced: synced,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> seq = const Value.absent(),
+                required String entityType,
+                required String entityId,
+                required String op,
+                Value<String?> payloadJson = const Value.absent(),
+                Value<DateTime> at = const Value.absent(),
+                Value<String> deviceId = const Value.absent(),
+                Value<bool> synced = const Value.absent(),
+              }) => ChangeLogCompanion.insert(
+                seq: seq,
+                entityType: entityType,
+                entityId: entityId,
+                op: op,
+                payloadJson: payloadJson,
+                at: at,
+                deviceId: deviceId,
+                synced: synced,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ChangeLogTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ChangeLogTable,
+      ChangeLogEntry,
+      $$ChangeLogTableFilterComposer,
+      $$ChangeLogTableOrderingComposer,
+      $$ChangeLogTableAnnotationComposer,
+      $$ChangeLogTableCreateCompanionBuilder,
+      $$ChangeLogTableUpdateCompanionBuilder,
+      (
+        ChangeLogEntry,
+        BaseReferences<_$AppDatabase, $ChangeLogTable, ChangeLogEntry>,
+      ),
+      ChangeLogEntry,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6366,4 +7346,6 @@ class $AppDatabaseManager {
       $$RewardsTableTableManager(_db, _db.rewards);
   $$StreakTableTableTableManager get streakTable =>
       $$StreakTableTableTableManager(_db, _db.streakTable);
+  $$ChangeLogTableTableManager get changeLog =>
+      $$ChangeLogTableTableManager(_db, _db.changeLog);
 }

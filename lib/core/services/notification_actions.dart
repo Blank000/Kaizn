@@ -5,10 +5,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../database/database.dart';
-import 'notification_feedback.dart';
+import 'app_event_bus.dart';
 import 'notification_scheduler.dart';
 import 'notification_service.dart';
 import 'streak_service.dart';
+import 'task_completion_service.dart';
 
 /// Handlers for taps on notification action buttons (Done / Skip / Snooze /
 /// Undo). These let the user update a task straight from the notification
@@ -93,25 +94,35 @@ Future<void> _handleDone(AppDatabase db, Map<String, dynamic> data) async {
   final task = await db.getTaskById(taskId);
   if (task == null) return;
 
-  // Idempotent: if it's already logged today, just re-confirm without inserting
-  // a duplicate.
+  // Idempotent: if it's already logged today, just re-confirm without
+  // inserting a duplicate. celebrationChecks stays off on this path — the
+  // app may not have UI up yet when the action fires.
   final existing = await db.getCompletionForTaskOn(taskId, DateTime.now());
-  if (existing == null) {
-    await db.completeTaskNow(task);
-    await StreakService.recordDayLogged(db);
-  }
-  final completion =
-      existing ?? await db.getCompletionForTaskOn(taskId, DateTime.now());
 
   // App is already opening (showsUserInterface: true) — surface the result as
   // an in-app snackbar instead of stacking another notification on top.
-  NotificationFeedback.post(NotificationFeedbackEvent(
-    kind: FeedbackKind.done,
-    taskName: task.name,
-    points: task.pointsPerCompletion,
-    taskId: taskId,
-    undoCompletionId: completion?.id,
-  ));
+  if (existing == null) {
+    final result = await TaskCompletionService.completeToday(db, task,
+        celebrationChecks: false);
+    AppEventBus.post(TaskActionEvent(
+      kind: TaskActionKind.done,
+      taskId: taskId,
+      taskName: task.name,
+      points: result.basePoints,
+      clutchBonus: result.clutchBonus,
+      nextStackedTaskName: result.stackedNext.firstOrNull?.name,
+      identityLine: result.identityLine,
+      undoCompletionId: result.completionId,
+    ));
+  } else {
+    AppEventBus.post(TaskActionEvent(
+      kind: TaskActionKind.done,
+      taskId: taskId,
+      taskName: task.name,
+      points: task.pointsPerCompletion,
+      undoCompletionId: existing.id,
+    ));
+  }
 }
 
 Future<void> _handleSkip(AppDatabase db, Map<String, dynamic> data) async {
@@ -132,11 +143,10 @@ Future<void> _handleSkip(AppDatabase db, Map<String, dynamic> data) async {
     }
   }
 
-  NotificationFeedback.post(NotificationFeedbackEvent(
-    kind: FeedbackKind.skip,
-    taskName: task.name,
-    points: 0,
+  AppEventBus.post(TaskActionEvent(
+    kind: TaskActionKind.skip,
     taskId: taskId,
+    taskName: task.name,
     undoCompletionId: cid,
   ));
 }
@@ -157,11 +167,10 @@ Future<void> _handleSnooze(Map<String, dynamic> data) async {
     payload: jsonEncode({'t': 'task', 'id': taskId, 'n': name}),
   );
 
-  NotificationFeedback.post(NotificationFeedbackEvent(
-    kind: FeedbackKind.snooze,
-    taskName: name,
-    points: 0,
+  AppEventBus.post(TaskActionEvent(
+    kind: TaskActionKind.snooze,
     taskId: taskId,
+    taskName: name,
     snoozedUntil: when,
   ));
 }

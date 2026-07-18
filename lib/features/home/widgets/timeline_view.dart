@@ -5,9 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
-import '../../../core/services/achievement_service.dart';
-import '../../../core/services/notification_feedback.dart';
+import '../../../core/services/app_event_bus.dart';
 import '../../../core/services/streak_service.dart';
+import '../../../core/services/task_completion_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
@@ -17,7 +17,6 @@ import '../../../shared/widgets/achievement_snackbar.dart';
 import '../../../shared/widgets/reward_unlock_snackbar.dart';
 import '../../../shared/widgets/task_tile.dart'
     show TaskRowState, taskRowStateFor;
-import '../../rewards/reward_unlock_service.dart';
 
 const double _pxPerMinute = 1.0;
 const double _hourLabelWidth = 56;
@@ -849,29 +848,23 @@ Future<void> _toggleTask(
     return;
   }
 
-  await db.completeTaskNow(task);
-  final streakBadges = await StreakService.recordDayLogged(db);
-  final completionBadges =
-      await AchievementService.checkAfterCompletion(db);
-  final unlocked = await RewardUnlockService.checkAfterPointsChange(db);
+  final result = await TaskCompletionService.completeToday(db, task);
   HapticFeedback.mediumImpact();
 
-  final hasCelebration = completionBadges.isNotEmpty ||
-      streakBadges.isNotEmpty ||
-      unlocked.isNotEmpty;
-
-  if (context.mounted && hasCelebration) {
-    showAchievementSnackbar(context, [...completionBadges, ...streakBadges]);
-    showRewardUnlockSnackbar(context, unlocked);
+  if (context.mounted && result.hasCelebration) {
+    showAchievementSnackbar(
+        context, [...result.completionBadges, ...result.streakBadges]);
+    showRewardUnlockSnackbar(context, result.unlockedRewards);
   } else if (context.mounted) {
-    final completion =
-        await db.getCompletionForTaskOn(task.id, DateTime.now());
-    NotificationFeedback.post(NotificationFeedbackEvent(
-      kind: FeedbackKind.done,
-      taskName: task.name,
-      points: task.pointsPerCompletion,
+    AppEventBus.post(TaskActionEvent(
+      kind: TaskActionKind.done,
       taskId: task.id,
-      undoCompletionId: completion?.id,
+      taskName: task.name,
+      points: result.basePoints,
+      clutchBonus: result.clutchBonus,
+      nextStackedTaskName: result.stackedNext.firstOrNull?.name,
+      identityLine: result.identityLine,
+      undoCompletionId: result.completionId,
     ));
   }
 }

@@ -3,13 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
-import '../../core/services/achievement_service.dart';
-import '../../core/services/notification_feedback.dart';
+import '../../core/services/app_event_bus.dart';
 import '../../core/services/streak_service.dart';
+import '../../core/services/task_completion_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
-import '../../features/rewards/reward_unlock_service.dart';
 import '../models/recurrence_rule.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
@@ -376,42 +375,35 @@ class _TaskTileState extends ConsumerState<TaskTile>
           widget.rowState.skipCompletion!.id, widget.task.id);
       HapticFeedback.lightImpact();
     } else if (_isUnchecked) {
-      await db.completeTaskNow(widget.task);
-      final streakBadges = await StreakService.recordDayLogged(db);
-      final completionBadges =
-          await AchievementService.checkAfterCompletion(db);
-      final unlockedRewards =
-          await RewardUnlockService.checkAfterPointsChange(db);
+      final result =
+          await TaskCompletionService.completeToday(db, widget.task);
       HapticFeedback.mediumImpact();
       if (widget.task.pointsPerCompletion > 0 && mounted) {
         _triggerFloater();
       }
 
       // Priority for the resulting snackbar:
-      //   - Badges unlocked → achievement snackbar (celebration wins).
-      //   - Rewards unlocked → reward snackbar.
+      //   - Badges/rewards unlocked → celebration snackbars win.
       //   - Otherwise → the "Logged X + UNDO" snackbar for the 6s grace.
       // We deliberately don't stack the UNDO snackbar with the celebration
       // ones — they'd shove each other around and lose the moment.
-      final hasCelebration = completionBadges.isNotEmpty ||
-          streakBadges.isNotEmpty ||
-          unlockedRewards.isNotEmpty;
-
-      if (mounted && hasCelebration) {
+      if (mounted && result.hasCelebration) {
         showAchievementSnackbar(
           context,
-          [...completionBadges, ...streakBadges],
+          [...result.completionBadges, ...result.streakBadges],
         );
-        showRewardUnlockSnackbar(context, unlockedRewards);
+        showRewardUnlockSnackbar(context, result.unlockedRewards);
       } else if (mounted) {
-        final completion =
-            await db.getCompletionForTaskOn(widget.task.id, DateTime.now());
-        NotificationFeedback.post(NotificationFeedbackEvent(
-          kind: FeedbackKind.done,
-          taskName: widget.task.name,
-          points: widget.task.pointsPerCompletion,
+        AppEventBus.post(TaskActionEvent(
+          kind: TaskActionKind.done,
           taskId: widget.task.id,
-          undoCompletionId: completion?.id,
+          taskName: widget.task.name,
+          points: result.basePoints,
+          clutchBonus: result.clutchBonus,
+          durationSeconds: result.attachedDurationSeconds,
+          nextStackedTaskName: result.stackedNext.firstOrNull?.name,
+          identityLine: result.identityLine,
+          undoCompletionId: result.completionId,
         ));
       }
     }
@@ -526,64 +518,36 @@ class _TaskTileState extends ConsumerState<TaskTile>
 
     // Empty chip → log a real completion. Two paths depending on whether it's
     // today (streak-relevant) or a past/future date (retro-log).
+    final CompletionResult result;
     if (chip.isToday) {
-      await db.completeTaskNow(widget.task);
-      final streakBadges = await StreakService.recordDayLogged(db);
-      final completionBadges =
-          await AchievementService.checkAfterCompletion(db);
-      final unlockedRewards =
-          await RewardUnlockService.checkAfterPointsChange(db);
+      result = await TaskCompletionService.completeToday(db, widget.task);
       HapticFeedback.mediumImpact();
       if (widget.task.pointsPerCompletion > 0 && mounted) {
         _triggerFloater();
       }
-
-      final hasCelebration = completionBadges.isNotEmpty ||
-          streakBadges.isNotEmpty ||
-          unlockedRewards.isNotEmpty;
-
-      if (mounted && hasCelebration) {
-        showAchievementSnackbar(
-          context,
-          [...completionBadges, ...streakBadges],
-        );
-        showRewardUnlockSnackbar(context, unlockedRewards);
-      } else if (mounted) {
-        final completion =
-            await db.getCompletionForTaskOn(widget.task.id, DateTime.now());
-        NotificationFeedback.post(NotificationFeedbackEvent(
-          kind: FeedbackKind.done,
-          taskName: widget.task.name,
-          points: widget.task.pointsPerCompletion,
-          taskId: widget.task.id,
-          undoCompletionId: completion?.id,
-        ));
-      }
     } else {
-      await db.completeTaskOn(widget.task, chip.date);
-      final completionBadges =
-          await AchievementService.checkAfterCompletion(db);
-      final unlockedRewards =
-          await RewardUnlockService.checkAfterPointsChange(db);
+      result = await TaskCompletionService.completeOn(
+          db, widget.task, chip.date);
       HapticFeedback.mediumImpact();
+    }
 
-      final hasCelebration =
-          completionBadges.isNotEmpty || unlockedRewards.isNotEmpty;
-
-      if (mounted && hasCelebration) {
-        showAchievementSnackbar(context, completionBadges);
-        showRewardUnlockSnackbar(context, unlockedRewards);
-      } else if (mounted) {
-        final completion =
-            await db.getCompletionForTaskOn(widget.task.id, chip.date);
-        NotificationFeedback.post(NotificationFeedbackEvent(
-          kind: FeedbackKind.done,
-          taskName: widget.task.name,
-          points: widget.task.pointsPerCompletion,
-          taskId: widget.task.id,
-          undoCompletionId: completion?.id,
-        ));
-      }
+    if (mounted && result.hasCelebration) {
+      showAchievementSnackbar(
+        context,
+        [...result.completionBadges, ...result.streakBadges],
+      );
+      showRewardUnlockSnackbar(context, result.unlockedRewards);
+    } else if (mounted) {
+      AppEventBus.post(TaskActionEvent(
+        kind: TaskActionKind.done,
+        taskId: widget.task.id,
+        taskName: widget.task.name,
+        points: result.basePoints,
+        clutchBonus: result.clutchBonus,
+        nextStackedTaskName: result.stackedNext.firstOrNull?.name,
+        identityLine: result.identityLine,
+        undoCompletionId: result.completionId,
+      ));
     }
   }
 }

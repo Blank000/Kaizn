@@ -15,6 +15,10 @@ class TaskCompletions extends Table {
 
   IntColumn get pointsEarned => integer().withDefault(const Constant(0))();
 
+  // Stopwatch-lite: seconds tracked for this completion via the in-app timer.
+  // Null = untimed completion (the overwhelming default).
+  IntColumn get durationSeconds => integer().nullable()();
+
   // Carried over from the old `entries` model.
   BoolColumn get isSkip => boolean().withDefault(const Constant(false))();
   BoolColumn get isNd => boolean().withDefault(const Constant(false))();

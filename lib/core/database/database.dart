@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'tables/change_log.dart';
 import 'tables/milestones.dart';
 import 'tables/tasks.dart';
 import 'tables/task_completions.dart';
@@ -19,6 +21,15 @@ part 'database.g.dart';
 
 /// Main database class for the Habit Reward Tracker app.
 /// Uses Drift (SQLite) for local storage.
+/// Outcome of a completion insert, returned so callers/services can surface
+/// points without a re-query. `clutchBonus` stays 0 until the last-call +
+/// clutch feature (Wave 2 of the Atomic Habits plan) fills it in.
+typedef DbCompletionOutcome = ({
+  String completionId,
+  int basePoints,
+  int clutchBonus,
+});
+
 @DriftDatabase(tables: [
   Milestones,
   Tasks,
@@ -26,6 +37,7 @@ part 'database.g.dart';
   PointsHistoryTable,
   Rewards,
   StreakTable,
+  ChangeLog,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -37,8 +49,12 @@ class AppDatabase extends _$AppDatabase {
   //        reminder notifications.
   // 5 → 6 adds `reminder_date` to tasks — when set, the reminder is a one-shot
   //        nudge on that specific date (ignoring recurrence).
+  // 6 → 7 Atomic Habits wave batch: `stacked_after_task_id` on tasks (habit
+  //        stacking), `duration_seconds` on task_completions (stopwatch),
+  //        `identity` on milestones (identity-based habits), and the new
+  //        `change_log` journal table (auto-backup/sync/outbox foundation).
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -75,8 +91,43 @@ class AppDatabase extends _$AppDatabase {
           // v5 → v6: add one-shot reminder date, nullable.
           await m.addColumn(tasks, tasks.reminderDate);
         }
+        if (from < 7) {
+          // v6 → v7: Atomic Habits wave — single batched migration.
+          await m.addColumn(tasks, tasks.stackedAfterTaskId);
+          await m.addColumn(taskCompletions, taskCompletions.durationSeconds);
+          await m.addColumn(milestones, milestones.identity);
+          await m.createTable(changeLog);
+        }
       },
     );
+  }
+
+  // ============ Change log (append-only mutation journal) ============
+
+  /// Record a mutation in the journal. Called inside the same transaction as
+  /// the write it describes wherever one exists. See tables/change_log.dart
+  /// for what this powers (auto-backup now; sync/outbox later).
+  Future<void> _logChange(
+    String entityType,
+    String entityId,
+    String op, {
+    Map<String, Object?>? payload,
+  }) {
+    return into(changeLog).insert(ChangeLogCompanion.insert(
+      entityType: entityType,
+      entityId: entityId,
+      op: op,
+      payloadJson: Value(payload == null ? null : jsonEncode(payload)),
+    ));
+  }
+
+  /// Newest journal sequence number, or 0 when empty. Cheap; lets callers
+  /// (debounced auto-backup, future sync) detect "anything changed since X?".
+  Future<int> latestChangeSeq() async {
+    final query = selectOnly(changeLog)
+      ..addColumns([changeLog.seq.max()]);
+    final row = await query.getSingle();
+    return row.read(changeLog.seq.max()) ?? 0;
   }
 
   Future<void> _initStreakSingleton() async {
@@ -99,30 +150,48 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
   }
 
-  Future<int> insertMilestone(MilestonesCompanion milestone) {
-    return into(milestones).insert(milestone);
+  Future<int> insertMilestone(MilestonesCompanion milestone) async {
+    final result = await into(milestones).insert(milestone);
+    await _logChange('milestone', milestone.id.value, 'create',
+        payload: {'name': milestone.name.value});
+    return result;
   }
 
-  Future<bool> updateMilestone(Milestone milestone) {
-    return update(milestones).replace(milestone);
+  Future<bool> updateMilestone(Milestone milestone) async {
+    final result = await update(milestones).replace(milestone);
+    await _logChange('milestone', milestone.id, 'update',
+        payload: {'name': milestone.name});
+    return result;
   }
 
-  Future<int> deleteMilestone(String id) {
-    return (delete(milestones)..where((m) => m.id.equals(id))).go();
+  Future<int> deleteMilestone(String id) async {
+    final result =
+        await (delete(milestones)..where((m) => m.id.equals(id))).go();
+    await _logChange('milestone', id, 'delete');
+    return result;
   }
 
   /// Delete a milestone, all its tasks, and all completions of those tasks.
+  /// Clears habit-stacking references pointing at any deleted task.
   Future<void> deleteMilestoneCascade(String id) {
     return transaction(() async {
       final tasksUnder = await (select(tasks)
             ..where((t) => t.milestoneId.equals(id)))
           .get();
+      final taskIds = tasksUnder.map((t) => t.id).toList();
+      if (taskIds.isNotEmpty) {
+        await (update(tasks)
+              ..where((t) => t.stackedAfterTaskId.isIn(taskIds)))
+            .write(const TasksCompanion(stackedAfterTaskId: Value(null)));
+      }
       for (final t in tasksUnder) {
         await (delete(taskCompletions)..where((c) => c.taskId.equals(t.id)))
             .go();
       }
       await (delete(tasks)..where((t) => t.milestoneId.equals(id))).go();
       await (delete(milestones)..where((m) => m.id.equals(id))).go();
+      await _logChange('milestone', id, 'delete',
+          payload: {'cascadedTasks': taskIds.length});
     });
   }
 
@@ -181,12 +250,27 @@ class AppDatabase extends _$AppDatabase {
     return (select(tasks)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
-  Future<int> insertTask(TasksCompanion task) {
-    return into(tasks).insert(task);
+  /// Active tasks stacked after [anchorTaskId] (habit stacking). Single-level
+  /// query — chains resolve stepwise as each link completes.
+  Future<List<Task>> getTasksStackedAfter(String anchorTaskId) {
+    return (select(tasks)
+          ..where((t) =>
+              t.stackedAfterTaskId.equals(anchorTaskId) &
+              t.status.equals(TaskStatus.active.value)))
+        .get();
   }
 
-  Future<bool> updateTask(Task task) {
-    return update(tasks).replace(task);
+  Future<int> insertTask(TasksCompanion task) async {
+    final result = await into(tasks).insert(task);
+    await _logChange('task', task.id.value, 'create',
+        payload: {'name': task.name.value});
+    return result;
+  }
+
+  Future<bool> updateTask(Task task) async {
+    final result = await update(tasks).replace(task);
+    await _logChange('task', task.id, 'update', payload: {'name': task.name});
+    return result;
   }
 
   Future<int> deleteTask(String id) {
@@ -208,11 +292,15 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Delete a task and all its completions.
+  /// Delete a task and all its completions. Clears any habit-stacking
+  /// references pointing at it so no dangling anchor ids survive.
   Future<void> deleteTaskCascade(String id) {
     return transaction(() async {
+      await (update(tasks)..where((t) => t.stackedAfterTaskId.equals(id)))
+          .write(const TasksCompanion(stackedAfterTaskId: Value(null)));
       await (delete(taskCompletions)..where((c) => c.taskId.equals(id))).go();
       await (delete(tasks)..where((t) => t.id.equals(id))).go();
+      await _logChange('task', id, 'delete');
     });
   }
 
@@ -373,14 +461,17 @@ class AppDatabase extends _$AppDatabase {
     return transaction(() async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
+      final id = _generateId();
       await into(taskCompletions).insert(
         TaskCompletionsCompanion.insert(
-          id: _generateId(),
+          id: id,
           taskId: task.id,
           completedOn: today,
           isSkip: const Value(true),
         ),
       );
+      await _logChange('completion', id, 'create',
+          payload: {'taskId': task.id, 'kind': 'skip'});
     });
   }
 
@@ -391,14 +482,17 @@ class AppDatabase extends _$AppDatabase {
     return transaction(() async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
+      final id = _generateId();
       await into(taskCompletions).insert(
         TaskCompletionsCompanion.insert(
-          id: _generateId(),
+          id: id,
           taskId: task.id,
           completedOn: today,
           isNd: const Value(true),
         ),
       );
+      await _logChange('completion', id, 'create',
+          payload: {'taskId': task.id, 'kind': 'missed'});
     });
   }
 
@@ -408,14 +502,17 @@ class AppDatabase extends _$AppDatabase {
   Future<void> skipTaskOn(Task task, DateTime date) {
     return transaction(() async {
       final dayOnly = DateTime(date.year, date.month, date.day);
+      final id = _generateId();
       await into(taskCompletions).insert(
         TaskCompletionsCompanion.insert(
-          id: _generateId(),
+          id: id,
           taskId: task.id,
           completedOn: dayOnly,
           isSkip: const Value(true),
         ),
       );
+      await _logChange('completion', id, 'create',
+          payload: {'taskId': task.id, 'kind': 'skip'});
     });
   }
 
@@ -423,14 +520,17 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markTaskMissedOn(Task task, DateTime date) {
     return transaction(() async {
       final dayOnly = DateTime(date.year, date.month, date.day);
+      final id = _generateId();
       await into(taskCompletions).insert(
         TaskCompletionsCompanion.insert(
-          id: _generateId(),
+          id: id,
           taskId: task.id,
           completedOn: dayOnly,
           isNd: const Value(true),
         ),
       );
+      await _logChange('completion', id, 'create',
+          payload: {'taskId': task.id, 'kind': 'missed'});
     });
   }
 
@@ -438,7 +538,8 @@ class AppDatabase extends _$AppDatabase {
   /// per-day weekly chip row). Awards points, but does NOT flip one-shot
   /// status (per-day chips don't apply to one-shots) and does not touch the
   /// streak (the caller decides whether to advance for today specifically).
-  Future<void> completeTaskOn(Task task, DateTime date) {
+  Future<DbCompletionOutcome> completeTaskOn(Task task, DateTime date,
+      {int? durationSeconds}) {
     return transaction(() async {
       final dayOnly = DateTime(date.year, date.month, date.day);
       final completionId = _generateId();
@@ -448,6 +549,7 @@ class AppDatabase extends _$AppDatabase {
           taskId: task.id,
           completedOn: dayOnly,
           pointsEarned: Value(task.pointsPerCompletion),
+          durationSeconds: Value.absentIfNull(durationSeconds),
         ),
       );
       if (task.pointsPerCompletion > 0) {
@@ -461,12 +563,23 @@ class AppDatabase extends _$AppDatabase {
           ),
         );
       }
+      await _logChange('completion', completionId, 'create', payload: {
+        'taskId': task.id,
+        'on': dayOnly.toIso8601String(),
+        'points': task.pointsPerCompletion,
+      });
+      return (
+        completionId: completionId,
+        basePoints: task.pointsPerCompletion,
+        clutchBonus: 0,
+      );
     });
   }
 
   /// Mark a task complete now: insert a completion, award points, and for
   /// one-shot tasks flip status → completed. Single transaction.
-  Future<void> completeTaskNow(Task task) {
+  Future<DbCompletionOutcome> completeTaskNow(Task task,
+      {int? durationSeconds}) {
     return transaction(() async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -478,6 +591,7 @@ class AppDatabase extends _$AppDatabase {
           taskId: task.id,
           completedOn: today,
           pointsEarned: Value(task.pointsPerCompletion),
+          durationSeconds: Value.absentIfNull(durationSeconds),
         ),
       );
 
@@ -501,6 +615,19 @@ class AppDatabase extends _$AppDatabase {
           ),
         );
       }
+
+      await _logChange('completion', completionId, 'create', payload: {
+        'taskId': task.id,
+        'on': today.toIso8601String(),
+        'points': task.pointsPerCompletion,
+        if (durationSeconds != null) 'durationSeconds': durationSeconds,
+      });
+
+      return (
+        completionId: completionId,
+        basePoints: task.pointsPerCompletion,
+        clutchBonus: 0,
+      );
     });
   }
 
@@ -523,6 +650,8 @@ class AppDatabase extends _$AppDatabase {
           ),
         );
       }
+      await _logChange('completion', completionId, 'delete',
+          payload: {'taskId': taskId});
     });
   }
 
@@ -575,6 +704,8 @@ class AppDatabase extends _$AppDatabase {
           ),
         );
       }
+      await _logChange('milestone', milestoneId, 'update',
+          payload: {'completed': true, 'bonus': bonusPoints});
       return bonusPoints;
     });
   }
@@ -722,16 +853,24 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
-  Future<int> insertReward(RewardsCompanion reward) {
-    return into(rewards).insert(reward);
+  Future<int> insertReward(RewardsCompanion reward) async {
+    final result = await into(rewards).insert(reward);
+    await _logChange('reward', reward.id.value, 'create',
+        payload: {'name': reward.name.value});
+    return result;
   }
 
-  Future<bool> updateReward(Reward reward) {
-    return update(rewards).replace(reward);
+  Future<bool> updateReward(Reward reward) async {
+    final result = await update(rewards).replace(reward);
+    await _logChange('reward', reward.id, 'update',
+        payload: {'name': reward.name, 'claimed': reward.isClaimed});
+    return result;
   }
 
-  Future<int> deleteReward(String id) {
-    return (delete(rewards)..where((r) => r.id.equals(id))).go();
+  Future<int> deleteReward(String id) async {
+    final result = await (delete(rewards)..where((r) => r.id.equals(id))).go();
+    await _logChange('reward', id, 'delete');
+    return result;
   }
 
   // ============ Streak ============

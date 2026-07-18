@@ -5,7 +5,12 @@ import 'tasks.dart';
 /// Reason a point event was recorded. Drives audit log + reporting.
 enum PointsReason {
   taskCompletion('task_completion'),
-  milestoneBonus('milestone_bonus');
+  milestoneBonus('milestone_bonus'),
+  // Completion landed in the last stretch of the task's scheduled window
+  // ("beat the buzzer"). Wave 2 of the Atomic Habits plan; enum added early
+  // so the v7 codegen batch is done once. textEnum stores the Dart name, so
+  // adding a value needs no migration.
+  clutchBonus('clutch_bonus');
 
   const PointsReason(this.value);
   final String value;

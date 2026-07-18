@@ -67,7 +67,7 @@ class NotificationService {
   // the app so the tap handler runs in the foreground isolate — silent
   // background isolates are unreliable on aggressive OEMs (Vivo/iQOO/Xiaomi)
   // where the OS kills the isolate before the DB write lands. Tap → app opens
-  // → action processed → in-app snackbar (see NotificationFeedback).
+  // → action processed → in-app snackbar (see AppEventBus).
   //
   // Built on demand via [taskDetailsFor] so we can bake per-task point value
   // into the Done button label ("Done (+10 pts)"). Also uses a larger
