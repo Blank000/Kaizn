@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/notification_prefs.dart';
+import '../../../core/services/notification_scheduler.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -28,6 +29,7 @@ class _NotificationSettingsSheetState
   bool _dailyEnabled = false;
   TimeOfDay _dailyTime = const TimeOfDay(hour: 8, minute: 0);
   bool _streakAlertEnabled = false;
+  bool _taskRemindersEnabled = true;
   bool _weeklyRecapEnabled = false;
   bool _loading = true;
 
@@ -41,12 +43,14 @@ class _NotificationSettingsSheetState
     final dailyEnabled = await NotificationPrefs.isDailyEnabled();
     final dailyTime = await NotificationPrefs.getDailyTime();
     final streakEnabled = await NotificationPrefs.isStreakAlertEnabled();
+    final taskReminders = await NotificationPrefs.isTaskRemindersEnabled();
     final weeklyEnabled = await NotificationPrefs.isWeeklyRecapEnabled();
     if (mounted) {
       setState(() {
         _dailyEnabled = dailyEnabled;
         _dailyTime = TimeOfDay(hour: dailyTime.hour, minute: dailyTime.minute);
         _streakAlertEnabled = streakEnabled;
+        _taskRemindersEnabled = taskReminders;
         _weeklyRecapEnabled = weeklyEnabled;
         _loading = false;
       });
@@ -56,12 +60,7 @@ class _NotificationSettingsSheetState
   Future<void> _toggleDaily(bool value) async {
     setState(() => _dailyEnabled = value);
     await NotificationPrefs.setDailyEnabled(value);
-    if (value) {
-      await NotificationService.scheduleDailyReminder(
-          _dailyTime.hour, _dailyTime.minute);
-    } else {
-      await NotificationService.cancelDailyReminder();
-    }
+    await NotificationScheduler.reschedule();
   }
 
   Future<void> _pickTime() async {
@@ -72,20 +71,19 @@ class _NotificationSettingsSheetState
     if (picked == null || !mounted) return;
     setState(() => _dailyTime = picked);
     await NotificationPrefs.setDailyTime(picked.hour, picked.minute);
-    if (_dailyEnabled) {
-      await NotificationService.scheduleDailyReminder(
-          picked.hour, picked.minute);
-    }
+    await NotificationScheduler.reschedule();
   }
 
   Future<void> _toggleStreakAlert(bool value) async {
     setState(() => _streakAlertEnabled = value);
     await NotificationPrefs.setStreakAlertEnabled(value);
-    if (value) {
-      await NotificationService.scheduleStreakAlert();
-    } else {
-      await NotificationService.cancelStreakAlert();
-    }
+    await NotificationScheduler.reschedule();
+  }
+
+  Future<void> _toggleTaskReminders(bool value) async {
+    setState(() => _taskRemindersEnabled = value);
+    await NotificationPrefs.setTaskRemindersEnabled(value);
+    await NotificationScheduler.reschedule();
   }
 
   Future<void> _toggleWeeklyRecap(bool value) async {
@@ -138,9 +136,9 @@ class _NotificationSettingsSheetState
           if (_loading)
             const Center(child: CircularProgressIndicator())
           else ...[
-            // ── Daily Reminder ──
+            // ── Morning Briefing ──
             Text(
-              'DAILY REMINDER',
+              'MORNING BRIEFING',
               style: AppTypography.caption.copyWith(
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w800,
@@ -148,8 +146,9 @@ class _NotificationSettingsSheetState
             ),
             const SizedBox(height: 8),
             _ToggleRow(
-              label: 'Enable daily reminder',
-              subtitle: 'Remind me to log my habits',
+              label: 'Daily summary',
+              subtitle: "Lists today's tasks — or nudges you to log if there "
+                  'are none',
               value: _dailyEnabled,
               onChanged: _toggleDaily,
             ),
@@ -209,7 +208,30 @@ class _NotificationSettingsSheetState
             ),
             const SizedBox(height: 8),
             Text(
-              'Keeps your streak alive by nudging you before midnight.',
+              'Only fires if you haven\'t logged anything that day.',
+              style: AppTypography.caption
+                  .copyWith(color: context.appTextTertiary),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Task Reminders ──
+            Text(
+              'TASK REMINDERS',
+              style: AppTypography.caption.copyWith(
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _ToggleRow(
+              label: 'Per-task reminders',
+              subtitle: 'Allow reminders set on individual tasks',
+              value: _taskRemindersEnabled,
+              onChanged: _toggleTaskReminders,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Set a reminder time on a task when creating or editing it.',
               style: AppTypography.caption
                   .copyWith(color: context.appTextTertiary),
             ),

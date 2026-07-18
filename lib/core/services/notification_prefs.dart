@@ -50,6 +50,23 @@ class NotificationPrefs {
     await p.setBool(_weeklyRecapEnabledKey, value);
   }
 
+  // ── Per-task reminders (master switch) ────────────────────────────────────
+
+  static const _taskRemindersEnabledKey = 'notif_task_reminders_enabled';
+
+  /// Master switch for per-task reminders. On by default — individual tasks
+  /// opt in via their own `reminderEnabled` flag, so this just lets the user
+  /// silence all of them at once.
+  static Future<bool> isTaskRemindersEnabled() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_taskRemindersEnabledKey) ?? true;
+  }
+
+  static Future<void> setTaskRemindersEnabled(bool value) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_taskRemindersEnabledKey, value);
+  }
+
   // ── Per-metric reminders ──────────────────────────────────────────────────
 
   static String _metricEnabledKey(String id) => 'metric_reminder_${id}_enabled';

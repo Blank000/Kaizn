@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/backup_service.dart';
+import '../../core/services/notification_scheduler.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
@@ -86,6 +88,21 @@ class SettingsScreen extends ConsumerWidget {
                     color: context.appTextSecondary),
                 onTap: () => showNotificationSettingsSheet(context),
               ),
+              _Divider(),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined),
+                title: Text('Test notifications',
+                    style: AppTypography.body),
+                subtitle: Text(
+                  'Diagnose why reminders aren\'t firing',
+                  style: AppTypography.caption.copyWith(
+                    color: context.appTextSecondary,
+                  ),
+                ),
+                trailing: Icon(Icons.chevron_right_rounded,
+                    color: context.appTextSecondary),
+                onTap: () => _showNotificationDiagnostics(context),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -147,6 +164,161 @@ class SettingsScreen extends ConsumerWidget {
       applicationLegalese:
           'Gamified personal productivity. Log anything, earn points, '
           'unlock the rewards you set for yourself.',
+    );
+  }
+
+  void _showNotificationDiagnostics(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: ctx.appCardSurface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ctx.appBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('Test notifications', style: AppTypography.heading2),
+              const SizedBox(height: 8),
+              Text(
+                'Show now — tests OS notification permission.\n'
+                'Schedule in 30s — tests exact alarms + OEM background wake.\n'
+                'If (1) works but (2) doesn\'t, your phone is killing background alarms.',
+                style: AppTypography.caption
+                    .copyWith(color: ctx.appTextSecondary),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await NotificationService.show(
+                      id: 90001,
+                      title: '🧪 Test notification',
+                      body:
+                          'If you see this, notifications are enabled.',
+                      kind: NotificationKind.morning,
+                    );
+                    if (ctx.mounted) Navigator.of(ctx).pop();
+                  },
+                  icon: const Icon(Icons.notifications_active_outlined),
+                  label: const Text('SHOW NOW'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await NotificationService.scheduleAt(
+                      id: 90002,
+                      when: DateTime.now()
+                          .add(const Duration(seconds: 30)),
+                      title: '⏰ 30-second test',
+                      body:
+                          'Scheduled 30s ago via exact-alarm. Lock the phone to test background delivery.',
+                      kind: NotificationKind.task,
+                    );
+                    if (ctx.mounted) {
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                'Scheduled — lock your phone and wait 30s')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.schedule_rounded),
+                  label: const Text('SCHEDULE IN 30s'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    await _showPendingNotifications(context);
+                  },
+                  icon: const Icon(Icons.list_alt_rounded),
+                  label:
+                      const Text('SHOW QUEUED NOTIFICATIONS'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPendingNotifications(BuildContext context) async {
+    // Force the scheduler to rebuild the queue from current task state, so we
+    // see what should be there right now — not a stale snapshot.
+    await NotificationScheduler.reschedule();
+    final pending = await NotificationService.pending();
+    if (!context.mounted) return;
+
+    // Sort task reminders (id >= taskBase) to the top so they're easy to spot.
+    pending.sort((a, b) => b.id.compareTo(a.id));
+
+    await showDialog<void>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text('Queued: ${pending.length}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: pending.isEmpty
+              ? const Text(
+                  'Nothing is scheduled. Task reminders won\'t fire until '
+                  'reschedule() runs and queues them.')
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: pending.length,
+                  separatorBuilder: (_, __) => const Divider(height: 8),
+                  itemBuilder: (_, i) {
+                    final r = pending[i];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('id: ${r.id}',
+                            style: const TextStyle(
+                                fontFamily: 'monospace', fontSize: 12)),
+                        Text(r.title ?? '(no title)',
+                            style: AppTypography.body),
+                        if (r.body != null)
+                          Text(r.body!,
+                              style: AppTypography.caption,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                      ],
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dctx).pop(),
+              child: const Text('CLOSE')),
+        ],
+      ),
     );
   }
 }
