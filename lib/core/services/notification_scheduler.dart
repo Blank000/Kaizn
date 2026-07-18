@@ -82,12 +82,17 @@ class NotificationScheduler {
       final eveningEnabled = await NotificationPrefs.isStreakAlertEnabled();
       final taskRemindersEnabled =
           await NotificationPrefs.isTaskRemindersEnabled();
+      final lastCallEnabled = await NotificationPrefs.isLastCallEnabled();
 
       debugPrint(
-          '🔔 reschedule: morning=$morningEnabled evening=$eveningEnabled tasks=$taskRemindersEnabled');
+          '🔔 reschedule: morning=$morningEnabled evening=$eveningEnabled '
+          'tasks=$taskRemindersEnabled lastCall=$lastCallEnabled');
 
       // Nothing to schedule — clear the whole managed queue.
-      if (!morningEnabled && !eveningEnabled && !taskRemindersEnabled) {
+      if (!morningEnabled &&
+          !eveningEnabled &&
+          !taskRemindersEnabled &&
+          !lastCallEnabled) {
         await NotificationService.cancelManaged();
         debugPrint('🔔 reschedule: all notification kinds off, cleared queue');
         return;
@@ -168,7 +173,40 @@ class NotificationScheduler {
           );
         }
 
-        if (eveningEnabled) {
+        // ── Last-call alerts (opt-in): 20 min before a scheduled task's
+        // window closes. Only for windows >= 45 min — shorter ones would
+        // double-fire minutes after the start-time reminder. Computed before
+        // the evening nudge so the nudge can yield to them.
+        var lastCallInEveningBand = false;
+        if (lastCallEnabled) {
+          for (final task in due) {
+            final start = task.startMinute;
+            if (start == null) continue;
+            if (task.durationMinutes < 45) continue;
+            if (offset == 0 && loggedTodayIds.contains(task.id)) continue;
+            final fireMinute = start + task.durationMinutes - 20;
+            if (fireMinute >= 24 * 60) continue;
+            // 8:30 PM – 10 PM band: this last-call replaces the evening
+            // nudge (both mean "the day is ending" — one ping, not two).
+            if (fireMinute >= 20 * 60 + 30 && fireMinute <= 22 * 60) {
+              lastCallInEveningBand = true;
+            }
+            desired[_lastCallId(task.id, offset)] = _DesiredAlarm(
+              when: DateTime(
+                  day.year, day.month, day.day, fireMinute ~/ 60,
+                  fireMinute % 60),
+              title: _lastCallTitle(task.name, task.id),
+              body: _lastCallBody(task.pointsPerCompletion, task.id),
+              kind: NotificationKind.task,
+              payload:
+                  jsonEncode({'t': 'task', 'id': task.id, 'n': task.name}),
+              overrideDetails: NotificationService.taskDetailsFor(
+                  points: task.pointsPerCompletion),
+            );
+          }
+        }
+
+        if (eveningEnabled && !lastCallInEveningBand) {
           final alreadyLogged = offset == 0 && anyLoggedToday;
           if (!alreadyLogged) {
             desired[NotificationService.eveningBase + offset] = _DesiredAlarm(
@@ -301,6 +339,35 @@ class NotificationScheduler {
   /// collide with the recurrence-based ids. Offsets 100..: reserved for these.
   static int _oneShotReminderId(String taskId) =>
       NotificationService.taskBase + 100 * 10000 + taskId.hashCode.abs() % 10000;
+
+  /// Last-call alerts live at 2,300,000+ (slot 200) — inside the
+  /// `id >= taskBase` sweep arm of _isManagedId, clear of every other family.
+  static int _lastCallId(String taskId, int offset) =>
+      NotificationService.lastCallBase +
+      offset * 10000 +
+      taskId.hashCode.abs() % 10000;
+
+  // Urgent-but-calm copy (voice sheet: max one emoji, urgency through
+  // brevity). Deterministic per-task rotation like _catchyTitle.
+  static const _lastCallTitles = <String>[
+    '⏳ 20 min left: %s',
+    'Final stretch — %s',
+    '🏁 Last call: %s',
+  ];
+
+  static const _lastCallBodies = <String>[
+    'Still time to land it. +%p pts on the line.',
+    'The window closes soon — one tap when done.',
+    'Beat the buzzer for +%p pts.',
+  ];
+
+  static String _lastCallTitle(String taskName, String taskId) =>
+      _lastCallTitles[taskId.hashCode.abs() % _lastCallTitles.length]
+          .replaceAll('%s', taskName);
+
+  static String _lastCallBody(int points, String taskId) =>
+      _lastCallBodies[taskId.hashCode.abs() % _lastCallBodies.length]
+          .replaceAll('%p', '$points');
 
   /// Whether [task] is due on the calendar day [day]. Mirrors the logic used by
   /// the home timeline and launcher widget.

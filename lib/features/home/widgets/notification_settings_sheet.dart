@@ -30,6 +30,7 @@ class _NotificationSettingsSheetState
   TimeOfDay _dailyTime = const TimeOfDay(hour: 8, minute: 0);
   bool _streakAlertEnabled = false;
   bool _taskRemindersEnabled = true;
+  bool _lastCallEnabled = false;
   bool _weeklyRecapEnabled = false;
   bool _loading = true;
 
@@ -44,6 +45,7 @@ class _NotificationSettingsSheetState
     final dailyTime = await NotificationPrefs.getDailyTime();
     final streakEnabled = await NotificationPrefs.isStreakAlertEnabled();
     final taskReminders = await NotificationPrefs.isTaskRemindersEnabled();
+    final lastCall = await NotificationPrefs.isLastCallEnabled();
     final weeklyEnabled = await NotificationPrefs.isWeeklyRecapEnabled();
     if (mounted) {
       setState(() {
@@ -51,6 +53,7 @@ class _NotificationSettingsSheetState
         _dailyTime = TimeOfDay(hour: dailyTime.hour, minute: dailyTime.minute);
         _streakAlertEnabled = streakEnabled;
         _taskRemindersEnabled = taskReminders;
+        _lastCallEnabled = lastCall;
         _weeklyRecapEnabled = weeklyEnabled;
         _loading = false;
       });
@@ -83,6 +86,12 @@ class _NotificationSettingsSheetState
   Future<void> _toggleTaskReminders(bool value) async {
     setState(() => _taskRemindersEnabled = value);
     await NotificationPrefs.setTaskRemindersEnabled(value);
+    await NotificationScheduler.reschedule();
+  }
+
+  Future<void> _toggleLastCall(bool value) async {
+    setState(() => _lastCallEnabled = value);
+    await NotificationPrefs.setLastCallEnabled(value);
     await NotificationScheduler.reschedule();
   }
 
@@ -234,6 +243,19 @@ class _NotificationSettingsSheetState
               'Set a reminder time on a task when creating or editing it.',
               style: AppTypography.caption
                   .copyWith(color: context.appTextTertiary),
+            ),
+            const SizedBox(height: 12),
+            // Visually nested under TASK REMINDERS — scoped to timeline
+            // (windowed) tasks, independent of the master switch above.
+            Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: _ToggleRow(
+                label: 'Last-call alerts',
+                subtitle:
+                    "One final nudge 20 min before a scheduled task's window closes",
+                value: _lastCallEnabled,
+                onChanged: _toggleLastCall,
+              ),
             ),
             const SizedBox(height: 24),
 

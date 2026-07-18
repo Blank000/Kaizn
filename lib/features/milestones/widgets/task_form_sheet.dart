@@ -70,6 +70,12 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   TimeOfDay? _reminderOverride;
   DateTime? _reminderDate;
 
+  // Habit stacking: id of the anchor task this one follows ("After
+  // [anchor], I will [this]"). Lives behind the More-options expander.
+  String? _stackedAfterTaskId;
+  bool _moreOptions = false;
+  List<Task> _allTasks = [];
+
   bool _saving = false;
 
   bool get _isEdit => widget.task != null;
@@ -105,6 +111,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         );
       }
       _reminderDate = t.reminderDate;
+      _stackedAfterTaskId = t.stackedAfterTaskId;
+      // Surface an already-configured anchor instead of hiding it.
+      _moreOptions = t.stackedAfterTaskId != null;
       if (_frequency != TaskRecurrence.none) {
         final rule = RecurrenceRule.fromTask(t);
         _interval = rule.interval;
@@ -132,6 +141,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   Future<void> _loadMilestones() async {
     final db = ref.read(databaseProvider);
     final list = await db.getActiveMilestones();
+    final allTasks = await db.getAllActiveTasks();
     String? initial = _isEdit ? widget.task!.milestoneId : widget.milestoneId;
     if (initial == null) {
       final lastUsed = await AppPrefs.getLastUsedMilestoneId();
@@ -146,9 +156,28 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     if (!mounted) return;
     setState(() {
       _milestones = list;
+      _allTasks = allTasks;
       _selectedMilestoneId = initial;
       _milestonesLoaded = true;
     });
+  }
+
+  /// Whether picking [candidate] as this task's anchor would create a loop:
+  /// following the candidate's own anchor chain reaches the task being
+  /// edited. Visited-set walk, depth-capped — dangling ids just end the walk.
+  bool _wouldLoop(Task candidate) {
+    final editingId = widget.task?.id;
+    if (editingId == null) return false; // new task: no one anchors on it yet
+    final byId = {for (final t in _allTasks) t.id: t};
+    final visited = <String>{};
+    Task? cur = candidate;
+    for (var depth = 0; cur != null && depth < 25; depth++) {
+      if (cur.id == editingId) return true;
+      final next = cur.stackedAfterTaskId;
+      if (next == null || !visited.add(next)) break;
+      cur = byId[next];
+    }
+    return false;
   }
 
   @override
@@ -261,6 +290,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         reminderEnabled: _reminderEnabled,
         reminderMinute: Value(reminderMin),
         reminderDate: Value(reminderDate),
+        stackedAfterTaskId: Value(_stackedAfterTaskId),
       ));
     } else {
       await db.insertTask(TasksCompanion.insert(
@@ -276,6 +306,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         reminderEnabled: Value(_reminderEnabled),
         reminderMinute: Value(reminderMin),
         reminderDate: Value(reminderDate),
+        stackedAfterTaskId: Value(_stackedAfterTaskId),
       ));
     }
     await AppPrefs.setLastUsedMilestoneId(_selectedMilestoneId!);
@@ -384,7 +415,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               _buildScheduleTimeRow(),
               const SizedBox(height: 24),
               _buildReminderRow(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              _buildMoreOptions(),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -775,6 +808,159 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         ],
       ],
     );
+  }
+
+  // ── More options (progressive disclosure for niche power features) ───────
+
+  Widget _buildMoreOptions() {
+    final anchor = _stackedAfterTaskId == null
+        ? null
+        : _allTasks.where((t) => t.id == _stackedAfterTaskId).firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _moreOptions = !_moreOptions),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(
+                  _moreOptions
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 20,
+                  color: context.appTextSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'More options',
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: context.appTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_moreOptions) ...[
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: _pickAnchorTask,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Do it after another task (optional)',
+                helperText: anchor == null
+                    ? null
+                    : 'Surfaces after you finish that task',
+                suffixIcon: _stackedAfterTaskId == null
+                    ? const Icon(Icons.link_rounded)
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Remove anchor',
+                        onPressed: () =>
+                            setState(() => _stackedAfterTaskId = null),
+                      ),
+              ),
+              child: Text(
+                anchor?.name ?? 'None — starts on its own',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.body.copyWith(
+                  color: anchor == null
+                      ? context.appTextSecondary
+                      : context.appTextPrimary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickAnchorTask() async {
+    final selfId = widget.task?.id;
+    final candidates = _allTasks
+        .where((t) => t.id != selfId && !_wouldLoop(t))
+        .toList();
+    final excludedForLoops =
+        _allTasks.where((t) => t.id != selfId).length - candidates.length;
+
+    final milestoneById = {for (final m in _milestones) m.id: m};
+    final picked = await showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+        ),
+        decoration: BoxDecoration(
+          color: ctx.appCardSurface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ctx.appBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('After completing…', style: AppTypography.heading2),
+            const SizedBox(height: 8),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.link_off_rounded),
+                    title: Text('No anchor — starts on its own',
+                        style: AppTypography.body),
+                    onTap: () => Navigator.of(ctx).pop('__none__'),
+                  ),
+                  for (final t in candidates)
+                    ListTile(
+                      leading: const Icon(Icons.link_rounded),
+                      title: Text(t.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.body),
+                      subtitle: milestoneById[t.milestoneId] == null
+                          ? null
+                          : Text(milestoneById[t.milestoneId]!.name,
+                              style: AppTypography.caption),
+                      onTap: () => Navigator.of(ctx).pop(t.id),
+                    ),
+                ],
+              ),
+            ),
+            if (excludedForLoops > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  "Tasks that would loop back to this one aren't listed.",
+                  style: AppTypography.caption
+                      .copyWith(color: ctx.appTextTertiary),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return; // dismissed
+    setState(() =>
+        _stackedAfterTaskId = picked == '__none__' ? null : picked);
   }
 
   Widget _buildDueDatePicker() {

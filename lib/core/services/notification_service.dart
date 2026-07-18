@@ -23,17 +23,22 @@ class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
 
   // ── ID scheme (kept in sync with NotificationScheduler) ───────────────────
-  // 1, 2          legacy repeating daily/streak reminders (cancelled on sight)
-  // 3             weekly recap
-  // 100..199      morning briefing, one per day-offset
-  // 200..299      evening nudge, one per day-offset
-  // 50000         transient action-confirmation toast (outside managed range)
-  // 300000+       per-task reminders
+  // 1, 2                  legacy repeating daily/streak reminders (cancelled)
+  // 3                     weekly recap
+  // 100..199              morning briefing, one per day-offset
+  // 200..299              evening nudge, one per day-offset
+  // 50000                 transient action-confirmation toast (unmanaged)
+  // 60000..69999          snooze re-fires (see notification_actions)
+  // 300000..369999        per-task reminders (offset*10000 + hash%10000)
+  // 1300000..1309999      one-shot reminder-date reminders (offset slot 100)
+  // 2300000..2369999      last-call alerts (offset slot 200) — deliberately
+  //                       >= taskBase so _isManagedId sweeps them for free.
   static const _weeklyRecapId = 3;
   static const morningBase = 100;
   static const eveningBase = 200;
   static const confirmId = 50000;
   static const taskBase = 300000;
+  static const lastCallBase = 2300000;
 
   // ── Action button ids (matched in notification_actions) ───────────────────
   static const actionDone = 'task_done';

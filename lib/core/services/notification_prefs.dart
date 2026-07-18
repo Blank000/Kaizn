@@ -50,6 +50,23 @@ class NotificationPrefs {
     await p.setBool(_weeklyRecapEnabledKey, value);
   }
 
+  // ── Last-call alerts (opt-in) ─────────────────────────────────────────────
+
+  static const _lastCallEnabledKey = 'notif_last_call_enabled';
+
+  /// One final nudge ~20 min before a scheduled task's window closes.
+  /// Default OFF — unlike per-task reminders there is no per-task gate, so
+  /// this family is globally opt-in.
+  static Future<bool> isLastCallEnabled() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_lastCallEnabledKey) ?? false;
+  }
+
+  static Future<void> setLastCallEnabled(bool value) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_lastCallEnabledKey, value);
+  }
+
   // ── Per-task reminders (master switch) ────────────────────────────────────
 
   static const _taskRemindersEnabledKey = 'notif_task_reminders_enabled';

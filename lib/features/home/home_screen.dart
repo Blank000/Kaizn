@@ -126,7 +126,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final claimableRewards = ref.watch(claimableRewardsProvider);
 
     final milestoneById = {for (final m in milestones) m.id: m};
+    final taskById = {for (final t in tasks) t.id: t};
     final now = DateTime.now();
+
+    // Habit stacking: a task is "waiting" while its anchor is due today and
+    // unresolved (no completion of any kind yet). Waiting tasks sink to the
+    // bottom of Up next and carry a 🔗 meta line — a suggestion, never a lock.
+    bool waitingOnAnchor(Task t) {
+      final anchorId = t.stackedAfterTaskId;
+      if (anchorId == null) return false;
+      final anchor = taskById[anchorId];
+      if (anchor == null) return false; // dangling ref (restored backup)
+      if (!_isScheduledToday(anchor, now)) return false;
+      final anchorToday = _completionsTodayFor(anchor.id, completions, now);
+      return anchorToday.real == null &&
+          anchorToday.skip == null &&
+          anchorToday.nd == null;
+    }
 
     final upNext = <_TodayItem>[];
     final doneToday = <_TodayItem>[];
@@ -276,12 +292,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           else ...[
             if (upNext.isNotEmpty) ...[
               _SectionHeader('Up next today'),
-              ...upNext.map((it) => TaskTile(
+              // Stable partition: anchor-satisfied tasks first, ones still
+              // waiting on their stack anchor last.
+              ...[
+                ...upNext.where((it) => !waitingOnAnchor(it.task)),
+                ...upNext.where((it) => waitingOnAnchor(it.task)),
+              ].map((it) => TaskTile(
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
-                    meta: _metaForHome(it.task,
-                        milestoneById[it.task.milestoneId], it.rowState),
+                    meta: _metaForHome(
+                      it.task,
+                      milestoneById[it.task.milestoneId],
+                      it.rowState,
+                      anchorName:
+                          taskById[it.task.stackedAfterTaskId]?.name,
+                    ),
                   )),
             ],
             if (doneToday.isNotEmpty) ...[
@@ -375,10 +401,12 @@ bool _isScheduledToday(Task task, DateTime today) {
   return RecurrenceRule.fromTask(task).isDueOn(today);
 }
 
-String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState) {
+String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState,
+    {String? anchorName}) {
   final parts = <String>[];
   if (milestone != null) parts.add(milestone.name);
   parts.add('${task.pointsPerCompletion} pts');
+  if (anchorName != null) parts.add('🔗 After $anchorName');
   if (rowState.isMissed) {
     parts.add('Missed today');
   } else if (rowState.isSkipped) {

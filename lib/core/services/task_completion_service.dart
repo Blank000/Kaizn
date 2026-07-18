@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import '../../features/rewards/reward_unlock_service.dart';
+import '../../shared/models/recurrence_rule.dart';
 import '../database/database.dart';
 import 'achievement_service.dart';
 import 'identity_voice.dart';
+import 'notification_scheduler.dart';
 import 'streak_service.dart';
 import 'timer_service.dart';
 
@@ -94,6 +98,13 @@ class TaskCompletionService {
     final identityLine =
         await IdentityVoice.voteLineFor(db, task, masked: hasCelebration);
 
+    final stackedNext = await _stackedNextFor(db, task);
+
+    // Fire-and-forget: promptly retire this task's now-stale alarms (its
+    // pending last-call, today's reminder) instead of waiting for the next
+    // periodic tick. No-ops safely in the notification background isolate.
+    unawaited(NotificationScheduler.reschedule());
+
     return CompletionResult(
       completionId: outcome.completionId,
       basePoints: outcome.basePoints,
@@ -103,7 +114,35 @@ class TaskCompletionService {
       completionBadges: completionBadges,
       unlockedRewards: unlockedRewards,
       identityLine: identityLine,
+      stackedNext: stackedNext,
     );
+  }
+
+  /// Habit stacking: tasks anchored on [task] that are surfaced by its
+  /// completion — due today per their own recurrence (undated one-shots ride
+  /// the anchor's schedule) and not already really done today. Single-level
+  /// query, so a data-level cycle (A after B after A) can't loop: completing
+  /// A surfaces B only while B is unresolved, and vice versa.
+  static Future<List<Task>> _stackedNextFor(AppDatabase db, Task task) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final stacked = await db.getTasksStackedAfter(task.id);
+    final out = <Task>[];
+    for (final s in stacked) {
+      final bool eligible;
+      if (s.recurrence == TaskRecurrence.none) {
+        final due = s.dueDate;
+        eligible = due == null ||
+            !DateTime(due.year, due.month, due.day).isAfter(today);
+      } else {
+        eligible = RecurrenceRule.fromTask(s).isDueOn(today);
+      }
+      if (!eligible) continue;
+      final already = await db.getCompletionForTaskOn(s.id, now);
+      if (already != null) continue;
+      out.add(s);
+    }
+    return out;
   }
 
   /// Retro-log [task] on a past (or future) [date] via the weekly chip row.

@@ -576,14 +576,35 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Mark a task complete now: insert a completion, award points, and for
-  /// one-shot tasks flip status → completed. Single transaction.
+  /// Bonus for completing a task inside the clutch zone of its window.
+  static const int clutchBonusPoints = 5;
+
+  /// Whether completing [task] at [now] lands in the "clutch zone" — the
+  /// last 20% of its scheduled window, never after the window closes.
+  /// Windowless tasks never clutch (v1: honest beat-the-buzzer only; an
+  /// anytime-evening rule would inflate points for night loggers).
+  static bool isClutchTime(Task task, DateTime now) {
+    final start = task.startMinute;
+    if (start == null) return false;
+    final duration = task.durationMinutes;
+    if (duration <= 0) return false;
+    final nowMin = now.hour * 60 + now.minute;
+    final end = start + duration;
+    final clutchStart = start + (duration * 0.8).floor();
+    return nowMin >= clutchStart && nowMin <= end;
+  }
+
+  /// Mark a task complete now: insert a completion, award points (+clutch
+  /// bonus when earned), and for one-shot tasks flip status → completed.
+  /// Single transaction. The bonus row carries taskCompletionId, so
+  /// [undoCompletion]'s delete-by-completion refunds it automatically.
   Future<DbCompletionOutcome> completeTaskNow(Task task,
       {int? durationSeconds}) {
     return transaction(() async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final completionId = _generateId();
+      final clutch = isClutchTime(task, now) ? clutchBonusPoints : 0;
 
       await into(taskCompletions).insert(
         TaskCompletionsCompanion.insert(
@@ -607,6 +628,18 @@ class AppDatabase extends _$AppDatabase {
         );
       }
 
+      if (clutch > 0) {
+        await into(pointsHistoryTable).insert(
+          PointsHistoryTableCompanion.insert(
+            id: _generateId(),
+            points: clutch,
+            reason: PointsReason.clutchBonus,
+            taskCompletionId: Value(completionId),
+            taskId: Value(task.id),
+          ),
+        );
+      }
+
       if (task.recurrence == TaskRecurrence.none) {
         await (update(tasks)..where((t) => t.id.equals(task.id))).write(
           TasksCompanion(
@@ -620,13 +653,14 @@ class AppDatabase extends _$AppDatabase {
         'taskId': task.id,
         'on': today.toIso8601String(),
         'points': task.pointsPerCompletion,
+        if (clutch > 0) 'clutchBonus': clutch,
         if (durationSeconds != null) 'durationSeconds': durationSeconds,
       });
 
       return (
         completionId: completionId,
         basePoints: task.pointsPerCompletion,
-        clutchBonus: 0,
+        clutchBonus: clutch,
       );
     });
   }
