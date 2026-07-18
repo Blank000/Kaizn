@@ -15,8 +15,10 @@ import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/task_tile.dart';
+import '../../shared/providers/active_timer_provider.dart';
 import '../milestones/widgets/task_form_sheet.dart';
 import '../rewards/claim_flow.dart';
+import 'widgets/active_timer_banner.dart';
 import 'widgets/never_miss_twice_banner.dart';
 import 'widgets/streak_popup.dart';
 import 'widgets/timeline_view.dart';
@@ -183,12 +185,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Never-miss-twice banner (Atomic Habits). Auto-hides reactively the
     // moment a real completion lands today (the completions stream re-emits).
-    final showNmtBanner = shouldShowNeverMissTwice(
-      completions: completions,
-      now: now,
-      hasUpNext: upNext.isNotEmpty,
-      dismissedDate: AppPrefs.nmtDismissedDateSync,
-    );
+    // One-attention-slot policy: the live timer banner outranks it.
+    final timerRunning =
+        ref.watch(activeTimerProvider).valueOrNull != null;
+    final showNmtBanner = !timerRunning &&
+        shouldShowNeverMissTwice(
+          completions: completions,
+          now: now,
+          hasUpNext: upNext.isNotEmpty,
+          dismissedDate: AppPrefs.nmtDismissedDateSync,
+        );
 
     return Scaffold(
       appBar: AppBar(
@@ -211,8 +217,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: Column(
         children: [
           _ViewToggle(value: _viewMode, onChanged: _switchView),
-          // Mounted above the view body so it shows in BOTH List and
-          // Timeline modes and holds the single attention-banner slot.
+          // The single attention-banner slot, shared by both view modes.
+          // Priority: live timer > never-miss-twice (showNmtBanner already
+          // yields when a timer runs). ActiveTimerBanner renders nothing
+          // when no timer is active.
+          const ActiveTimerBanner(),
           if (showNmtBanner)
             NeverMissTwiceBanner(
               currentStreak: streak?.currentStreak ?? 0,

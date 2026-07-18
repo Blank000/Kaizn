@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../database/database.dart';
 import 'app_event_bus.dart';
+import 'app_prefs.dart';
 import 'notification_scheduler.dart';
 import 'notification_service.dart';
 import 'streak_service.dart';
@@ -60,9 +61,13 @@ Future<void> handleNotificationAction(
   final ownDb = existingDb == null;
   if (ownDb) {
     // Background isolate: register plugins and re-init notifications before we
-    // can show/schedule anything.
+    // can show/schedule anything. AppPrefs.hydrate is REQUIRED here — this
+    // isolate shares no memory with the app, so without it the sync caches
+    // (active timer, etc.) read as empty and the timer auto-attach on a
+    // notification Done silently fails.
     DartPluginRegistrant.ensureInitialized();
     await NotificationService.initForBackground();
+    await AppPrefs.hydrate();
   }
   final db = existingDb ?? AppDatabase();
 
@@ -110,6 +115,7 @@ Future<void> _handleDone(AppDatabase db, Map<String, dynamic> data) async {
       taskName: task.name,
       points: result.basePoints,
       clutchBonus: result.clutchBonus,
+      durationSeconds: result.attachedDurationSeconds,
       nextStackedTaskName: result.stackedNext.firstOrNull?.name,
       identityLine: result.identityLine,
       undoCompletionId: result.completionId,

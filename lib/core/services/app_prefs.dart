@@ -100,8 +100,14 @@ class AppPrefs {
   static const _nmtDismissedKey = 'nmt_dismissed_date';
   static DateTime? _nmtDismissedCache;
 
+  static const _activeTimerTaskIdKey = 'active_timer_task_id';
+  static const _activeTimerStartedAtKey = 'active_timer_started_at_millis';
+  static String? _activeTimerTaskIdCache;
+  static int? _activeTimerStartedAtCache;
+
   /// Loads sync-cached prefs at app startup. Call from `main()` before
-  /// `runApp`.
+  /// `runApp` — and from the notification background isolate before anything
+  /// reads a sync getter there (the isolate shares no memory with the app).
   static Future<void> hydrate() async {
     final p = await SharedPreferences.getInstance();
     _onboardingCompleteCache = p.getBool(_onboardingCompleteKey) ?? false;
@@ -109,6 +115,8 @@ class AppPrefs {
     _homeViewModeCache = p.getString(_homeViewModeKey) ?? 'list';
     final nmtIso = p.getString(_nmtDismissedKey);
     _nmtDismissedCache = nmtIso == null ? null : DateTime.tryParse(nmtIso);
+    _activeTimerTaskIdCache = p.getString(_activeTimerTaskIdKey);
+    _activeTimerStartedAtCache = p.getInt(_activeTimerStartedAtKey);
   }
 
   static bool get isOnboardingCompleteSync => _onboardingCompleteCache;
@@ -147,6 +155,31 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setString(_nmtDismissedKey, dateOnly.toIso8601String());
     _nmtDismissedCache = dateOnly;
+  }
+
+  // ── Active stopwatch timer (stopwatch-lite) ──────────────────────────────
+  // Two values ARE the whole persistence story: elapsed time is always
+  // recomputed from wall clock, so the timer survives app kill and OEM
+  // process death with zero background services. Sync caches so the Home
+  // banner can render on the first frame after a cold start.
+
+  static String? get activeTimerTaskIdSync => _activeTimerTaskIdCache;
+  static int? get activeTimerStartedAtMillisSync => _activeTimerStartedAtCache;
+
+  static Future<void> setActiveTimer(String taskId, int startedAtMillis) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_activeTimerTaskIdKey, taskId);
+    await p.setInt(_activeTimerStartedAtKey, startedAtMillis);
+    _activeTimerTaskIdCache = taskId;
+    _activeTimerStartedAtCache = startedAtMillis;
+  }
+
+  static Future<void> clearActiveTimer() async {
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_activeTimerTaskIdKey);
+    await p.remove(_activeTimerStartedAtKey);
+    _activeTimerTaskIdCache = null;
+    _activeTimerStartedAtCache = null;
   }
 
   // ── Announced reward IDs (so each reward unlock fires its snackbar once) ─

@@ -3,6 +3,7 @@ import '../database/database.dart';
 import 'achievement_service.dart';
 import 'identity_voice.dart';
 import 'streak_service.dart';
+import 'timer_service.dart';
 
 /// Everything a completion produced, so call sites can render their own
 /// surfaces (haptics, floater, snackbar choice stay with the caller — each
@@ -65,8 +66,19 @@ class TaskCompletionService {
     bool celebrationChecks = true,
     int? durationSeconds,
   }) async {
+    // Timer auto-attach: if THIS task's stopwatch is running, completing it
+    // by any means (tile tap, chip, timeline, notification Done, stop sheet)
+    // stops the timer and credits the session. Solved once here instead of
+    // being five bug reports.
+    var attachSeconds = durationSeconds;
+    final timer = TimerService.current;
+    if (attachSeconds == null && timer != null && timer.taskId == task.id) {
+      attachSeconds = TimerService.cappedElapsedSeconds(timer);
+      await TimerService.clear();
+    }
+
     final outcome =
-        await db.completeTaskNow(task, durationSeconds: durationSeconds);
+        await db.completeTaskNow(task, durationSeconds: attachSeconds);
     final streakBadges = await StreakService.recordDayLogged(db);
 
     var completionBadges = const <AchievementBadge>[];
@@ -86,7 +98,7 @@ class TaskCompletionService {
       completionId: outcome.completionId,
       basePoints: outcome.basePoints,
       clutchBonus: outcome.clutchBonus,
-      attachedDurationSeconds: durationSeconds,
+      attachedDurationSeconds: attachSeconds,
       streakBadges: streakBadges,
       completionBadges: completionBadges,
       unlockedRewards: unlockedRewards,

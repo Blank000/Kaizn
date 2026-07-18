@@ -67,6 +67,8 @@ class StatsScreen extends ConsumerWidget {
         _computeTopTasks(thisWeekReals, taskById, milestoneById, limit: 5);
     final milestoneStats =
         _computeMilestoneStats(thisWeekReals, taskById, milestones);
+    final timeInvested =
+        _computeTimeInvested(thisWeekReals, taskById, milestoneById);
 
     return Scaffold(
       appBar: AppBar(
@@ -125,6 +127,12 @@ class StatsScreen extends ConsumerWidget {
             _SectionLabel('By milestone · This week'),
             const SizedBox(height: 8),
             _MilestoneBreakdownCard(items: milestoneStats),
+          ],
+          if (timeInvested.totalSeconds > 0) ...[
+            const SizedBox(height: 20),
+            _SectionLabel('Time invested · This week'),
+            const SizedBox(height: 8),
+            _TimeInvestedCard(data: timeInvested),
           ],
           if (hourly.values.any((v) => v > 0)) ...[
             const SizedBox(height: 20),
@@ -263,6 +271,45 @@ List<_MilestoneStatItem> _computeMilestoneStats(
   }
   out.sort((a, b) => b.completions.compareTo(a.completions));
   return out;
+}
+
+class _TimeInvested {
+  final int totalSeconds;
+  // Milestone name (or "Adhoc") → seconds, sorted desc.
+  final List<(String, int)> byMilestone;
+  const _TimeInvested(this.totalSeconds, this.byMilestone);
+}
+
+/// Sum of stopwatch time on this week's real completions, total + grouped by
+/// milestone. Zero-duration completions (the untimed default) contribute
+/// nothing, so the card hides itself until the timer has been used.
+_TimeInvested _computeTimeInvested(
+  List<TaskCompletion> reals,
+  Map<String, Task> taskById,
+  Map<String, Milestone> milestoneById,
+) {
+  var total = 0;
+  final byName = <String, int>{};
+  for (final c in reals) {
+    final secs = c.durationSeconds ?? 0;
+    if (secs <= 0) continue;
+    total += secs;
+    final task = taskById[c.taskId];
+    final name =
+        milestoneById[task?.milestoneId]?.name ?? task?.name ?? 'Other';
+    byName[name] = (byName[name] ?? 0) + secs;
+  }
+  final rows = byName.entries.map((e) => (e.key, e.value)).toList()
+    ..sort((a, b) => b.$2.compareTo(a.$2));
+  return _TimeInvested(total, rows);
+}
+
+String _formatInvested(int seconds) {
+  final h = seconds ~/ 3600;
+  final m = (seconds % 3600) ~/ 60;
+  if (h > 0) return '${h}h ${m.toString().padLeft(2, '0')}m';
+  if (m > 0) return '${m}m';
+  return '${seconds}s';
 }
 
 // ── Existing widgets ────────────────────────────────────────────────────────
@@ -1190,6 +1237,67 @@ class _TopTasksCard extends StatelessWidget {
 }
 
 // ── Milestone breakdown card ────────────────────────────────────────────────
+
+class _TimeInvestedCard extends StatelessWidget {
+  final _TimeInvested data;
+  const _TimeInvestedCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.appCardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.timer_rounded,
+                  size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                _formatInvested(data.totalSeconds),
+                style: AppTypography.heading1
+                    .copyWith(color: AppColors.primary),
+              ),
+            ],
+          ),
+          if (data.byMilestone.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final (name, secs) in data.byMilestone.take(5))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body,
+                      ),
+                    ),
+                    Text(
+                      _formatInvested(secs),
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: context.appTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _MilestoneBreakdownCard extends StatelessWidget {
   final List<_MilestoneStatItem> items;

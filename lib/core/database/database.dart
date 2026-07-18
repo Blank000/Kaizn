@@ -655,6 +655,24 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Add stopwatch seconds to an existing completion (stop-timer sheet's
+  /// "ADD TIME" path when the task was already completed today). Accumulates
+  /// on top of any previously-attached duration.
+  Future<void> addDurationToCompletion(String completionId, int seconds) {
+    return transaction(() async {
+      final existing = await (select(taskCompletions)
+            ..where((c) => c.id.equals(completionId)))
+          .getSingleOrNull();
+      if (existing == null) return;
+      final total = (existing.durationSeconds ?? 0) + seconds;
+      await (update(taskCompletions)
+            ..where((c) => c.id.equals(completionId)))
+          .write(TaskCompletionsCompanion(durationSeconds: Value(total)));
+      await _logChange('completion', completionId, 'update',
+          payload: {'durationSeconds': total});
+    });
+  }
+
   /// Insert a completion + record the corresponding point event in one txn.
   Future<int> insertCompletionWithPoints({
     required TaskCompletionsCompanion completion,

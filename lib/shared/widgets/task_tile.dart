@@ -6,6 +6,7 @@ import '../../core/database/database.dart';
 import '../../core/services/app_event_bus.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/services/task_completion_service.dart';
+import '../../core/services/timer_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
@@ -13,6 +14,7 @@ import '../models/recurrence_rule.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
 import 'reward_unlock_snackbar.dart';
+import 'stop_timer_sheet.dart';
 
 /// State of a task row at the time it's rendered. The four "active" states
 /// are mutually exclusive in practice — priority is `checked > missed >
@@ -413,18 +415,49 @@ class _TaskTileState extends ConsumerState<TaskTile>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _SkipActionsSheet(
-        taskName: widget.task.name,
-        onSkip: () {
-          Navigator.of(ctx).pop();
-          _skipToday();
-        },
-        onMissed: () {
-          Navigator.of(ctx).pop();
-          _markMissed();
-        },
-      ),
+      builder: (ctx) {
+        final ownsTimer =
+            TimerService.current?.taskId == widget.task.id;
+        return _SkipActionsSheet(
+          taskName: widget.task.name,
+          timerTitle: ownsTimer ? 'Stop timer' : 'Start timer',
+          timerSubtitle: ownsTimer
+              ? '${TimerService.formatElapsed(TimerService.elapsedSeconds(TimerService.current!))} on the clock'
+              : 'Time this session. Stop anytime from Home.',
+          onTimer: () {
+            Navigator.of(ctx).pop();
+            _handleTimerAction();
+          },
+          onSkip: () {
+            Navigator.of(ctx).pop();
+            _skipToday();
+          },
+          onMissed: () {
+            Navigator.of(ctx).pop();
+            _markMissed();
+          },
+        );
+      },
     );
+  }
+
+  Future<void> _handleTimerAction() async {
+    final current = TimerService.current;
+    if (current?.taskId == widget.task.id) {
+      if (mounted) await showStopTimerSheet(context, ref);
+    } else if (current != null) {
+      if (mounted) {
+        await showTimerConflictDialog(context, ref, newTask: widget.task);
+      }
+    } else {
+      await TimerService.start(widget.task.id);
+      HapticFeedback.lightImpact();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("⏱ Timer on! Go get '${widget.task.name}'."),
+        ));
+      }
+    }
   }
 
   Future<void> _skipToday() async {
@@ -544,6 +577,7 @@ class _TaskTileState extends ConsumerState<TaskTile>
         taskName: widget.task.name,
         points: result.basePoints,
         clutchBonus: result.clutchBonus,
+        durationSeconds: result.attachedDurationSeconds,
         nextStackedTaskName: result.stackedNext.firstOrNull?.name,
         identityLine: result.identityLine,
         undoCompletionId: result.completionId,
@@ -677,12 +711,22 @@ class _DayChipWidget extends StatelessWidget {
 class _SkipActionsSheet extends StatelessWidget {
   final String taskName;
   final String? subtitle; // e.g., "Mon, May 5" — set by chip long-press
+
+  /// Stopwatch row (today-sheet only; retro chip sheets pass null — a timer
+  /// is a now-action).
+  final String? timerTitle;
+  final String? timerSubtitle;
+  final VoidCallback? onTimer;
+
   final VoidCallback onSkip;
   final VoidCallback onMissed;
 
   const _SkipActionsSheet({
     required this.taskName,
     this.subtitle,
+    this.timerTitle,
+    this.timerSubtitle,
+    this.onTimer,
     required this.onSkip,
     required this.onMissed,
   });
@@ -720,6 +764,17 @@ class _SkipActionsSheet extends StatelessWidget {
                   textAlign: TextAlign.center),
             ],
             const SizedBox(height: 20),
+            if (onTimer != null) ...[
+              _OptionRow(
+                icon: Icons.timer_rounded,
+                iconColor: AppColors.primary,
+                title: timerTitle ?? 'Start timer',
+                subtitle:
+                    timerSubtitle ?? 'Time this session. Stop anytime from Home.',
+                onTap: onTimer!,
+              ),
+              const SizedBox(height: 12),
+            ],
             _OptionRow(
               icon: Icons.do_not_disturb_alt_rounded,
               iconColor: context.appTextTertiary,

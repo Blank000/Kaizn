@@ -8,6 +8,8 @@ import '../../../core/database/database.dart';
 import '../../../core/services/app_event_bus.dart';
 import '../../../core/services/streak_service.dart';
 import '../../../core/services/task_completion_service.dart';
+import '../../../core/services/timer_service.dart';
+import '../../../shared/widgets/stop_timer_sheet.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
@@ -647,6 +649,7 @@ class _TimelineTaskCard extends ConsumerWidget {
                 ? () => _showSkipMissedSheet(
                       context,
                       taskName: task.name,
+                      onTimer: () => _handleTimerAction(context, ref, task),
                       onSkip: () async {
                         final db = ref.read(databaseProvider);
                         await db.skipTaskNow(task);
@@ -862,10 +865,33 @@ Future<void> _toggleTask(
       taskName: task.name,
       points: result.basePoints,
       clutchBonus: result.clutchBonus,
+      durationSeconds: result.attachedDurationSeconds,
       nextStackedTaskName: result.stackedNext.firstOrNull?.name,
       identityLine: result.identityLine,
       undoCompletionId: result.completionId,
     ));
+  }
+}
+
+// ── Timer action (start / stop / conflict) ─────────────────────────────────
+
+Future<void> _handleTimerAction(
+    BuildContext context, WidgetRef ref, Task task) async {
+  final current = TimerService.current;
+  if (current?.taskId == task.id) {
+    if (context.mounted) await showStopTimerSheet(context, ref);
+  } else if (current != null) {
+    if (context.mounted) {
+      await showTimerConflictDialog(context, ref, newTask: task);
+    }
+  } else {
+    await TimerService.start(task.id);
+    HapticFeedback.lightImpact();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("⏱ Timer on! Go get '${task.name}'."),
+      ));
+    }
   }
 }
 
@@ -874,6 +900,7 @@ Future<void> _toggleTask(
 void _showSkipMissedSheet(
   BuildContext context, {
   required String taskName,
+  required Future<void> Function() onTimer,
   required Future<void> Function() onSkip,
   required Future<void> Function() onMissed,
 }) {
@@ -906,6 +933,17 @@ void _showSkipMissedSheet(
                   style: AppTypography.heading2,
                   textAlign: TextAlign.center),
               const SizedBox(height: 20),
+              _SheetOption(
+                icon: Icons.timer_rounded,
+                iconColor: AppColors.primary,
+                title: 'Start timer',
+                subtitle: 'Time this session. Stop anytime from Home.',
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  await onTimer();
+                },
+              ),
+              const SizedBox(height: 12),
               _SheetOption(
                 icon: Icons.do_not_disturb_alt_rounded,
                 iconColor: ctx.appTextTertiary,
