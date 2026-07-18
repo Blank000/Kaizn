@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/services/achievement_service.dart';
+import '../../../core/services/notification_feedback.dart';
 import '../../../core/services/streak_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -477,8 +478,11 @@ class _TimeGrid extends StatelessWidget {
                     right: 12,
                     top: _gridTopPadding +
                         (e.task.startMinute ?? 0) * _pxPerMinute,
+                    // 32 fits one line of the task name comfortably; the card
+                    // itself drops the time-range subtitle if it's still too
+                    // short for both lines.
                     height: (effectiveDuration(e.task) * _pxPerMinute)
-                        .clamp(28.0, double.infinity),
+                        .clamp(32.0, double.infinity),
                     child: _TimelineTaskCard(
                       entry: e,
                       isResizing: resizeTaskId == e.task.id,
@@ -739,37 +743,46 @@ class _CardSurface extends StatelessWidget {
             : null,
       ),
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-      child: ClipRect(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              task.name,
-              style: AppTypography.body.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: rowState.isChecked
-                    ? context.appTextSecondary
-                    : context.appTextPrimary,
-                decoration: rowState.isChecked
-                    ? TextDecoration.lineThrough
-                    : null,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Body line ≈ 19.5px + caption ≈ 15.4px + padding 8 = ~43px minimum
+          // to render both lines without an overflow warning. Below that,
+          // render just the name.
+          final showTimeRange = constraints.maxHeight >= 44;
+          return ClipRect(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  task.name,
+                  style: AppTypography.body.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: rowState.isChecked
+                        ? context.appTextSecondary
+                        : context.appTextPrimary,
+                    decoration: rowState.isChecked
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (showTimeRange)
+                  Text(
+                    timeRange,
+                    style: AppTypography.caption.copyWith(
+                      color: context.appTextSecondary,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
             ),
-            Text(
-              timeRange,
-              style: AppTypography.caption.copyWith(
-                color: context.appTextSecondary,
-                fontSize: 11,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -828,27 +841,38 @@ Future<void> _toggleTask(
   final task = entry.task;
   final state = entry.rowState;
   final db = ref.read(databaseProvider);
-  if (state.isChecked && state.checkedCompletion != null) {
-    await db.undoCompletion(state.checkedCompletion!.id, task.id);
-    HapticFeedback.lightImpact();
-  } else if (state.isMissed && state.ndCompletion != null) {
-    await db.undoCompletion(state.ndCompletion!.id, task.id);
-    HapticFeedback.lightImpact();
-  } else if (state.isSkipped && state.skipCompletion != null) {
-    await db.undoCompletion(state.skipCompletion!.id, task.id);
-    HapticFeedback.lightImpact();
-  } else {
-    await db.completeTaskNow(task);
-    final streakBadges = await StreakService.recordDayLogged(db);
-    final completionBadges =
-        await AchievementService.checkAfterCompletion(db);
-    final unlocked = await RewardUnlockService.checkAfterPointsChange(db);
-    HapticFeedback.mediumImpact();
-    if (context.mounted) {
-      showAchievementSnackbar(
-          context, [...completionBadges, ...streakBadges]);
-      showRewardUnlockSnackbar(context, unlocked);
-    }
+
+  // Locked-completion policy on Home / Timeline: tapping an already-completed
+  // tile is a no-op. Recovery is via the 6s UNDO snackbar or Milestone Detail.
+  if (state.isChecked || state.isMissed || state.isSkipped) {
+    HapticFeedback.selectionClick();
+    return;
+  }
+
+  await db.completeTaskNow(task);
+  final streakBadges = await StreakService.recordDayLogged(db);
+  final completionBadges =
+      await AchievementService.checkAfterCompletion(db);
+  final unlocked = await RewardUnlockService.checkAfterPointsChange(db);
+  HapticFeedback.mediumImpact();
+
+  final hasCelebration = completionBadges.isNotEmpty ||
+      streakBadges.isNotEmpty ||
+      unlocked.isNotEmpty;
+
+  if (context.mounted && hasCelebration) {
+    showAchievementSnackbar(context, [...completionBadges, ...streakBadges]);
+    showRewardUnlockSnackbar(context, unlocked);
+  } else if (context.mounted) {
+    final completion =
+        await db.getCompletionForTaskOn(task.id, DateTime.now());
+    NotificationFeedback.post(NotificationFeedbackEvent(
+      kind: FeedbackKind.done,
+      taskName: task.name,
+      points: task.pointsPerCompletion,
+      taskId: task.id,
+      undoCompletionId: completion?.id,
+    ));
   }
 }
 

@@ -59,6 +59,22 @@ class Tasks extends Table {
   IntColumn get durationMinutes =>
       integer().withDefault(const Constant(30))();
 
+  // Whether a per-task reminder notification should fire on days this task is
+  // due.
+  BoolColumn get reminderEnabled =>
+      boolean().withDefault(const Constant(false))();
+
+  // Minute-from-midnight (0..1439) the reminder fires at. Null while
+  // reminderEnabled means "follow the timeline start time"; an explicit value
+  // overrides it. Ignored entirely when reminderEnabled is false.
+  IntColumn get reminderMinute => integer().nullable()();
+
+  // Optional specific date the reminder should fire on. When set + reminder
+  // is enabled, the reminder is treated as a ONE-SHOT nudge: it fires exactly
+  // once on this date+time and ignores the task's recurrence. When null, the
+  // reminder follows the recurrence (fires on every day the task is due).
+  DateTimeColumn get reminderDate => dateTime().nullable()();
+
   TextColumn get status =>
       textEnum<TaskStatus>().withDefault(Constant(TaskStatus.active.value))();
 

@@ -165,6 +165,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
     }
 
+    // Empty-state renders its own ADD TASK button, so hide the FAB there to
+    // avoid two identical CTAs stacked on the same screen.
+    final showEmptyState = _viewMode == HomeViewMode.list &&
+        upNext.isEmpty &&
+        doneToday.isEmpty &&
+        skippedToday.isEmpty &&
+        missedToday.isEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_greeting(), style: AppTypography.heading1),
@@ -176,11 +184,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showTaskFormSheet(context),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('ADD TASK'),
-      ),
+      floatingActionButton: showEmptyState
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => showTaskFormSheet(context),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('ADD TASK'),
+            ),
       body: Column(
         children: [
           _ViewToggle(value: _viewMode, onChanged: _switchView),
@@ -610,23 +620,26 @@ class _ViewToggle extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: SegmentedButton<HomeViewMode>(
+        // expandedInsets makes each segment fill an equal share of the
+        // available width — otherwise SegmentedButton sizes segments to their
+        // content and "Timeline" wraps to two lines. softWrap:false on the
+        // labels belt-and-suspenders that in case the layout still gets
+        // squeezed on some rotation / font-scale combo.
         segments: const [
           ButtonSegment(
             value: HomeViewMode.list,
-            label: Text('List'),
-            icon: Icon(Icons.view_agenda_outlined, size: 18),
+            label: Text('List', softWrap: false, maxLines: 1),
           ),
           ButtonSegment(
             value: HomeViewMode.timeline,
-            label: Text('Timeline'),
-            icon: Icon(Icons.view_timeline_outlined, size: 18),
+            label: Text('Timeline', softWrap: false, maxLines: 1),
           ),
         ],
         selected: {value},
         onSelectionChanged: (s) => onChanged(s.first),
         showSelectedIcon: false,
-        style: ButtonStyle(
-          visualDensity: VisualDensity.compact,
+        expandedInsets: EdgeInsets.zero,
+        style: const ButtonStyle(
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),

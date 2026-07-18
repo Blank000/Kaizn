@@ -1289,7 +1289,7 @@ class _TimeOfDayCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 0, 8),
               child: Text(
-                'Most active around ${_formatHour(peakHour!)}',
+                'Most active around ${_formatHour(peakHour)}',
                 style: AppTypography.body
                     .copyWith(fontWeight: FontWeight.w700),
               ),
@@ -1332,18 +1332,20 @@ class _TimeOfDayCard extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 22,
+                      reservedSize: 26,
                       interval: 1,
                       getTitlesWidget: (value, _) {
                         final h = value.toInt();
                         // Only label at 0, 6, 12, 18 to keep the axis clean.
                         if (h == 0 || h == 6 || h == 12 || h == 18) {
                           return Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              _formatHourShort(h),
-                              style: AppTypography.caption
-                                  .copyWith(fontSize: 9),
+                              _formatHour(h),
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           );
                         }
@@ -1383,13 +1385,6 @@ String _formatHour(int h) {
   if (h == 12) return '12 PM';
   if (h < 12) return '$h AM';
   return '${h - 12} PM';
-}
-
-String _formatHourShort(int h) {
-  if (h == 0) return '12a';
-  if (h == 12) return '12p';
-  if (h < 12) return '${h}a';
-  return '${h - 12}p';
 }
 
 // ── Day detail bottom sheet ─────────────────────────────────────────────────

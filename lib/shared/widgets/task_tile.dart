@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
+import '../../core/services/notification_feedback.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -168,6 +169,13 @@ class TaskTile extends ConsumerStatefulWidget {
   /// non-null, replaces the round main check button with a chip row.
   final List<DayChip>? weeklyChips;
 
+  /// When true, tapping a checked/missed/skipped tile immediately toggles it
+  /// back (the classic in-app tap-toggle). When false (default — Home, Timeline,
+  /// "quick log" surfaces), a completed tile is locked and can only be
+  /// reversed via the 6-second SnackBar UNDO or by navigating into the
+  /// milestone detail screen. See conversation for the "Option B" design.
+  final bool allowInlineUndo;
+
   const TaskTile({
     super.key,
     required this.task,
@@ -175,6 +183,7 @@ class TaskTile extends ConsumerStatefulWidget {
     required this.meta,
     this.trailing,
     this.weeklyChips,
+    this.allowInlineUndo = false,
   });
 
   @override
@@ -344,19 +353,25 @@ class _TaskTileState extends ConsumerState<TaskTile>
 
   Future<void> _toggle() async {
     final db = ref.read(databaseProvider);
+    final isCompleted = _isChecked || _isMissed || _isSkipped;
+
+    // Locked-completion policy: on Home / Timeline (allowInlineUndo=false),
+    // tapping a completed tile is a no-op. The 6-second UNDO snackbar is the
+    // only fast-path recovery; deeper reversal happens in Milestone Detail.
+    if (isCompleted && !widget.allowInlineUndo) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+
     if (_isChecked && widget.rowState.checkedCompletion != null) {
       await db.undoCompletion(
           widget.rowState.checkedCompletion!.id, widget.task.id);
       HapticFeedback.lightImpact();
     } else if (_isMissed && widget.rowState.ndCompletion != null) {
-      // Unmark missed — undoCompletion safely removes the ND row.
       await db.undoCompletion(
           widget.rowState.ndCompletion!.id, widget.task.id);
       HapticFeedback.lightImpact();
     } else if (_isSkipped && widget.rowState.skipCompletion != null) {
-      // Unskip: just delete the row. undoCompletion is safe (no points to
-      // refund, no status change for one-shots since skip doesn't set
-      // completed).
       await db.undoCompletion(
           widget.rowState.skipCompletion!.id, widget.task.id);
       HapticFeedback.lightImpact();
@@ -371,12 +386,33 @@ class _TaskTileState extends ConsumerState<TaskTile>
       if (widget.task.pointsPerCompletion > 0 && mounted) {
         _triggerFloater();
       }
-      if (mounted) {
+
+      // Priority for the resulting snackbar:
+      //   - Badges unlocked → achievement snackbar (celebration wins).
+      //   - Rewards unlocked → reward snackbar.
+      //   - Otherwise → the "Logged X + UNDO" snackbar for the 6s grace.
+      // We deliberately don't stack the UNDO snackbar with the celebration
+      // ones — they'd shove each other around and lose the moment.
+      final hasCelebration = completionBadges.isNotEmpty ||
+          streakBadges.isNotEmpty ||
+          unlockedRewards.isNotEmpty;
+
+      if (mounted && hasCelebration) {
         showAchievementSnackbar(
           context,
           [...completionBadges, ...streakBadges],
         );
         showRewardUnlockSnackbar(context, unlockedRewards);
+      } else if (mounted) {
+        final completion =
+            await db.getCompletionForTaskOn(widget.task.id, DateTime.now());
+        NotificationFeedback.post(NotificationFeedbackEvent(
+          kind: FeedbackKind.done,
+          taskName: widget.task.name,
+          points: widget.task.pointsPerCompletion,
+          taskId: widget.task.id,
+          undoCompletionId: completion?.id,
+        ));
       }
     }
   }
@@ -416,7 +452,6 @@ class _TaskTileState extends ConsumerState<TaskTile>
   /// specific date. Only opens when the chip is empty (no completion yet)
   /// and not in the future.
   void _showChipActions(DayChip chip) {
-    if (chip.isFuture) return;
     if (!_isChipEmpty(chip)) return;
     final dateLabel = _formatChipDate(chip.date);
     showModalBottomSheet(
@@ -473,20 +508,25 @@ class _TaskTileState extends ConsumerState<TaskTile>
   }
 
   Future<void> _toggleChip(DayChip chip) async {
-    if (chip.isFuture) return;
     final db = ref.read(databaseProvider);
 
-    // Undo any existing completion (real / skip / nd) for this chip's date.
+    // Existing completion on this chip's date → undo path. Locked on Home /
+    // Timeline (allowInlineUndo=false); passable via SnackBar UNDO or milestone
+    // detail. See TaskTile.allowInlineUndo docs.
     final existing = chip.real ?? chip.nd ?? chip.skip;
     if (existing != null) {
+      if (!widget.allowInlineUndo) {
+        HapticFeedback.selectionClick();
+        return;
+      }
       await db.undoCompletion(existing.id, widget.task.id);
       HapticFeedback.lightImpact();
       return;
     }
 
-    // Empty chip → log a real completion.
+    // Empty chip → log a real completion. Two paths depending on whether it's
+    // today (streak-relevant) or a past/future date (retro-log).
     if (chip.isToday) {
-      // Today's chip uses the full flow (streak + achievements + reward unlock).
       await db.completeTaskNow(widget.task);
       final streakBadges = await StreakService.recordDayLogged(db);
       final completionBadges =
@@ -497,25 +537,52 @@ class _TaskTileState extends ConsumerState<TaskTile>
       if (widget.task.pointsPerCompletion > 0 && mounted) {
         _triggerFloater();
       }
-      if (mounted) {
+
+      final hasCelebration = completionBadges.isNotEmpty ||
+          streakBadges.isNotEmpty ||
+          unlockedRewards.isNotEmpty;
+
+      if (mounted && hasCelebration) {
         showAchievementSnackbar(
           context,
           [...completionBadges, ...streakBadges],
         );
         showRewardUnlockSnackbar(context, unlockedRewards);
+      } else if (mounted) {
+        final completion =
+            await db.getCompletionForTaskOn(widget.task.id, DateTime.now());
+        NotificationFeedback.post(NotificationFeedbackEvent(
+          kind: FeedbackKind.done,
+          taskName: widget.task.name,
+          points: widget.task.pointsPerCompletion,
+          taskId: widget.task.id,
+          undoCompletionId: completion?.id,
+        ));
       }
     } else {
-      // Past-date retro-log: points + reward check, but no streak update
-      // (the streak for that day was already determined).
       await db.completeTaskOn(widget.task, chip.date);
       final completionBadges =
           await AchievementService.checkAfterCompletion(db);
       final unlockedRewards =
           await RewardUnlockService.checkAfterPointsChange(db);
       HapticFeedback.mediumImpact();
-      if (mounted) {
+
+      final hasCelebration =
+          completionBadges.isNotEmpty || unlockedRewards.isNotEmpty;
+
+      if (mounted && hasCelebration) {
         showAchievementSnackbar(context, completionBadges);
         showRewardUnlockSnackbar(context, unlockedRewards);
+      } else if (mounted) {
+        final completion =
+            await db.getCompletionForTaskOn(widget.task.id, chip.date);
+        NotificationFeedback.post(NotificationFeedbackEvent(
+          kind: FeedbackKind.done,
+          taskName: widget.task.name,
+          points: widget.task.pointsPerCompletion,
+          taskId: widget.task.id,
+          undoCompletionId: completion?.id,
+        ));
       }
     }
   }
@@ -611,8 +678,12 @@ class _DayChipWidget extends StatelessWidget {
     final letter = _letters[chip.weekday - 1];
 
     return InkWell(
-      onTap: chip.isFuture ? null : onTap,
-      onLongPress: chip.isFuture ? null : onLongPress,
+      // Future chips are still tappable — user may want to log a task ahead
+      // of its scheduled day. `completeTaskOn(task, chip.date)` stamps the
+      // completion for the chip's actual date, so a Wed chip tapped on Mon
+      // credits Wed correctly.
+      onTap: onTap,
+      onLongPress: onLongPress,
       customBorder: const CircleBorder(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),

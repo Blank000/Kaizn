@@ -750,6 +750,43 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     requiredDuringInsert: false,
     defaultValue: const Constant(30),
   );
+  static const VerificationMeta _reminderEnabledMeta = const VerificationMeta(
+    'reminderEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> reminderEnabled = GeneratedColumn<bool>(
+    'reminder_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("reminder_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _reminderMinuteMeta = const VerificationMeta(
+    'reminderMinute',
+  );
+  @override
+  late final GeneratedColumn<int> reminderMinute = GeneratedColumn<int>(
+    'reminder_minute',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _reminderDateMeta = const VerificationMeta(
+    'reminderDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> reminderDate = GeneratedColumn<DateTime>(
+    'reminder_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   late final GeneratedColumnWithTypeConverter<TaskStatus, String> status =
       GeneratedColumn<String>(
@@ -796,6 +833,9 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     dueDate,
     startMinute,
     durationMinutes,
+    reminderEnabled,
+    reminderMinute,
+    reminderDate,
     status,
     createdAt,
     completedAt,
@@ -891,6 +931,33 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         ),
       );
     }
+    if (data.containsKey('reminder_enabled')) {
+      context.handle(
+        _reminderEnabledMeta,
+        reminderEnabled.isAcceptableOrUnknown(
+          data['reminder_enabled']!,
+          _reminderEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reminder_minute')) {
+      context.handle(
+        _reminderMinuteMeta,
+        reminderMinute.isAcceptableOrUnknown(
+          data['reminder_minute']!,
+          _reminderMinuteMeta,
+        ),
+      );
+    }
+    if (data.containsKey('reminder_date')) {
+      context.handle(
+        _reminderDateMeta,
+        reminderDate.isAcceptableOrUnknown(
+          data['reminder_date']!,
+          _reminderDateMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -961,6 +1028,18 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.int,
         data['${effectivePrefix}duration_minutes'],
       )!,
+      reminderEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}reminder_enabled'],
+      )!,
+      reminderMinute: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reminder_minute'],
+      ),
+      reminderDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}reminder_date'],
+      ),
       status: $TasksTable.$converterstatus.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -1003,6 +1082,9 @@ class Task extends DataClass implements Insertable<Task> {
   final DateTime? dueDate;
   final int? startMinute;
   final int durationMinutes;
+  final bool reminderEnabled;
+  final int? reminderMinute;
+  final DateTime? reminderDate;
   final TaskStatus status;
   final DateTime createdAt;
   final DateTime? completedAt;
@@ -1018,6 +1100,9 @@ class Task extends DataClass implements Insertable<Task> {
     this.dueDate,
     this.startMinute,
     required this.durationMinutes,
+    required this.reminderEnabled,
+    this.reminderMinute,
+    this.reminderDate,
     required this.status,
     required this.createdAt,
     this.completedAt,
@@ -1050,6 +1135,13 @@ class Task extends DataClass implements Insertable<Task> {
       map['start_minute'] = Variable<int>(startMinute);
     }
     map['duration_minutes'] = Variable<int>(durationMinutes);
+    map['reminder_enabled'] = Variable<bool>(reminderEnabled);
+    if (!nullToAbsent || reminderMinute != null) {
+      map['reminder_minute'] = Variable<int>(reminderMinute);
+    }
+    if (!nullToAbsent || reminderDate != null) {
+      map['reminder_date'] = Variable<DateTime>(reminderDate);
+    }
     {
       map['status'] = Variable<String>(
         $TasksTable.$converterstatus.toSql(status),
@@ -1085,6 +1177,13 @@ class Task extends DataClass implements Insertable<Task> {
           ? const Value.absent()
           : Value(startMinute),
       durationMinutes: Value(durationMinutes),
+      reminderEnabled: Value(reminderEnabled),
+      reminderMinute: reminderMinute == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reminderMinute),
+      reminderDate: reminderDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reminderDate),
       status: Value(status),
       createdAt: Value(createdAt),
       completedAt: completedAt == null && nullToAbsent
@@ -1114,6 +1213,9 @@ class Task extends DataClass implements Insertable<Task> {
       dueDate: serializer.fromJson<DateTime?>(json['dueDate']),
       startMinute: serializer.fromJson<int?>(json['startMinute']),
       durationMinutes: serializer.fromJson<int>(json['durationMinutes']),
+      reminderEnabled: serializer.fromJson<bool>(json['reminderEnabled']),
+      reminderMinute: serializer.fromJson<int?>(json['reminderMinute']),
+      reminderDate: serializer.fromJson<DateTime?>(json['reminderDate']),
       status: $TasksTable.$converterstatus.fromJson(
         serializer.fromJson<String>(json['status']),
       ),
@@ -1138,6 +1240,9 @@ class Task extends DataClass implements Insertable<Task> {
       'dueDate': serializer.toJson<DateTime?>(dueDate),
       'startMinute': serializer.toJson<int?>(startMinute),
       'durationMinutes': serializer.toJson<int>(durationMinutes),
+      'reminderEnabled': serializer.toJson<bool>(reminderEnabled),
+      'reminderMinute': serializer.toJson<int?>(reminderMinute),
+      'reminderDate': serializer.toJson<DateTime?>(reminderDate),
       'status': serializer.toJson<String>(
         $TasksTable.$converterstatus.toJson(status),
       ),
@@ -1158,6 +1263,9 @@ class Task extends DataClass implements Insertable<Task> {
     Value<DateTime?> dueDate = const Value.absent(),
     Value<int?> startMinute = const Value.absent(),
     int? durationMinutes,
+    bool? reminderEnabled,
+    Value<int?> reminderMinute = const Value.absent(),
+    Value<DateTime?> reminderDate = const Value.absent(),
     TaskStatus? status,
     DateTime? createdAt,
     Value<DateTime?> completedAt = const Value.absent(),
@@ -1175,6 +1283,11 @@ class Task extends DataClass implements Insertable<Task> {
     dueDate: dueDate.present ? dueDate.value : this.dueDate,
     startMinute: startMinute.present ? startMinute.value : this.startMinute,
     durationMinutes: durationMinutes ?? this.durationMinutes,
+    reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+    reminderMinute: reminderMinute.present
+        ? reminderMinute.value
+        : this.reminderMinute,
+    reminderDate: reminderDate.present ? reminderDate.value : this.reminderDate,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
@@ -1206,6 +1319,15 @@ class Task extends DataClass implements Insertable<Task> {
       durationMinutes: data.durationMinutes.present
           ? data.durationMinutes.value
           : this.durationMinutes,
+      reminderEnabled: data.reminderEnabled.present
+          ? data.reminderEnabled.value
+          : this.reminderEnabled,
+      reminderMinute: data.reminderMinute.present
+          ? data.reminderMinute.value
+          : this.reminderMinute,
+      reminderDate: data.reminderDate.present
+          ? data.reminderDate.value
+          : this.reminderDate,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       completedAt: data.completedAt.present
@@ -1228,6 +1350,9 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('dueDate: $dueDate, ')
           ..write('startMinute: $startMinute, ')
           ..write('durationMinutes: $durationMinutes, ')
+          ..write('reminderEnabled: $reminderEnabled, ')
+          ..write('reminderMinute: $reminderMinute, ')
+          ..write('reminderDate: $reminderDate, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt')
@@ -1248,6 +1373,9 @@ class Task extends DataClass implements Insertable<Task> {
     dueDate,
     startMinute,
     durationMinutes,
+    reminderEnabled,
+    reminderMinute,
+    reminderDate,
     status,
     createdAt,
     completedAt,
@@ -1267,6 +1395,9 @@ class Task extends DataClass implements Insertable<Task> {
           other.dueDate == this.dueDate &&
           other.startMinute == this.startMinute &&
           other.durationMinutes == this.durationMinutes &&
+          other.reminderEnabled == this.reminderEnabled &&
+          other.reminderMinute == this.reminderMinute &&
+          other.reminderDate == this.reminderDate &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
           other.completedAt == this.completedAt);
@@ -1284,6 +1415,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<DateTime?> dueDate;
   final Value<int?> startMinute;
   final Value<int> durationMinutes;
+  final Value<bool> reminderEnabled;
+  final Value<int?> reminderMinute;
+  final Value<DateTime?> reminderDate;
   final Value<TaskStatus> status;
   final Value<DateTime> createdAt;
   final Value<DateTime?> completedAt;
@@ -1300,6 +1434,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.dueDate = const Value.absent(),
     this.startMinute = const Value.absent(),
     this.durationMinutes = const Value.absent(),
+    this.reminderEnabled = const Value.absent(),
+    this.reminderMinute = const Value.absent(),
+    this.reminderDate = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1317,6 +1454,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.dueDate = const Value.absent(),
     this.startMinute = const Value.absent(),
     this.durationMinutes = const Value.absent(),
+    this.reminderEnabled = const Value.absent(),
+    this.reminderMinute = const Value.absent(),
+    this.reminderDate = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1335,6 +1475,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<DateTime>? dueDate,
     Expression<int>? startMinute,
     Expression<int>? durationMinutes,
+    Expression<bool>? reminderEnabled,
+    Expression<int>? reminderMinute,
+    Expression<DateTime>? reminderDate,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? completedAt,
@@ -1353,6 +1496,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (dueDate != null) 'due_date': dueDate,
       if (startMinute != null) 'start_minute': startMinute,
       if (durationMinutes != null) 'duration_minutes': durationMinutes,
+      if (reminderEnabled != null) 'reminder_enabled': reminderEnabled,
+      if (reminderMinute != null) 'reminder_minute': reminderMinute,
+      if (reminderDate != null) 'reminder_date': reminderDate,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (completedAt != null) 'completed_at': completedAt,
@@ -1372,6 +1518,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<DateTime?>? dueDate,
     Value<int?>? startMinute,
     Value<int>? durationMinutes,
+    Value<bool>? reminderEnabled,
+    Value<int?>? reminderMinute,
+    Value<DateTime?>? reminderDate,
     Value<TaskStatus>? status,
     Value<DateTime>? createdAt,
     Value<DateTime?>? completedAt,
@@ -1389,6 +1538,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
       dueDate: dueDate ?? this.dueDate,
       startMinute: startMinute ?? this.startMinute,
       durationMinutes: durationMinutes ?? this.durationMinutes,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      reminderMinute: reminderMinute ?? this.reminderMinute,
+      reminderDate: reminderDate ?? this.reminderDate,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt ?? this.completedAt,
@@ -1434,6 +1586,15 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (durationMinutes.present) {
       map['duration_minutes'] = Variable<int>(durationMinutes.value);
     }
+    if (reminderEnabled.present) {
+      map['reminder_enabled'] = Variable<bool>(reminderEnabled.value);
+    }
+    if (reminderMinute.present) {
+      map['reminder_minute'] = Variable<int>(reminderMinute.value);
+    }
+    if (reminderDate.present) {
+      map['reminder_date'] = Variable<DateTime>(reminderDate.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(
         $TasksTable.$converterstatus.toSql(status.value),
@@ -1465,6 +1626,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('dueDate: $dueDate, ')
           ..write('startMinute: $startMinute, ')
           ..write('durationMinutes: $durationMinutes, ')
+          ..write('reminderEnabled: $reminderEnabled, ')
+          ..write('reminderMinute: $reminderMinute, ')
+          ..write('reminderDate: $reminderDate, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt, ')
@@ -3963,6 +4127,9 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<DateTime?> dueDate,
       Value<int?> startMinute,
       Value<int> durationMinutes,
+      Value<bool> reminderEnabled,
+      Value<int?> reminderMinute,
+      Value<DateTime?> reminderDate,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -3981,6 +4148,9 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<DateTime?> dueDate,
       Value<int?> startMinute,
       Value<int> durationMinutes,
+      Value<bool> reminderEnabled,
+      Value<int?> reminderMinute,
+      Value<DateTime?> reminderDate,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -4111,6 +4281,21 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<int> get durationMinutes => $composableBuilder(
     column: $table.durationMinutes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get reminderEnabled => $composableBuilder(
+    column: $table.reminderEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get reminderMinute => $composableBuilder(
+    column: $table.reminderMinute,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get reminderDate => $composableBuilder(
+    column: $table.reminderDate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4263,6 +4448,21 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get reminderEnabled => $composableBuilder(
+    column: $table.reminderEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get reminderMinute => $composableBuilder(
+    column: $table.reminderMinute,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get reminderDate => $composableBuilder(
+    column: $table.reminderDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -4351,6 +4551,21 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<int> get durationMinutes => $composableBuilder(
     column: $table.durationMinutes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get reminderEnabled => $composableBuilder(
+    column: $table.reminderEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get reminderMinute => $composableBuilder(
+    column: $table.reminderMinute,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get reminderDate => $composableBuilder(
+    column: $table.reminderDate,
     builder: (column) => column,
   );
 
@@ -4483,6 +4698,9 @@ class $$TasksTableTableManager
                 Value<DateTime?> dueDate = const Value.absent(),
                 Value<int?> startMinute = const Value.absent(),
                 Value<int> durationMinutes = const Value.absent(),
+                Value<bool> reminderEnabled = const Value.absent(),
+                Value<int?> reminderMinute = const Value.absent(),
+                Value<DateTime?> reminderDate = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -4499,6 +4717,9 @@ class $$TasksTableTableManager
                 dueDate: dueDate,
                 startMinute: startMinute,
                 durationMinutes: durationMinutes,
+                reminderEnabled: reminderEnabled,
+                reminderMinute: reminderMinute,
+                reminderDate: reminderDate,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,
@@ -4517,6 +4738,9 @@ class $$TasksTableTableManager
                 Value<DateTime?> dueDate = const Value.absent(),
                 Value<int?> startMinute = const Value.absent(),
                 Value<int> durationMinutes = const Value.absent(),
+                Value<bool> reminderEnabled = const Value.absent(),
+                Value<int?> reminderMinute = const Value.absent(),
+                Value<DateTime?> reminderDate = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -4533,6 +4757,9 @@ class $$TasksTableTableManager
                 dueDate: dueDate,
                 startMinute: startMinute,
                 durationMinutes: durationMinutes,
+                reminderEnabled: reminderEnabled,
+                reminderMinute: reminderMinute,
+                reminderDate: reminderDate,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,

@@ -33,8 +33,12 @@ class AppDatabase extends _$AppDatabase {
   // 1 → 2 was the milestone-centric schema rewrite (destructive, pre-launch).
   // 2 → 3 adds `color_index` to milestones (non-destructive).
   // 3 → 4 adds `start_minute` + `duration_minutes` to tasks for timeline view.
+  // 4 → 5 adds `reminder_enabled` + `reminder_minute` to tasks for per-task
+  //        reminder notifications.
+  // 5 → 6 adds `reminder_date` to tasks — when set, the reminder is a one-shot
+  //        nudge on that specific date (ignoring recurrence).
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -61,6 +65,15 @@ class AppDatabase extends _$AppDatabase {
           // v3 → v4: add scheduling columns to tasks.
           await m.addColumn(tasks, tasks.startMinute);
           await m.addColumn(tasks, tasks.durationMinutes);
+        }
+        if (from < 5) {
+          // v4 → v5: add per-task reminder columns.
+          await m.addColumn(tasks, tasks.reminderEnabled);
+          await m.addColumn(tasks, tasks.reminderMinute);
+        }
+        if (from < 6) {
+          // v5 → v6: add one-shot reminder date, nullable.
+          await m.addColumn(tasks, tasks.reminderDate);
         }
       },
     );
@@ -778,6 +791,235 @@ class AppDatabase extends _$AppDatabase {
     final results = await query.get();
     return results.length;
   }
+
+  // ============ Reactive streams (Drift .watch) ============
+  //
+  // These are the read paths the UI subscribes to. Each returns a Drift
+  // stream that emits ONLY when its underlying table(s) change — no polling.
+  // Previously the app polled every 1-2s per provider (~5 queries/second on
+  // Home), which was the main source of lag; these eliminate that entirely.
+  //
+  // Aggregate streams (int, Map) are derived from the base row-list streams
+  // in Dart via `map()` instead of watching a separate SQL aggregate — keeps
+  // the code simple and avoids extra queries when the same rows already flow
+  // through another provider (Drift dedupes at the query layer).
+
+  Stream<List<Milestone>> watchActiveMilestones() {
+    return (select(milestones)
+          ..where((m) => m.status.equals(MilestoneStatus.active.value))
+          ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
+        .watch();
+  }
+
+  Stream<List<Task>> watchAllActiveTasks() {
+    return (select(tasks)
+          ..where((t) => t.status.equals(TaskStatus.active.value))
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  Stream<List<Task>> watchAllTasks() {
+    return (select(tasks)
+          ..where((t) => t.status.equals(TaskStatus.archived.value).not())
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  Stream<List<Task>> watchAllTasksForMilestone(String milestoneId) {
+    return (select(tasks)
+          ..where((t) =>
+              t.milestoneId.equals(milestoneId) &
+              t.status.equals(TaskStatus.archived.value).not())
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  Stream<Streak?> watchStreak() =>
+      (select(streakTable)..where((s) => s.id.equals(1))).watchSingleOrNull();
+
+  Stream<List<Reward>> watchUnclaimedRewards() {
+    return (select(rewards)
+          ..where((r) => r.isClaimed.equals(false))
+          ..orderBy([(r) => OrderingTerm.asc(r.pointsThreshold)]))
+        .watch();
+  }
+
+  Stream<List<Reward>> watchClaimedRewards() {
+    return (select(rewards)
+          ..where((r) => r.isClaimed.equals(true))
+          ..orderBy([(r) => OrderingTerm.desc(r.claimedAt)]))
+        .watch();
+  }
+
+  Stream<List<TaskCompletion>> watchRecentCompletions(Duration window) {
+    final cutoff = DateTime.now().subtract(window);
+    return (select(taskCompletions)
+          ..where((c) => c.completedOn.isBiggerOrEqualValue(cutoff)))
+        .watch();
+  }
+
+  Stream<List<TaskCompletion>> watchRecentCompletionsForMilestone(
+    String milestoneId,
+    Duration window,
+  ) {
+    final cutoff = DateTime.now().subtract(window);
+    final tasksInMilestone = selectOnly(tasks)
+      ..addColumns([tasks.id])
+      ..where(tasks.milestoneId.equals(milestoneId));
+    return (select(taskCompletions)
+          ..where((c) =>
+              c.completedOn.isBiggerOrEqualValue(cutoff) &
+              c.taskId.isInQuery(tasksInMilestone)))
+        .watch();
+  }
+
+  /// Points balance: sum(points_history.points) - sum(claimed reward
+  /// thresholds). Watches both underlying tables via customSelect so it
+  /// re-fires whenever either changes.
+  Stream<int> watchTotalPoints() {
+    return customSelect(
+      "SELECT "
+      "COALESCE((SELECT SUM(points) FROM points_history), 0) - "
+      "COALESCE((SELECT SUM(points_threshold) FROM rewards WHERE is_claimed = 1), 0) "
+      "AS balance",
+      readsFrom: {pointsHistoryTable, rewards},
+    ).watchSingle().map((r) => r.read<int>('balance'));
+  }
+
+  Stream<int> watchTodayPoints() {
+    return customSelect(
+      "SELECT COALESCE(SUM(points), 0) AS total FROM points_history "
+      "WHERE earned_at >= :start AND earned_at < :end",
+      variables: [
+        Variable.withDateTime(_dayStart(DateTime.now())),
+        Variable.withDateTime(_dayEnd(DateTime.now())),
+      ],
+      readsFrom: {pointsHistoryTable},
+    ).watchSingle().map((r) => r.read<int>('total'));
+  }
+
+  Stream<int> watchLifetimeEarnedPoints() {
+    return customSelect(
+      "SELECT COALESCE(SUM(points), 0) AS total FROM points_history",
+      readsFrom: {pointsHistoryTable},
+    ).watchSingle().map((r) => r.read<int>('total'));
+  }
+
+  Stream<int> watchThisWeekPoints() {
+    final now = DateTime.now();
+    final monday = _dayStart(now).subtract(Duration(days: now.weekday - 1));
+    final nextMonday = monday.add(const Duration(days: 7));
+    return customSelect(
+      "SELECT COALESCE(SUM(points), 0) AS total FROM points_history "
+      "WHERE earned_at >= :start AND earned_at < :end",
+      variables: [
+        Variable.withDateTime(monday),
+        Variable.withDateTime(nextMonday),
+      ],
+      readsFrom: {pointsHistoryTable},
+    ).watchSingle().map((r) => r.read<int>('total'));
+  }
+
+  Stream<int> watchThisWeekCompletionCount() {
+    final now = DateTime.now();
+    final monday = _dayStart(now).subtract(Duration(days: now.weekday - 1));
+    final nextMonday = monday.add(const Duration(days: 7));
+    return customSelect(
+      "SELECT COUNT(*) AS c FROM task_completions "
+      "WHERE completed_on >= :start AND completed_on < :end "
+      "AND is_skip = 0 AND is_nd = 0",
+      variables: [
+        Variable.withDateTime(monday),
+        Variable.withDateTime(nextMonday),
+      ],
+      readsFrom: {taskCompletions},
+    ).watchSingle().map((r) => r.read<int>('c'));
+  }
+
+  /// Live version of [getTaskIdsCompletedToday]. Emits a fresh set whenever a
+  /// completion is inserted/deleted.
+  Stream<Set<String>> watchTaskIdsCompletedToday() {
+    final now = DateTime.now();
+    return (select(taskCompletions)
+          ..where((c) =>
+              c.completedOn.isBiggerOrEqualValue(_dayStart(now)) &
+              c.completedOn.isSmallerThanValue(_dayEnd(now)) &
+              c.isSkip.equals(false) &
+              c.isNd.equals(false)))
+        .watch()
+        .map((rows) => rows.map((r) => r.taskId).toSet());
+  }
+
+  Stream<Set<String>> watchTaskIdsCompletedThisWeek() {
+    final now = DateTime.now();
+    final monday = _dayStart(now).subtract(Duration(days: now.weekday - 1));
+    final nextMonday = monday.add(const Duration(days: 7));
+    return (select(taskCompletions)
+          ..where((c) =>
+              c.completedOn.isBiggerOrEqualValue(monday) &
+              c.completedOn.isSmallerThanValue(nextMonday) &
+              c.isSkip.equals(false) &
+              c.isNd.equals(false)))
+        .watch()
+        .map((rows) => rows.map((r) => r.taskId).toSet());
+  }
+
+  Stream<Map<DateTime, int>> watchDailyPointsLastNDays(int days) {
+    final startDate =
+        _dayStart(DateTime.now()).subtract(Duration(days: days - 1));
+    return (select(pointsHistoryTable)
+          ..where((ph) => ph.earnedAt.isBiggerOrEqualValue(startDate)))
+        .watch()
+        .map((rows) {
+      final byDay = <DateTime, int>{};
+      for (final r in rows) {
+        final day = DateTime(r.earnedAt.year, r.earnedAt.month, r.earnedAt.day);
+        byDay[day] = (byDay[day] ?? 0) + r.points;
+      }
+      return byDay;
+    });
+  }
+
+  Stream<Map<DateTime, int>> watchDailyCompletionsLastNDays(int days) {
+    final startDate =
+        _dayStart(DateTime.now()).subtract(Duration(days: days - 1));
+    return (select(taskCompletions)
+          ..where((c) =>
+              c.completedOn.isBiggerOrEqualValue(startDate) &
+              c.isSkip.equals(false) &
+              c.isNd.equals(false)))
+        .watch()
+        .map((rows) {
+      final byDay = <DateTime, int>{};
+      for (final r in rows) {
+        final day = DateTime(
+            r.completedOn.year, r.completedOn.month, r.completedOn.day);
+        byDay[day] = (byDay[day] ?? 0) + 1;
+      }
+      return byDay;
+    });
+  }
+
+  Stream<Map<int, int>> watchCompletionsByHour(Duration window) {
+    final cutoff = DateTime.now().subtract(window);
+    return (select(taskCompletions)
+          ..where((c) =>
+              c.createdAt.isBiggerOrEqualValue(cutoff) &
+              c.isSkip.equals(false) &
+              c.isNd.equals(false)))
+        .watch()
+        .map((rows) {
+      final byHour = <int, int>{};
+      for (final r in rows) {
+        byHour[r.createdAt.hour] = (byHour[r.createdAt.hour] ?? 0) + 1;
+      }
+      return byHour;
+    });
+  }
+
+  static DateTime _dayStart(DateTime d) => DateTime(d.year, d.month, d.day);
+  static DateTime _dayEnd(DateTime d) =>
+      _dayStart(d).add(const Duration(days: 1));
 }
 
 String _generateId() {

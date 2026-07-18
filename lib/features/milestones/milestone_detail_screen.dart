@@ -364,6 +364,10 @@ class _TaskGroup extends ConsumerWidget {
               rowState: state,
               meta: _metaForDetail(t, state),
               weeklyChips: chips,
+              // Milestone detail is the "management" surface — the escape hatch
+              // when a completion has already fallen out of the 6-second UNDO
+              // snackbar on Home / Timeline. Tap-to-toggle stays enabled here.
+              allowInlineUndo: true,
               trailing: PopupMenuButton<String>(
                 onSelected: (v) async {
                   if (v == 'edit') {

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/services/app_prefs.dart';
+import '../../../core/services/notification_scheduler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
@@ -61,6 +62,14 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   TimeOfDay? _startTime;
   int _durationMinutes = 30;
 
+  // Optional reminder. When enabled with no override, the reminder follows the
+  // timeline start time; an override sets an independent time. When
+  // `_reminderDate` is set, the reminder is a one-shot for that specific date
+  // regardless of the task's recurrence.
+  bool _reminderEnabled = false;
+  TimeOfDay? _reminderOverride;
+  DateTime? _reminderDate;
+
   bool _saving = false;
 
   bool get _isEdit => widget.task != null;
@@ -88,6 +97,14 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         );
       }
       _durationMinutes = t.durationMinutes;
+      _reminderEnabled = t.reminderEnabled;
+      if (t.reminderMinute != null) {
+        _reminderOverride = TimeOfDay(
+          hour: t.reminderMinute! ~/ 60,
+          minute: t.reminderMinute! % 60,
+        );
+      }
+      _reminderDate = t.reminderDate;
       if (_frequency != TaskRecurrence.none) {
         final rule = RecurrenceRule.fromTask(t);
         _interval = rule.interval;
@@ -221,6 +238,14 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final cfg = rule?.toJsonString();
     final startMin =
         _startTime == null ? null : _startTime!.hour * 60 + _startTime!.minute;
+    // Persist the override only; a null reminderMinute with reminderEnabled on
+    // means "follow the start time".
+    final reminderMin = _reminderOverride == null
+        ? null
+        : _reminderOverride!.hour * 60 + _reminderOverride!.minute;
+
+    // Only persist the one-shot reminder date when the reminder is enabled.
+    final reminderDate = _reminderEnabled ? _reminderDate : null;
 
     if (_isEdit) {
       final t = widget.task!;
@@ -233,6 +258,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         dueDate: Value(dueDate),
         startMinute: Value(startMin),
         durationMinutes: _durationMinutes,
+        reminderEnabled: _reminderEnabled,
+        reminderMinute: Value(reminderMin),
+        reminderDate: Value(reminderDate),
       ));
     } else {
       await db.insertTask(TasksCompanion.insert(
@@ -245,9 +273,14 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         dueDate: Value(dueDate),
         startMinute: Value(startMin),
         durationMinutes: Value(_durationMinutes),
+        reminderEnabled: Value(_reminderEnabled),
+        reminderMinute: Value(reminderMin),
+        reminderDate: Value(reminderDate),
       ));
     }
     await AppPrefs.setLastUsedMilestoneId(_selectedMilestoneId!);
+    // Reflect the new/changed reminder in the scheduled notifications.
+    await NotificationScheduler.reschedule();
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -307,6 +340,10 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               Text('Repeats', style: AppTypography.caption),
               const SizedBox(height: 8),
               SegmentedButton<TaskRecurrence>(
+                // Hide the leading check icon — the selected segment already
+                // reads as selected via its filled background, and the icon
+                // squeezes labels enough on narrow screens to wrap "Once".
+                showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(
                       value: TaskRecurrence.none, label: Text('Once')),
@@ -345,6 +382,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               ],
               const SizedBox(height: 24),
               _buildScheduleTimeRow(),
+              const SizedBox(height: 24),
+              _buildReminderRow(),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -608,6 +647,130 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 onChanged: (v) => setState(() => _durationMinutes = v),
               ),
             ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _toggleReminder(bool value) {
+    setState(() {
+      _reminderEnabled = value;
+      // Give the reminder a concrete time when there's no start time to follow.
+      if (value && _reminderOverride == null && _startTime == null) {
+        _reminderOverride = const TimeOfDay(hour: 9, minute: 0);
+      }
+    });
+  }
+
+  Future<void> _pickReminderTime() async {
+    final base = _reminderOverride ??
+        _startTime ??
+        const TimeOfDay(hour: 9, minute: 0);
+    final picked = await showTimePicker(context: context, initialTime: base);
+    if (picked != null) setState(() => _reminderOverride = picked);
+  }
+
+  Future<void> _pickReminderDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _reminderDate ?? today,
+      firstDate: today,
+      lastDate: DateTime(now.year + 5),
+    );
+    if (picked != null) setState(() => _reminderDate = picked);
+  }
+
+  Widget _buildReminderRow() {
+    final followsStart = _reminderOverride == null && _startTime != null;
+    final effective = _reminderOverride ?? _startTime;
+    final timeLabel =
+        effective == null ? 'Pick a time' : effective.format(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Remind me', style: AppTypography.body),
+                  Text(
+                    'Notify on days this task is due',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextSecondary),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _reminderEnabled,
+              onChanged: _toggleReminder,
+              activeColor: AppColors.primary,
+            ),
+          ],
+        ),
+        if (_reminderEnabled) ...[
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _pickReminderTime,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Reminder time',
+                helperText: followsStart ? 'Follows the start time' : null,
+                suffixIcon: (_reminderOverride != null && _startTime != null)
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Follow start time',
+                        onPressed: () =>
+                            setState(() => _reminderOverride = null),
+                      )
+                    : const Icon(Icons.notifications_active_outlined),
+              ),
+              child: Text(
+                timeLabel,
+                style: AppTypography.body.copyWith(
+                  color: effective == null
+                      ? context.appTextSecondary
+                      : context.appTextPrimary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _pickReminderDate,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Reminder date (optional)',
+                helperText: _reminderDate == null
+                    ? 'Fires on every day this task is due'
+                    : 'One-time nudge on this date only',
+                suffixIcon: _reminderDate == null
+                    ? const Icon(Icons.event_outlined)
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Clear date',
+                        onPressed: () =>
+                            setState(() => _reminderDate = null),
+                      ),
+              ),
+              child: Text(
+                _reminderDate == null
+                    ? 'No date — follows recurrence'
+                    : DateFormat.yMMMMd().format(_reminderDate!),
+                style: AppTypography.body.copyWith(
+                  color: _reminderDate == null
+                      ? context.appTextSecondary
+                      : context.appTextPrimary,
+                ),
+              ),
+            ),
           ),
         ],
       ],
