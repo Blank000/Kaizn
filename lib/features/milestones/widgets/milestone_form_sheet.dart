@@ -35,6 +35,7 @@ class _MilestoneFormSheet extends ConsumerStatefulWidget {
 class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _descController;
+  late final TextEditingController _identityController;
   late final TextEditingController _bonusController;
   DateTime? _targetDate;
   int _colorIndex = 0;
@@ -48,6 +49,7 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
     final m = widget.milestone;
     _nameController = TextEditingController(text: m?.name ?? '');
     _descController = TextEditingController(text: m?.description ?? '');
+    _identityController = TextEditingController(text: m?.identity ?? '');
     _bonusController =
         TextEditingController(text: (m?.completionPoints ?? 0).toString());
     _targetDate = m?.targetDate;
@@ -58,8 +60,25 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
   void dispose() {
     _nameController.dispose();
     _descController.dispose();
+    _identityController.dispose();
     _bonusController.dispose();
     super.dispose();
+  }
+
+  /// Normalize the identity input so surfacing can always prefix "Becoming":
+  /// trim, strip a leading "becoming " / "i am becoming ", drop a trailing
+  /// period. Empty → null.
+  String? _normalizedIdentity() {
+    var s = _identityController.text.trim();
+    final lower = s.toLowerCase();
+    if (lower.startsWith('i am becoming ')) {
+      s = s.substring('i am becoming '.length);
+    } else if (lower.startsWith('becoming ')) {
+      s = s.substring('becoming '.length);
+    }
+    if (s.endsWith('.')) s = s.substring(0, s.length - 1);
+    s = s.trim();
+    return s.isEmpty ? null : s;
   }
 
   Future<void> _pickDate() async {
@@ -86,11 +105,14 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
     final desc = _descController.text.trim();
     final bonus = int.tryParse(_bonusController.text.trim()) ?? 0;
 
+    final identity = _normalizedIdentity();
+
     if (_isEdit) {
       final m = widget.milestone!;
       await db.updateMilestone(m.copyWith(
         name: name,
         description: Value(desc.isEmpty ? null : desc),
+        identity: Value(identity),
         targetDate: Value(_targetDate),
         completionPoints: bonus,
         colorIndex: _colorIndex,
@@ -100,6 +122,7 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
         id: _generateId(),
         name: name,
         description: Value(desc.isEmpty ? null : desc),
+        identity: Value(identity),
         targetDate: Value(_targetDate),
         completionPoints: Value(bonus),
         colorIndex: Value(_colorIndex),
@@ -156,6 +179,16 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Description (optional)',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _identityController,
+                decoration: const InputDecoration(
+                  labelText: 'I am becoming… (optional)',
+                  hintText: 'a runner · a writer · an early riser',
+                  helperText:
+                      'Every task you finish here is a vote for this identity',
                 ),
               ),
               const SizedBox(height: 16),

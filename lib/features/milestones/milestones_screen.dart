@@ -98,6 +98,23 @@ class _MilestoneCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (milestone.identity != null &&
+                  milestone.identity!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Padding(
+                  padding: const EdgeInsets.only(left: 22),
+                  child: Text(
+                    'Becoming ${milestone.identity}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: accentColor,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
               if (milestone.description != null &&
                   milestone.description!.isNotEmpty) ...[
                 const SizedBox(height: 4),

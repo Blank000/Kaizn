@@ -898,6 +898,21 @@ class AppDatabase extends _$AppDatabase {
     return results.length;
   }
 
+  /// Real (non-skip, non-ND) completions ever logged for one task. The
+  /// identity-vote cadence counter — deliberately an all-time running tally,
+  /// not per-period, so vote moments land on stable multiples.
+  Future<int> getRealCompletionCountForTask(String taskId) async {
+    final query = selectOnly(taskCompletions)
+      ..addColumns([taskCompletions.id.count()])
+      ..where(
+        taskCompletions.taskId.equals(taskId) &
+            taskCompletions.isSkip.equals(false) &
+            taskCompletions.isNd.equals(false),
+      );
+    final row = await query.getSingle();
+    return row.read(taskCompletions.id.count()) ?? 0;
+  }
+
   Future<int> getTodayCompletionCount() async {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);

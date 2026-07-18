@@ -97,6 +97,9 @@ class AppPrefs {
   static const _homeViewModeKey = 'home_view_mode';
   static String _homeViewModeCache = 'list'; // 'list' | 'timeline'
 
+  static const _nmtDismissedKey = 'nmt_dismissed_date';
+  static DateTime? _nmtDismissedCache;
+
   /// Loads sync-cached prefs at app startup. Call from `main()` before
   /// `runApp`.
   static Future<void> hydrate() async {
@@ -104,6 +107,8 @@ class AppPrefs {
     _onboardingCompleteCache = p.getBool(_onboardingCompleteKey) ?? false;
     _themeModeCache = p.getString(_themeModeKey) ?? 'system';
     _homeViewModeCache = p.getString(_homeViewModeKey) ?? 'list';
+    final nmtIso = p.getString(_nmtDismissedKey);
+    _nmtDismissedCache = nmtIso == null ? null : DateTime.tryParse(nmtIso);
   }
 
   static bool get isOnboardingCompleteSync => _onboardingCompleteCache;
@@ -128,6 +133,20 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setString(_homeViewModeKey, mode);
     _homeViewModeCache = mode;
+  }
+
+  /// Date the never-miss-twice banner was last dismissed (date-only). The
+  /// dismissal is EPISODE-scoped, not day-scoped: the banner's predicate
+  /// keeps it hidden until the next real completion "spends" the dismissal
+  /// (see shouldShowNeverMissTwice) — one bad Tuesday never nags three
+  /// mornings in a row.
+  static DateTime? get nmtDismissedDateSync => _nmtDismissedCache;
+
+  static Future<void> setNmtDismissedDate(DateTime date) async {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_nmtDismissedKey, dateOnly.toIso8601String());
+    _nmtDismissedCache = dateOnly;
   }
 
   // ── Announced reward IDs (so each reward unlock fires its snackbar once) ─

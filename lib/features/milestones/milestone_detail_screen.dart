@@ -258,6 +258,18 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (milestone.identity != null &&
+              milestone.identity!.isNotEmpty) ...[
+            Text(
+              'Becoming ${milestone.identity}',
+              style: AppTypography.body.copyWith(
+                color: accent,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           if (milestone.description != null &&
               milestone.description!.isNotEmpty) ...[
             Text(milestone.description!, style: AppTypography.body),

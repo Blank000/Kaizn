@@ -17,6 +17,7 @@ import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../milestones/widgets/task_form_sheet.dart';
 import '../rewards/claim_flow.dart';
+import 'widgets/never_miss_twice_banner.dart';
 import 'widgets/streak_popup.dart';
 import 'widgets/timeline_view.dart';
 
@@ -31,6 +32,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _allDoneCelebrationFiredThisSession = false;
+  // True after the streak-reset popup fired this session — the
+  // never-miss-twice banner then switches to forward-only copy so the user
+  // isn't told "yesterday slipped" twice in three seconds.
+  bool _resetPopupShownThisSession = false;
   late HomeViewMode _viewMode;
 
   @override
@@ -99,6 +104,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         result.wasReset ||
         result.currentStreak > 0;
     if (shouldShow) {
+      if (result.wasReset) {
+        setState(() => _resetPopupShownThisSession = true);
+      }
       await showStreakPopup(context, result);
     }
   }
@@ -173,6 +181,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         skippedToday.isEmpty &&
         missedToday.isEmpty;
 
+    // Never-miss-twice banner (Atomic Habits). Auto-hides reactively the
+    // moment a real completion lands today (the completions stream re-emits).
+    final showNmtBanner = shouldShowNeverMissTwice(
+      completions: completions,
+      now: now,
+      hasUpNext: upNext.isNotEmpty,
+      dismissedDate: AppPrefs.nmtDismissedDateSync,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_greeting(), style: AppTypography.heading1),
@@ -194,6 +211,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: Column(
         children: [
           _ViewToggle(value: _viewMode, onChanged: _switchView),
+          // Mounted above the view body so it shows in BOTH List and
+          // Timeline modes and holds the single attention-banner slot.
+          if (showNmtBanner)
+            NeverMissTwiceBanner(
+              currentStreak: streak?.currentStreak ?? 0,
+              freshStartCopy: _resetPopupShownThisSession,
+              onDismiss: () async {
+                await AppPrefs.setNmtDismissedDate(DateTime.now());
+                if (mounted) setState(() {});
+              },
+            ),
           Expanded(
             child: _viewMode == HomeViewMode.timeline
                 ? const TimelineView()
@@ -213,12 +241,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           if (claimableRewards.isNotEmpty) ...[
             const SizedBox(height: 20),
-            _SectionHeader('Ready to claim'),
-            ...claimableRewards.map((r) => _ClaimableRewardCard(
-                  reward: r,
-                  onClaim: () =>
-                      claimReward(context, ref, r, totalPoints),
-                )),
+            // One-attention-slot policy: while the never-miss-twice banner
+            // holds the slot, rewards collapse to a single-line pill so the
+            // first actionable task stays above the fold.
+            if (showNmtBanner)
+              _RewardsReadyPill(count: claimableRewards.length)
+            else ...[
+              _SectionHeader('Ready to claim'),
+              ...claimableRewards.map((r) => _ClaimableRewardCard(
+                    reward: r,
+                    onClaim: () =>
+                        claimReward(context, ref, r, totalPoints),
+                  )),
+            ],
           ],
           const SizedBox(height: 20),
           if (upNext.isEmpty &&
@@ -557,6 +592,56 @@ class _ClaimableRewardCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact stand-in for the Ready-to-claim cards while another banner holds
+/// the attention slot. Tapping goes to the Rewards tab.
+class _RewardsReadyPill extends StatelessWidget {
+  final int count;
+  const _RewardsReadyPill({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.go('/rewards'),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.rewardsGold.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.rewardsGold.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Text('🎁', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                count == 1
+                    ? '1 reward ready to claim'
+                    : '$count rewards ready to claim',
+                style: AppTypography.body.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: context.appTextPrimary,
+                ),
+              ),
+            ),
+            Text(
+              'CLAIM',
+              style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+                color: AppColors.rewardsGold,
+              ),
+            ),
+          ],
         ),
       ),
     );

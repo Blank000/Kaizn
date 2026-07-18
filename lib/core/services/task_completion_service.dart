@@ -1,6 +1,7 @@
 import '../../features/rewards/reward_unlock_service.dart';
 import '../database/database.dart';
 import 'achievement_service.dart';
+import 'identity_voice.dart';
 import 'streak_service.dart';
 
 /// Everything a completion produced, so call sites can render their own
@@ -75,6 +76,12 @@ class TaskCompletionService {
       unlockedRewards = await RewardUnlockService.checkAfterPointsChange(db);
     }
 
+    final hasCelebration = streakBadges.isNotEmpty ||
+        completionBadges.isNotEmpty ||
+        unlockedRewards.isNotEmpty;
+    final identityLine =
+        await IdentityVoice.voteLineFor(db, task, masked: hasCelebration);
+
     return CompletionResult(
       completionId: outcome.completionId,
       basePoints: outcome.basePoints,
@@ -83,6 +90,7 @@ class TaskCompletionService {
       streakBadges: streakBadges,
       completionBadges: completionBadges,
       unlockedRewards: unlockedRewards,
+      identityLine: identityLine,
     );
   }
 
@@ -100,12 +108,19 @@ class TaskCompletionService {
     final unlockedRewards =
         await RewardUnlockService.checkAfterPointsChange(db);
 
+    // Retro logs count toward the identity-vote cadence too.
+    final hasCelebration =
+        completionBadges.isNotEmpty || unlockedRewards.isNotEmpty;
+    final identityLine =
+        await IdentityVoice.voteLineFor(db, task, masked: hasCelebration);
+
     return CompletionResult(
       completionId: outcome.completionId,
       basePoints: outcome.basePoints,
       clutchBonus: outcome.clutchBonus,
       completionBadges: completionBadges,
       unlockedRewards: unlockedRewards,
+      identityLine: identityLine,
     );
   }
 }
