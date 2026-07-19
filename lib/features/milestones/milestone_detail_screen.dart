@@ -213,8 +213,9 @@ class MilestoneDetailScreen extends ConsumerWidget {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-String _metaForDetail(Task task, TaskRowState state) {
+String _metaForDetail(Task task, TaskRowState state, {String? anchorName}) {
   final parts = <String>['${task.pointsPerCompletion} pts'];
+  if (anchorName != null) parts.add('🔗 After $anchorName');
   if (task.recurrence == TaskRecurrence.none) {
     if (state.isChecked) {
       parts.add('Completed');
@@ -351,6 +352,9 @@ class _TaskGroup extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Anchor names can live in OTHER milestones — resolve against all tasks.
+    final allTasks = ref.watch(allTasksProvider).valueOrNull ?? const <Task>[];
+    final anchorNameById = {for (final t in allTasks) t.id: t.name};
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -374,7 +378,8 @@ class _TaskGroup extends ConsumerWidget {
             return TaskTile(
               task: t,
               rowState: state,
-              meta: _metaForDetail(t, state),
+              meta: _metaForDetail(t, state,
+                  anchorName: anchorNameById[t.stackedAfterTaskId]),
               weeklyChips: chips,
               // Milestone detail is the "management" surface — the escape hatch
               // when a completion has already fallen out of the 6-second UNDO

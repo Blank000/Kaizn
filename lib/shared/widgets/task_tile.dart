@@ -389,13 +389,18 @@ class _TaskTileState extends ConsumerState<TaskTile>
       //   - Otherwise → the "Logged X + UNDO" snackbar for the 6s grace.
       // We deliberately don't stack the UNDO snackbar with the celebration
       // ones — they'd shove each other around and lose the moment.
+      // Celebration snackbars need this tile's context; the feedback event
+      // does NOT (global bus → root messenger). No `mounted` gate on the
+      // event post: completing a one-shot removes it from the active-tasks
+      // stream and disposes this tile before we get here — the UNDO snackbar
+      // must survive that.
       if (mounted && result.hasCelebration) {
         showAchievementSnackbar(
           context,
           [...result.completionBadges, ...result.streakBadges],
         );
         showRewardUnlockSnackbar(context, result.unlockedRewards);
-      } else if (mounted) {
+      } else {
         AppEventBus.post(TaskActionEvent(
           kind: TaskActionKind.done,
           taskId: widget.task.id,
@@ -570,7 +575,8 @@ class _TaskTileState extends ConsumerState<TaskTile>
         [...result.completionBadges, ...result.streakBadges],
       );
       showRewardUnlockSnackbar(context, result.unlockedRewards);
-    } else if (mounted) {
+    } else {
+      // Global bus — no context/mounted needed; see _toggle.
       AppEventBus.post(TaskActionEvent(
         kind: TaskActionKind.done,
         taskId: widget.task.id,

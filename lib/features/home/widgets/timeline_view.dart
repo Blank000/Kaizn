@@ -858,7 +858,9 @@ Future<void> _toggleTask(
     showAchievementSnackbar(
         context, [...result.completionBadges, ...result.streakBadges]);
     showRewardUnlockSnackbar(context, result.unlockedRewards);
-  } else if (context.mounted) {
+  } else {
+    // Global bus — safe even if this card was disposed by the completion
+    // (one-shots leave the active list immediately).
     AppEventBus.post(TaskActionEvent(
       kind: TaskActionKind.done,
       taskId: task.id,

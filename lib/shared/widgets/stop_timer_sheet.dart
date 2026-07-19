@@ -174,14 +174,15 @@ class _StopTimerSheet extends StatelessWidget {
     final result = await TaskCompletionService.completeToday(db, task);
     HapticFeedback.mediumImpact();
 
-    if (!hostContext.mounted) return;
-    if (result.hasCelebration) {
+    if (hostContext.mounted && result.hasCelebration) {
       showAchievementSnackbar(
         hostContext,
         [...result.completionBadges, ...result.streakBadges],
       );
       showRewardUnlockSnackbar(hostContext, result.unlockedRewards);
     } else {
+      // Global bus — the UNDO snackbar must show even if the host screen
+      // rebuilt away under the sheet.
       AppEventBus.post(TaskActionEvent(
         kind: TaskActionKind.done,
         taskId: task.id,

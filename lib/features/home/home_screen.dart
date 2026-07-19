@@ -118,7 +118,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final totalPoints = ref.watch(totalPointsProvider).valueOrNull ?? 0;
     final todayPoints = ref.watch(todayPointsProvider).valueOrNull ?? 0;
     final streak = ref.watch(currentStreakProvider).valueOrNull;
-    final tasks = ref.watch(activeTasksProvider).valueOrNull ?? [];
+    // All non-archived tasks — NOT just active ones. A one-shot completed
+    // today flips to status=completed and would vanish from an active-only
+    // list; it must stay visible in "Done today" (and count toward the
+    // progress card) for the rest of the day.
+    final tasks = ref.watch(allTasksProvider).valueOrNull ?? [];
     final completions =
         ref.watch(recentCompletionsAllProvider).valueOrNull ?? [];
     final milestones =
@@ -144,6 +148,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           anchorToday.nd == null;
     }
 
+    // Whether [t] belongs on today's list. Beyond the recurrence rule,
+    // stacked one-shots with no due date ride their anchor's schedule —
+    // otherwise "Journal after Meditate" would never appear anywhere.
+    bool surfacesToday(Task t) {
+      if (_isScheduledToday(t, now)) return true;
+      if (t.recurrence == TaskRecurrence.none &&
+          t.status == TaskStatus.active &&
+          t.dueDate == null &&
+          t.stackedAfterTaskId != null) {
+        final anchor = taskById[t.stackedAfterTaskId];
+        return anchor != null && _isScheduledToday(anchor, now);
+      }
+      return false;
+    }
+
     final upNext = <_TodayItem>[];
     final doneToday = <_TodayItem>[];
     final skippedToday = <_TodayItem>[];
@@ -167,12 +186,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         continue;
       }
       // Already handled earlier in the rule period (e.g. weekly task done
-      // Monday — don't reshow on Wednesday).
+      // Monday — don't reshow on Wednesday). Also filters one-shots
+      // completed on a PREVIOUS day (their best completion marks them
+      // checked), so old finished tasks don't clutter today.
       final periodState = taskRowStateFor(t, completions);
       if (periodState.isChecked ||
           periodState.isMissed ||
           periodState.isSkipped) continue;
-      if (_isScheduledToday(t, now)) {
+      if (surfacesToday(t)) {
         upNext.add(_TodayItem(t, const TaskRowState()));
       }
     }
@@ -317,8 +338,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
-                    meta: _metaForHome(it.task,
-                        milestoneById[it.task.milestoneId], it.rowState),
+                    meta: _metaForHome(
+                      it.task,
+                      milestoneById[it.task.milestoneId],
+                      it.rowState,
+                      anchorName:
+                          taskById[it.task.stackedAfterTaskId]?.name,
+                    ),
                   )),
             ],
             if (missedToday.isNotEmpty) ...[
@@ -328,8 +354,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
-                    meta: _metaForHome(it.task,
-                        milestoneById[it.task.milestoneId], it.rowState),
+                    meta: _metaForHome(
+                      it.task,
+                      milestoneById[it.task.milestoneId],
+                      it.rowState,
+                      anchorName:
+                          taskById[it.task.stackedAfterTaskId]?.name,
+                    ),
                   )),
             ],
             if (skippedToday.isNotEmpty) ...[
@@ -339,8 +370,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
-                    meta: _metaForHome(it.task,
-                        milestoneById[it.task.milestoneId], it.rowState),
+                    meta: _metaForHome(
+                      it.task,
+                      milestoneById[it.task.milestoneId],
+                      it.rowState,
+                      anchorName:
+                          taskById[it.task.stackedAfterTaskId]?.name,
+                    ),
                   )),
             ],
           ],

@@ -258,6 +258,21 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
       );
       return;
     }
+    // Habit stacking: defense-in-depth cycle check at save (the picker
+    // already excludes loop candidates; this catches stale state).
+    if (_stackedAfterTaskId != null) {
+      final anchor =
+          _allTasks.where((t) => t.id == _stackedAfterTaskId).firstOrNull;
+      if (anchor == null || anchor.id == widget.task?.id ||
+          _wouldLoop(anchor)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text("That anchor would create a loop — pick another task")),
+        );
+        return;
+      }
+    }
 
     setState(() => _saving = true);
     final db = ref.read(databaseProvider);
@@ -812,6 +827,21 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
 
   // ── More options (progressive disclosure for niche power features) ───────
 
+  /// Both this task and its anchor are weekly but share no common day —
+  /// the stack would never fire the "Next up" moment.
+  bool _scheduleMismatch(Task anchor) {
+    if (_frequency != TaskRecurrence.weekly) return false;
+    if (anchor.recurrence != TaskRecurrence.weekly) return false;
+    final anchorDays = RecurrenceRule.fromTask(anchor).daysOfWeek.toSet();
+    return anchorDays.isNotEmpty &&
+        _daysOfWeek.isNotEmpty &&
+        _daysOfWeek.intersection(anchorDays).isEmpty;
+  }
+
+  String _scheduleSummaryOf(Task t) => t.recurrence == TaskRecurrence.none
+      ? 'One-time'
+      : RecurrenceRule.fromTask(t).summary();
+
   Widget _buildMoreOptions() {
     final anchor = _stackedAfterTaskId == null
         ? null
@@ -855,7 +885,11 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 labelText: 'Do it after another task (optional)',
                 helperText: anchor == null
                     ? null
-                    : 'Surfaces after you finish that task',
+                    : _scheduleMismatch(anchor)
+                        ? "⚠ This task and its anchor aren't due on the same days"
+                        : 'Surfaces after you finish that task · '
+                            '${_scheduleSummaryOf(anchor)}',
+                helperMaxLines: 2,
                 suffixIcon: _stackedAfterTaskId == null
                     ? const Icon(Icons.link_rounded)
                     : IconButton(
@@ -936,10 +970,16 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.body),
-                      subtitle: milestoneById[t.milestoneId] == null
-                          ? null
-                          : Text(milestoneById[t.milestoneId]!.name,
-                              style: AppTypography.caption),
+                      subtitle: Text(
+                        [
+                          if (milestoneById[t.milestoneId] != null)
+                            milestoneById[t.milestoneId]!.name,
+                          _scheduleSummaryOf(t),
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption,
+                      ),
                       onTap: () => Navigator.of(ctx).pop(t.id),
                     ),
                 ],
