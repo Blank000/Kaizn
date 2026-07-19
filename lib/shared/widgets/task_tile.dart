@@ -11,6 +11,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../models/recurrence_rule.dart';
+import '../providers/active_timer_provider.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
 import 'reward_unlock_snackbar.dart';
@@ -177,6 +178,11 @@ class TaskTile extends ConsumerStatefulWidget {
   /// milestone detail screen. See conversation for the "Option B" design.
   final bool allowInlineUndo;
 
+  /// Show the compact ▶ start-timer affordance on unchecked tiles. The
+  /// long-press sheet remains the full action menu; this button exists so
+  /// the stopwatch is discoverable without knowing the gesture.
+  final bool showTimerButton;
+
   const TaskTile({
     super.key,
     required this.task,
@@ -185,6 +191,7 @@ class TaskTile extends ConsumerStatefulWidget {
     this.trailing,
     this.weeklyChips,
     this.allowInlineUndo = false,
+    this.showTimerButton = false,
   });
 
   @override
@@ -303,6 +310,8 @@ class _TaskTileState extends ConsumerState<TaskTile>
                       ],
                     ),
                   ),
+                  if (widget.showTimerButton && _isUnchecked)
+                    _buildTimerButton(),
                   if (widget.trailing != null) widget.trailing!,
                 ],
               ),
@@ -443,6 +452,23 @@ class _TaskTileState extends ConsumerState<TaskTile>
           },
         );
       },
+    );
+  }
+
+  /// Compact ▶ / ⏱ affordance. Plain outline when idle; filled primary when
+  /// THIS task's stopwatch is running (the Home banner shows the elapsed).
+  Widget _buildTimerButton() {
+    final ownsTimer =
+        ref.watch(activeTimerProvider).valueOrNull?.taskId == widget.task.id;
+    return IconButton(
+      icon: Icon(
+        ownsTimer ? Icons.timer_rounded : Icons.play_circle_outline_rounded,
+        size: 22,
+        color: ownsTimer ? AppColors.primary : context.appTextTertiary,
+      ),
+      tooltip: ownsTimer ? 'Stop timer' : 'Start timer',
+      visualDensity: VisualDensity.compact,
+      onPressed: _handleTimerAction,
     );
   }
 

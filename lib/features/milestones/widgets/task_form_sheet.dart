@@ -658,75 +658,65 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   }
 
   Widget _buildScheduleTimeRow() {
-    // Queued tasks: no time-of-day picker, just "how long does it take" —
-    // the duration feeds the anchor's merged timeline block.
-    if (_stackedAfterTaskId != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Takes about', style: AppTypography.caption),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _DurationStepper(
-                minutes: _durationMinutes,
-                onChanged: (v) => setState(() => _durationMinutes = v),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Runs whenever you finish its anchor — no start time needed',
-                  style: AppTypography.caption
-                      .copyWith(color: context.appTextSecondary),
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
-    }
-
+    final anchored = _stackedAfterTaskId != null;
     final has = _startTime != null;
     final timeLabel = has
         ? _startTime!.format(context)
         : 'No time — shows in Anytime tray';
+    final durationHint = anchored
+        ? 'Runs whenever you finish its anchor — no start time needed'
+        : has
+            ? 'Sets the size of its timeline block'
+            : 'Feeds timeline blocks and task-queue totals';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Schedule on timeline', style: AppTypography.caption),
+        // Duration is a first-class field on EVERY task — it powers timeline
+        // block sizes, queue totals ("~1h 15m"), and future planning stats.
+        Text('Takes about', style: AppTypography.caption),
         const SizedBox(height: 8),
-        InkWell(
-          onTap: _pickStartTime,
-          borderRadius: BorderRadius.circular(8),
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Start time',
-              suffixIcon: has
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () => setState(() => _startTime = null),
-                    )
-                  : const Icon(Icons.schedule_rounded),
+        Row(
+          children: [
+            _DurationStepper(
+              minutes: _durationMinutes,
+              onChanged: (v) => setState(() => _durationMinutes = v),
             ),
-            child: Text(
-              timeLabel,
-              style: AppTypography.body.copyWith(
-                color: has ? context.appTextPrimary : context.appTextSecondary,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                durationHint,
+                style: AppTypography.caption
+                    .copyWith(color: context.appTextSecondary),
               ),
             ),
-          ),
+          ],
         ),
-        if (has) ...[
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text('Duration', style: AppTypography.body),
-              const SizedBox(width: 12),
-              _DurationStepper(
-                minutes: _durationMinutes,
-                onChanged: (v) => setState(() => _durationMinutes = v),
+        // Queued tasks have no time of day of their own.
+        if (!anchored) ...[
+          const SizedBox(height: 24),
+          Text('Schedule on timeline', style: AppTypography.caption),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: _pickStartTime,
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Start time',
+                suffixIcon: has
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _startTime = null),
+                      )
+                    : const Icon(Icons.schedule_rounded),
               ),
-            ],
+              child: Text(
+                timeLabel,
+                style: AppTypography.body.copyWith(
+                  color:
+                      has ? context.appTextPrimary : context.appTextSecondary,
+                ),
+              ),
+            ),
           ),
         ],
       ],

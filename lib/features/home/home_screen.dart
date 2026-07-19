@@ -356,6 +356,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   task: it.task,
                   rowState: it.rowState,
                   weeklyChips: weeklyChipsFor(it.task, completions),
+                  showTimerButton: true,
                   meta: _metaForHome(
                     it.task,
                     milestoneById[it.task.milestoneId],
