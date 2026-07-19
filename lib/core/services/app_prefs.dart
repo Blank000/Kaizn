@@ -105,6 +105,9 @@ class AppPrefs {
   static String? _activeTimerTaskIdCache;
   static int? _activeTimerStartedAtCache;
 
+  static const _coachDismissedKey = 'coach_dismissed_date';
+  static DateTime? _coachDismissedCache;
+
   /// Loads sync-cached prefs at app startup. Call from `main()` before
   /// `runApp` — and from the notification background isolate before anything
   /// reads a sync getter there (the isolate shares no memory with the app).
@@ -117,6 +120,8 @@ class AppPrefs {
     _nmtDismissedCache = nmtIso == null ? null : DateTime.tryParse(nmtIso);
     _activeTimerTaskIdCache = p.getString(_activeTimerTaskIdKey);
     _activeTimerStartedAtCache = p.getInt(_activeTimerStartedAtKey);
+    final coachIso = p.getString(_coachDismissedKey);
+    _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
   }
 
   static bool get isOnboardingCompleteSync => _onboardingCompleteCache;
@@ -180,6 +185,17 @@ class AppPrefs {
     await p.remove(_activeTimerStartedAtKey);
     _activeTimerTaskIdCache = null;
     _activeTimerStartedAtCache = null;
+  }
+
+  /// Date the Goldilocks coach banner was dismissed — max one suggestion
+  /// surfaced per day.
+  static DateTime? get coachDismissedDateSync => _coachDismissedCache;
+
+  static Future<void> setCoachDismissedDate(DateTime date) async {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_coachDismissedKey, dateOnly.toIso8601String());
+    _coachDismissedCache = dateOnly;
   }
 
   // ── Announced reward IDs (so each reward unlock fires its snackbar once) ─

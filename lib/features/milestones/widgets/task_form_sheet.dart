@@ -40,6 +40,7 @@ class _TaskFormSheet extends ConsumerStatefulWidget {
 class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _pointsController;
+  late final TextEditingController _tinyController;
 
   // Milestone selection
   List<Milestone> _milestones = [];
@@ -87,6 +88,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     _nameController = TextEditingController(text: t?.name ?? '');
     _pointsController =
         TextEditingController(text: (t?.pointsPerCompletion ?? 10).toString());
+    _tinyController = TextEditingController(text: t?.tinyName ?? '');
 
     final today = DateTime.now();
     _daysOfWeek = {today.weekday};
@@ -112,8 +114,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
       }
       _reminderDate = t.reminderDate;
       _stackedAfterTaskId = t.stackedAfterTaskId;
-      // Surface an already-configured anchor instead of hiding it.
-      _moreOptions = t.stackedAfterTaskId != null;
+      // Surface already-configured power options instead of hiding them.
+      _moreOptions = t.stackedAfterTaskId != null || t.tinyName != null;
       if (_frequency != TaskRecurrence.none) {
         final rule = RecurrenceRule.fromTask(t);
         _interval = rule.interval;
@@ -184,6 +186,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   void dispose() {
     _nameController.dispose();
     _pointsController.dispose();
+    _tinyController.dispose();
     super.dispose();
   }
 
@@ -286,6 +289,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final startMin = (_stackedAfterTaskId != null || _startTime == null)
         ? null
         : _startTime!.hour * 60 + _startTime!.minute;
+    final tinyTrimmed = _tinyController.text.trim();
+    final tinyName = tinyTrimmed.isEmpty ? null : tinyTrimmed;
     // Persist the override only; a null reminderMinute with reminderEnabled on
     // means "follow the start time".
     final reminderMin = _reminderOverride == null
@@ -310,6 +315,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         reminderMinute: Value(reminderMin),
         reminderDate: Value(reminderDate),
         stackedAfterTaskId: Value(_stackedAfterTaskId),
+        tinyName: Value(tinyName),
       ));
     } else {
       await db.insertTask(TasksCompanion.insert(
@@ -326,6 +332,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         reminderMinute: Value(reminderMin),
         reminderDate: Value(reminderDate),
         stackedAfterTaskId: Value(_stackedAfterTaskId),
+        tinyName: Value(tinyName),
       ));
     }
     await AppPrefs.setLastUsedMilestoneId(_selectedMilestoneId!);
@@ -899,6 +906,18 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         ),
         if (_moreOptions) ...[
           const SizedBox(height: 8),
+          TextField(
+            controller: _tinyController,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: '2-minute version (optional)',
+              hintText: 'e.g. Read one page',
+              helperText:
+                  'A bad-day fallback: half points, full streak credit',
+              helperMaxLines: 2,
+            ),
+          ),
+          const SizedBox(height: 16),
           InkWell(
             onTap: _pickAnchorTask,
             borderRadius: BorderRadius.circular(8),

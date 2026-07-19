@@ -69,6 +69,7 @@ class TaskCompletionService {
     Task task, {
     bool celebrationChecks = true,
     int? durationSeconds,
+    bool tiny = false,
   }) async {
     // Timer auto-attach: if THIS task's stopwatch is running, completing it
     // by any means (tile tap, chip, timeline, notification Done, stop sheet)
@@ -81,8 +82,8 @@ class TaskCompletionService {
       await TimerService.clear();
     }
 
-    final outcome =
-        await db.completeTaskNow(task, durationSeconds: attachSeconds);
+    final outcome = await db.completeTaskNow(task,
+        durationSeconds: attachSeconds, tiny: tiny);
     final streakBadges = await StreakService.recordDayLogged(db);
 
     var completionBadges = const <AchievementBadge>[];

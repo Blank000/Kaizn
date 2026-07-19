@@ -19,6 +19,10 @@ class TaskCompletions extends Table {
   // Null = untimed completion (the overwhelming default).
   IntColumn get durationSeconds => integer().nullable()();
 
+  // Two-minute rule: this completion was the task's tiny version (half
+  // points, full streak credit). Distinguishable in stats/history.
+  BoolColumn get isTiny => boolean().withDefault(const Constant(false))();
+
   // Carried over from the old `entries` model.
   BoolColumn get isSkip => boolean().withDefault(const Constant(false))();
   BoolColumn get isNd => boolean().withDefault(const Constant(false))();

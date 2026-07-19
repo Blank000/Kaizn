@@ -847,6 +847,17 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _tinyNameMeta = const VerificationMeta(
+    'tinyName',
+  );
+  @override
+  late final GeneratedColumn<String> tinyName = GeneratedColumn<String>(
+    'tiny_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   late final GeneratedColumnWithTypeConverter<TaskStatus, String> status =
       GeneratedColumn<String>(
@@ -897,6 +908,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     reminderMinute,
     reminderDate,
     stackedAfterTaskId,
+    tinyName,
     status,
     createdAt,
     completedAt,
@@ -1028,6 +1040,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         ),
       );
     }
+    if (data.containsKey('tiny_name')) {
+      context.handle(
+        _tinyNameMeta,
+        tinyName.isAcceptableOrUnknown(data['tiny_name']!, _tinyNameMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1114,6 +1132,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.string,
         data['${effectivePrefix}stacked_after_task_id'],
       ),
+      tinyName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tiny_name'],
+      ),
       status: $TasksTable.$converterstatus.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -1160,6 +1182,7 @@ class Task extends DataClass implements Insertable<Task> {
   final int? reminderMinute;
   final DateTime? reminderDate;
   final String? stackedAfterTaskId;
+  final String? tinyName;
   final TaskStatus status;
   final DateTime createdAt;
   final DateTime? completedAt;
@@ -1179,6 +1202,7 @@ class Task extends DataClass implements Insertable<Task> {
     this.reminderMinute,
     this.reminderDate,
     this.stackedAfterTaskId,
+    this.tinyName,
     required this.status,
     required this.createdAt,
     this.completedAt,
@@ -1220,6 +1244,9 @@ class Task extends DataClass implements Insertable<Task> {
     }
     if (!nullToAbsent || stackedAfterTaskId != null) {
       map['stacked_after_task_id'] = Variable<String>(stackedAfterTaskId);
+    }
+    if (!nullToAbsent || tinyName != null) {
+      map['tiny_name'] = Variable<String>(tinyName);
     }
     {
       map['status'] = Variable<String>(
@@ -1266,6 +1293,9 @@ class Task extends DataClass implements Insertable<Task> {
       stackedAfterTaskId: stackedAfterTaskId == null && nullToAbsent
           ? const Value.absent()
           : Value(stackedAfterTaskId),
+      tinyName: tinyName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tinyName),
       status: Value(status),
       createdAt: Value(createdAt),
       completedAt: completedAt == null && nullToAbsent
@@ -1301,6 +1331,7 @@ class Task extends DataClass implements Insertable<Task> {
       stackedAfterTaskId: serializer.fromJson<String?>(
         json['stackedAfterTaskId'],
       ),
+      tinyName: serializer.fromJson<String?>(json['tinyName']),
       status: $TasksTable.$converterstatus.fromJson(
         serializer.fromJson<String>(json['status']),
       ),
@@ -1329,6 +1360,7 @@ class Task extends DataClass implements Insertable<Task> {
       'reminderMinute': serializer.toJson<int?>(reminderMinute),
       'reminderDate': serializer.toJson<DateTime?>(reminderDate),
       'stackedAfterTaskId': serializer.toJson<String?>(stackedAfterTaskId),
+      'tinyName': serializer.toJson<String?>(tinyName),
       'status': serializer.toJson<String>(
         $TasksTable.$converterstatus.toJson(status),
       ),
@@ -1353,6 +1385,7 @@ class Task extends DataClass implements Insertable<Task> {
     Value<int?> reminderMinute = const Value.absent(),
     Value<DateTime?> reminderDate = const Value.absent(),
     Value<String?> stackedAfterTaskId = const Value.absent(),
+    Value<String?> tinyName = const Value.absent(),
     TaskStatus? status,
     DateTime? createdAt,
     Value<DateTime?> completedAt = const Value.absent(),
@@ -1378,6 +1411,7 @@ class Task extends DataClass implements Insertable<Task> {
     stackedAfterTaskId: stackedAfterTaskId.present
         ? stackedAfterTaskId.value
         : this.stackedAfterTaskId,
+    tinyName: tinyName.present ? tinyName.value : this.tinyName,
     status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
@@ -1421,6 +1455,7 @@ class Task extends DataClass implements Insertable<Task> {
       stackedAfterTaskId: data.stackedAfterTaskId.present
           ? data.stackedAfterTaskId.value
           : this.stackedAfterTaskId,
+      tinyName: data.tinyName.present ? data.tinyName.value : this.tinyName,
       status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       completedAt: data.completedAt.present
@@ -1447,6 +1482,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('reminderMinute: $reminderMinute, ')
           ..write('reminderDate: $reminderDate, ')
           ..write('stackedAfterTaskId: $stackedAfterTaskId, ')
+          ..write('tinyName: $tinyName, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt')
@@ -1471,6 +1507,7 @@ class Task extends DataClass implements Insertable<Task> {
     reminderMinute,
     reminderDate,
     stackedAfterTaskId,
+    tinyName,
     status,
     createdAt,
     completedAt,
@@ -1494,6 +1531,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.reminderMinute == this.reminderMinute &&
           other.reminderDate == this.reminderDate &&
           other.stackedAfterTaskId == this.stackedAfterTaskId &&
+          other.tinyName == this.tinyName &&
           other.status == this.status &&
           other.createdAt == this.createdAt &&
           other.completedAt == this.completedAt);
@@ -1515,6 +1553,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<int?> reminderMinute;
   final Value<DateTime?> reminderDate;
   final Value<String?> stackedAfterTaskId;
+  final Value<String?> tinyName;
   final Value<TaskStatus> status;
   final Value<DateTime> createdAt;
   final Value<DateTime?> completedAt;
@@ -1535,6 +1574,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.reminderMinute = const Value.absent(),
     this.reminderDate = const Value.absent(),
     this.stackedAfterTaskId = const Value.absent(),
+    this.tinyName = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1556,6 +1596,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.reminderMinute = const Value.absent(),
     this.reminderDate = const Value.absent(),
     this.stackedAfterTaskId = const Value.absent(),
+    this.tinyName = const Value.absent(),
     this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -1578,6 +1619,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<int>? reminderMinute,
     Expression<DateTime>? reminderDate,
     Expression<String>? stackedAfterTaskId,
+    Expression<String>? tinyName,
     Expression<String>? status,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? completedAt,
@@ -1601,6 +1643,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (reminderDate != null) 'reminder_date': reminderDate,
       if (stackedAfterTaskId != null)
         'stacked_after_task_id': stackedAfterTaskId,
+      if (tinyName != null) 'tiny_name': tinyName,
       if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (completedAt != null) 'completed_at': completedAt,
@@ -1624,6 +1667,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<int?>? reminderMinute,
     Value<DateTime?>? reminderDate,
     Value<String?>? stackedAfterTaskId,
+    Value<String?>? tinyName,
     Value<TaskStatus>? status,
     Value<DateTime>? createdAt,
     Value<DateTime?>? completedAt,
@@ -1645,6 +1689,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       reminderMinute: reminderMinute ?? this.reminderMinute,
       reminderDate: reminderDate ?? this.reminderDate,
       stackedAfterTaskId: stackedAfterTaskId ?? this.stackedAfterTaskId,
+      tinyName: tinyName ?? this.tinyName,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt ?? this.completedAt,
@@ -1702,6 +1747,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (stackedAfterTaskId.present) {
       map['stacked_after_task_id'] = Variable<String>(stackedAfterTaskId.value);
     }
+    if (tinyName.present) {
+      map['tiny_name'] = Variable<String>(tinyName.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(
         $TasksTable.$converterstatus.toSql(status.value),
@@ -1737,6 +1785,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('reminderMinute: $reminderMinute, ')
           ..write('reminderDate: $reminderDate, ')
           ..write('stackedAfterTaskId: $stackedAfterTaskId, ')
+          ..write('tinyName: $tinyName, ')
           ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('completedAt: $completedAt, ')
@@ -1817,6 +1866,19 @@ class $TaskCompletionsTable extends TaskCompletions
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isTinyMeta = const VerificationMeta('isTiny');
+  @override
+  late final GeneratedColumn<bool> isTiny = GeneratedColumn<bool>(
+    'is_tiny',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_tiny" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _isSkipMeta = const VerificationMeta('isSkip');
   @override
   late final GeneratedColumn<bool> isSkip = GeneratedColumn<bool>(
@@ -1872,6 +1934,7 @@ class $TaskCompletionsTable extends TaskCompletions
     completedOn,
     pointsEarned,
     durationSeconds,
+    isTiny,
     isSkip,
     isNd,
     note,
@@ -1937,6 +2000,12 @@ class $TaskCompletionsTable extends TaskCompletions
         ),
       );
     }
+    if (data.containsKey('is_tiny')) {
+      context.handle(
+        _isTinyMeta,
+        isTiny.isAcceptableOrUnknown(data['is_tiny']!, _isTinyMeta),
+      );
+    }
     if (data.containsKey('is_skip')) {
       context.handle(
         _isSkipMeta,
@@ -1994,6 +2063,10 @@ class $TaskCompletionsTable extends TaskCompletions
         DriftSqlType.int,
         data['${effectivePrefix}duration_seconds'],
       ),
+      isTiny: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_tiny'],
+      )!,
       isSkip: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_skip'],
@@ -2026,6 +2099,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
   final DateTime completedOn;
   final int pointsEarned;
   final int? durationSeconds;
+  final bool isTiny;
   final bool isSkip;
   final bool isNd;
   final String? note;
@@ -2037,6 +2111,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     required this.completedOn,
     required this.pointsEarned,
     this.durationSeconds,
+    required this.isTiny,
     required this.isSkip,
     required this.isNd,
     this.note,
@@ -2053,6 +2128,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     if (!nullToAbsent || durationSeconds != null) {
       map['duration_seconds'] = Variable<int>(durationSeconds);
     }
+    map['is_tiny'] = Variable<bool>(isTiny);
     map['is_skip'] = Variable<bool>(isSkip);
     map['is_nd'] = Variable<bool>(isNd);
     if (!nullToAbsent || note != null) {
@@ -2072,6 +2148,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       durationSeconds: durationSeconds == null && nullToAbsent
           ? const Value.absent()
           : Value(durationSeconds),
+      isTiny: Value(isTiny),
       isSkip: Value(isSkip),
       isNd: Value(isNd),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
@@ -2091,6 +2168,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       completedOn: serializer.fromJson<DateTime>(json['completedOn']),
       pointsEarned: serializer.fromJson<int>(json['pointsEarned']),
       durationSeconds: serializer.fromJson<int?>(json['durationSeconds']),
+      isTiny: serializer.fromJson<bool>(json['isTiny']),
       isSkip: serializer.fromJson<bool>(json['isSkip']),
       isNd: serializer.fromJson<bool>(json['isNd']),
       note: serializer.fromJson<String?>(json['note']),
@@ -2107,6 +2185,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       'completedOn': serializer.toJson<DateTime>(completedOn),
       'pointsEarned': serializer.toJson<int>(pointsEarned),
       'durationSeconds': serializer.toJson<int?>(durationSeconds),
+      'isTiny': serializer.toJson<bool>(isTiny),
       'isSkip': serializer.toJson<bool>(isSkip),
       'isNd': serializer.toJson<bool>(isNd),
       'note': serializer.toJson<String?>(note),
@@ -2121,6 +2200,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     DateTime? completedOn,
     int? pointsEarned,
     Value<int?> durationSeconds = const Value.absent(),
+    bool? isTiny,
     bool? isSkip,
     bool? isNd,
     Value<String?> note = const Value.absent(),
@@ -2134,6 +2214,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     durationSeconds: durationSeconds.present
         ? durationSeconds.value
         : this.durationSeconds,
+    isTiny: isTiny ?? this.isTiny,
     isSkip: isSkip ?? this.isSkip,
     isNd: isNd ?? this.isNd,
     note: note.present ? note.value : this.note,
@@ -2153,6 +2234,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       durationSeconds: data.durationSeconds.present
           ? data.durationSeconds.value
           : this.durationSeconds,
+      isTiny: data.isTiny.present ? data.isTiny.value : this.isTiny,
       isSkip: data.isSkip.present ? data.isSkip.value : this.isSkip,
       isNd: data.isNd.present ? data.isNd.value : this.isNd,
       note: data.note.present ? data.note.value : this.note,
@@ -2169,6 +2251,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
           ..write('completedOn: $completedOn, ')
           ..write('pointsEarned: $pointsEarned, ')
           ..write('durationSeconds: $durationSeconds, ')
+          ..write('isTiny: $isTiny, ')
           ..write('isSkip: $isSkip, ')
           ..write('isNd: $isNd, ')
           ..write('note: $note, ')
@@ -2185,6 +2268,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     completedOn,
     pointsEarned,
     durationSeconds,
+    isTiny,
     isSkip,
     isNd,
     note,
@@ -2200,6 +2284,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
           other.completedOn == this.completedOn &&
           other.pointsEarned == this.pointsEarned &&
           other.durationSeconds == this.durationSeconds &&
+          other.isTiny == this.isTiny &&
           other.isSkip == this.isSkip &&
           other.isNd == this.isNd &&
           other.note == this.note &&
@@ -2213,6 +2298,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
   final Value<DateTime> completedOn;
   final Value<int> pointsEarned;
   final Value<int?> durationSeconds;
+  final Value<bool> isTiny;
   final Value<bool> isSkip;
   final Value<bool> isNd;
   final Value<String?> note;
@@ -2225,6 +2311,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     this.completedOn = const Value.absent(),
     this.pointsEarned = const Value.absent(),
     this.durationSeconds = const Value.absent(),
+    this.isTiny = const Value.absent(),
     this.isSkip = const Value.absent(),
     this.isNd = const Value.absent(),
     this.note = const Value.absent(),
@@ -2238,6 +2325,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     required DateTime completedOn,
     this.pointsEarned = const Value.absent(),
     this.durationSeconds = const Value.absent(),
+    this.isTiny = const Value.absent(),
     this.isSkip = const Value.absent(),
     this.isNd = const Value.absent(),
     this.note = const Value.absent(),
@@ -2253,6 +2341,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     Expression<DateTime>? completedOn,
     Expression<int>? pointsEarned,
     Expression<int>? durationSeconds,
+    Expression<bool>? isTiny,
     Expression<bool>? isSkip,
     Expression<bool>? isNd,
     Expression<String>? note,
@@ -2266,6 +2355,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
       if (completedOn != null) 'completed_on': completedOn,
       if (pointsEarned != null) 'points_earned': pointsEarned,
       if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (isTiny != null) 'is_tiny': isTiny,
       if (isSkip != null) 'is_skip': isSkip,
       if (isNd != null) 'is_nd': isNd,
       if (note != null) 'note': note,
@@ -2281,6 +2371,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     Value<DateTime>? completedOn,
     Value<int>? pointsEarned,
     Value<int?>? durationSeconds,
+    Value<bool>? isTiny,
     Value<bool>? isSkip,
     Value<bool>? isNd,
     Value<String?>? note,
@@ -2294,6 +2385,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
       completedOn: completedOn ?? this.completedOn,
       pointsEarned: pointsEarned ?? this.pointsEarned,
       durationSeconds: durationSeconds ?? this.durationSeconds,
+      isTiny: isTiny ?? this.isTiny,
       isSkip: isSkip ?? this.isSkip,
       isNd: isNd ?? this.isNd,
       note: note ?? this.note,
@@ -2323,6 +2415,9 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     if (durationSeconds.present) {
       map['duration_seconds'] = Variable<int>(durationSeconds.value);
     }
+    if (isTiny.present) {
+      map['is_tiny'] = Variable<bool>(isTiny.value);
+    }
     if (isSkip.present) {
       map['is_skip'] = Variable<bool>(isSkip.value);
     }
@@ -2350,6 +2445,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
           ..write('completedOn: $completedOn, ')
           ..write('pointsEarned: $pointsEarned, ')
           ..write('durationSeconds: $durationSeconds, ')
+          ..write('isTiny: $isTiny, ')
           ..write('isSkip: $isSkip, ')
           ..write('isNd: $isNd, ')
           ..write('note: $note, ')
@@ -4814,6 +4910,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<int?> reminderMinute,
       Value<DateTime?> reminderDate,
       Value<String?> stackedAfterTaskId,
+      Value<String?> tinyName,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -4836,6 +4933,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<int?> reminderMinute,
       Value<DateTime?> reminderDate,
       Value<String?> stackedAfterTaskId,
+      Value<String?> tinyName,
       Value<TaskStatus> status,
       Value<DateTime> createdAt,
       Value<DateTime?> completedAt,
@@ -4986,6 +5084,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<String> get stackedAfterTaskId => $composableBuilder(
     column: $table.stackedAfterTaskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tinyName => $composableBuilder(
+    column: $table.tinyName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5158,6 +5261,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tinyName => $composableBuilder(
+    column: $table.tinyName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -5268,6 +5376,9 @@ class $$TasksTableAnnotationComposer
     column: $table.stackedAfterTaskId,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get tinyName =>
+      $composableBuilder(column: $table.tinyName, builder: (column) => column);
 
   GeneratedColumnWithTypeConverter<TaskStatus, String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
@@ -5402,6 +5513,7 @@ class $$TasksTableTableManager
                 Value<int?> reminderMinute = const Value.absent(),
                 Value<DateTime?> reminderDate = const Value.absent(),
                 Value<String?> stackedAfterTaskId = const Value.absent(),
+                Value<String?> tinyName = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -5422,6 +5534,7 @@ class $$TasksTableTableManager
                 reminderMinute: reminderMinute,
                 reminderDate: reminderDate,
                 stackedAfterTaskId: stackedAfterTaskId,
+                tinyName: tinyName,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,
@@ -5444,6 +5557,7 @@ class $$TasksTableTableManager
                 Value<int?> reminderMinute = const Value.absent(),
                 Value<DateTime?> reminderDate = const Value.absent(),
                 Value<String?> stackedAfterTaskId = const Value.absent(),
+                Value<String?> tinyName = const Value.absent(),
                 Value<TaskStatus> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -5464,6 +5578,7 @@ class $$TasksTableTableManager
                 reminderMinute: reminderMinute,
                 reminderDate: reminderDate,
                 stackedAfterTaskId: stackedAfterTaskId,
+                tinyName: tinyName,
                 status: status,
                 createdAt: createdAt,
                 completedAt: completedAt,
@@ -5597,6 +5712,7 @@ typedef $$TaskCompletionsTableCreateCompanionBuilder =
       required DateTime completedOn,
       Value<int> pointsEarned,
       Value<int?> durationSeconds,
+      Value<bool> isTiny,
       Value<bool> isSkip,
       Value<bool> isNd,
       Value<String?> note,
@@ -5611,6 +5727,7 @@ typedef $$TaskCompletionsTableUpdateCompanionBuilder =
       Value<DateTime> completedOn,
       Value<int> pointsEarned,
       Value<int?> durationSeconds,
+      Value<bool> isTiny,
       Value<bool> isSkip,
       Value<bool> isNd,
       Value<String?> note,
@@ -5704,6 +5821,11 @@ class $$TaskCompletionsTableFilterComposer
 
   ColumnFilters<int> get durationSeconds => $composableBuilder(
     column: $table.durationSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isTiny => $composableBuilder(
+    column: $table.isTiny,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5810,6 +5932,11 @@ class $$TaskCompletionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isTiny => $composableBuilder(
+    column: $table.isTiny,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isSkip => $composableBuilder(
     column: $table.isSkip,
     builder: (column) => ColumnOrderings(column),
@@ -5883,6 +6010,9 @@ class $$TaskCompletionsTableAnnotationComposer
     column: $table.durationSeconds,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get isTiny =>
+      $composableBuilder(column: $table.isTiny, builder: (column) => column);
 
   GeneratedColumn<bool> get isSkip =>
       $composableBuilder(column: $table.isSkip, builder: (column) => column);
@@ -5982,6 +6112,7 @@ class $$TaskCompletionsTableTableManager
                 Value<DateTime> completedOn = const Value.absent(),
                 Value<int> pointsEarned = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
+                Value<bool> isTiny = const Value.absent(),
                 Value<bool> isSkip = const Value.absent(),
                 Value<bool> isNd = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -5994,6 +6125,7 @@ class $$TaskCompletionsTableTableManager
                 completedOn: completedOn,
                 pointsEarned: pointsEarned,
                 durationSeconds: durationSeconds,
+                isTiny: isTiny,
                 isSkip: isSkip,
                 isNd: isNd,
                 note: note,
@@ -6008,6 +6140,7 @@ class $$TaskCompletionsTableTableManager
                 required DateTime completedOn,
                 Value<int> pointsEarned = const Value.absent(),
                 Value<int?> durationSeconds = const Value.absent(),
+                Value<bool> isTiny = const Value.absent(),
                 Value<bool> isSkip = const Value.absent(),
                 Value<bool> isNd = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -6020,6 +6153,7 @@ class $$TaskCompletionsTableTableManager
                 completedOn: completedOn,
                 pointsEarned: pointsEarned,
                 durationSeconds: durationSeconds,
+                isTiny: isTiny,
                 isSkip: isSkip,
                 isNd: isNd,
                 note: note,

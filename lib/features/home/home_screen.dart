@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
 import '../../core/services/app_prefs.dart';
+import '../../core/services/goldilocks_service.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -266,6 +267,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           dismissedDate: AppPrefs.nmtDismissedDateSync,
         );
 
+    // Goldilocks coach (lowest banner priority: timer > NMT > coach). One
+    // suggestion per day max; dormant until the user's own history triggers
+    // it (3 straight misses → shrink; 14-for-14 → level up).
+    final coachDismissed = AppPrefs.coachDismissedDateSync;
+    final coachEligible = !timerRunning &&
+        !showNmtBanner &&
+        (coachDismissed == null ||
+            !coachDismissed
+                .isAtSameMomentAs(DateTime(now.year, now.month, now.day)));
+    final coachSuggestion = coachEligible
+        ? GoldilocksService.evaluate(tasks, completions, now)
+        : null;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_greeting(), style: AppTypography.heading1),
@@ -298,6 +312,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               freshStartCopy: _resetPopupShownThisSession,
               onDismiss: () async {
                 await AppPrefs.setNmtDismissedDate(DateTime.now());
+                if (mounted) setState(() {});
+              },
+            ),
+          if (coachSuggestion != null)
+            _CoachBanner(
+              suggestion: coachSuggestion,
+              onTap: () => showTaskFormSheet(context,
+                  milestoneId: coachSuggestion.task.milestoneId,
+                  task: coachSuggestion.task),
+              onDismiss: () async {
+                await AppPrefs.setCoachDismissedDate(DateTime.now());
                 if (mounted) setState(() {});
               },
             ),
@@ -716,6 +741,64 @@ class _ClaimableRewardCard extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 child: const Text('CLAIM'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Goldilocks coach suggestion — the quietest banner in the attention slot.
+/// Tap opens the task's edit form; X mutes the coach for the day.
+class _CoachBanner extends StatelessWidget {
+  final GoldilocksSuggestion suggestion;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+
+  const _CoachBanner({
+    required this.suggestion,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+          decoration: BoxDecoration(
+            color: AppColors.infoBlue.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.infoBlue.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            children: [
+              Text(suggestion.emoji, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  suggestion.message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: context.appTextPrimary,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                color: context.appTextTertiary,
+                tooltip: 'Not today',
+                onPressed: onDismiss,
               ),
             ],
           ),

@@ -202,6 +202,8 @@ class _TaskTileState extends ConsumerState<TaskTile>
     with SingleTickerProviderStateMixin {
   late final AnimationController _floaterCtrl;
   bool _showFloater = false;
+  // Points shown by the +N floater — the ACTUAL award (tiny wins are half).
+  int _floaterPoints = 0;
 
   bool get _isChecked => widget.rowState.isChecked;
   bool get _isMissed => widget.rowState.isMissed;
@@ -344,7 +346,7 @@ class _TaskTileState extends ConsumerState<TaskTile>
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '+${widget.task.pointsPerCompletion}',
+                          '+$_floaterPoints',
                           style: AppTypography.caption.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
@@ -386,42 +388,52 @@ class _TaskTileState extends ConsumerState<TaskTile>
           widget.rowState.skipCompletion!.id, widget.task.id);
       HapticFeedback.lightImpact();
     } else if (_isUnchecked) {
-      final result =
-          await TaskCompletionService.completeToday(db, widget.task);
-      HapticFeedback.mediumImpact();
-      if (widget.task.pointsPerCompletion > 0 && mounted) {
-        _triggerFloater();
-      }
+      await _completeNow();
+    }
+  }
 
-      // Priority for the resulting snackbar:
-      //   - Badges/rewards unlocked → celebration snackbars win.
-      //   - Otherwise → the "Logged X + UNDO" snackbar for the 6s grace.
-      // We deliberately don't stack the UNDO snackbar with the celebration
-      // ones — they'd shove each other around and lose the moment.
-      // Celebration snackbars need this tile's context; the feedback event
-      // does NOT (global bus → root messenger). No `mounted` gate on the
-      // event post: completing a one-shot removes it from the active-tasks
-      // stream and disposes this tile before we get here — the UNDO snackbar
-      // must survive that.
-      if (mounted && result.hasCelebration) {
-        showAchievementSnackbar(
-          context,
-          [...result.completionBadges, ...result.streakBadges],
-        );
-        showRewardUnlockSnackbar(context, result.unlockedRewards);
-      } else {
-        AppEventBus.post(TaskActionEvent(
-          kind: TaskActionKind.done,
-          taskId: widget.task.id,
-          taskName: widget.task.name,
-          points: result.basePoints,
-          clutchBonus: result.clutchBonus,
-          durationSeconds: result.attachedDurationSeconds,
-          nextStackedTaskName: result.stackedNext.firstOrNull?.name,
-          identityLine: result.identityLine,
-          undoCompletionId: result.completionId,
-        ));
-      }
+  /// Complete this task for today (optionally its 2-minute version) and
+  /// surface the result.
+  Future<void> _completeNow({bool tiny = false}) async {
+    final db = ref.read(databaseProvider);
+    final result =
+        await TaskCompletionService.completeToday(db, widget.task, tiny: tiny);
+    HapticFeedback.mediumImpact();
+    if (result.basePoints > 0 && mounted) {
+      _floaterPoints = result.basePoints + result.clutchBonus;
+      _triggerFloater();
+    }
+
+    // Priority for the resulting snackbar:
+    //   - Badges/rewards unlocked → celebration snackbars win.
+    //   - Otherwise → the "Logged X + UNDO" snackbar for the 6s grace.
+    // We deliberately don't stack the UNDO snackbar with the celebration
+    // ones — they'd shove each other around and lose the moment.
+    // Celebration snackbars need this tile's context; the feedback event
+    // does NOT (global bus → root messenger). No `mounted` gate on the
+    // event post: completing a one-shot removes it from the active-tasks
+    // stream and disposes this tile before we get here — the UNDO snackbar
+    // must survive that.
+    if (mounted && result.hasCelebration) {
+      showAchievementSnackbar(
+        context,
+        [...result.completionBadges, ...result.streakBadges],
+      );
+      showRewardUnlockSnackbar(context, result.unlockedRewards);
+    } else {
+      AppEventBus.post(TaskActionEvent(
+        kind: TaskActionKind.done,
+        taskId: widget.task.id,
+        taskName: tiny
+            ? '${widget.task.tinyName ?? widget.task.name} ⚡'
+            : widget.task.name,
+        points: result.basePoints,
+        clutchBonus: result.clutchBonus,
+        durationSeconds: result.attachedDurationSeconds,
+        nextStackedTaskName: result.stackedNext.firstOrNull?.name,
+        identityLine: result.identityLine,
+        undoCompletionId: result.completionId,
+      ));
     }
   }
 
@@ -432,8 +444,21 @@ class _TaskTileState extends ConsumerState<TaskTile>
       builder: (ctx) {
         final ownsTimer =
             TimerService.current?.taskId == widget.task.id;
+        final tiny = widget.task.tinyName;
+        final base = widget.task.pointsPerCompletion;
+        final tinyPts = base > 0 ? (base + 1) ~/ 2 : 0;
         return _SkipActionsSheet(
           taskName: widget.task.name,
+          tinyTitle: tiny == null ? null : 'Do the 2-minute version',
+          tinySubtitle: tiny == null
+              ? null
+              : "'$tiny'${tinyPts > 0 ? ' · +$tinyPts pts' : ''} · full streak credit",
+          onTiny: tiny == null
+              ? null
+              : () {
+                  Navigator.of(ctx).pop();
+                  _completeNow(tiny: true);
+                },
           timerTitle: ownsTimer ? 'Stop timer' : 'Start timer',
           timerSubtitle: ownsTimer
               ? '${TimerService.formatElapsed(TimerService.elapsedSeconds(TimerService.current!))} on the clock'
@@ -586,7 +611,8 @@ class _TaskTileState extends ConsumerState<TaskTile>
     if (chip.isToday) {
       result = await TaskCompletionService.completeToday(db, widget.task);
       HapticFeedback.mediumImpact();
-      if (widget.task.pointsPerCompletion > 0 && mounted) {
+      if (result.basePoints > 0 && mounted) {
+        _floaterPoints = result.basePoints + result.clutchBonus;
         _triggerFloater();
       }
     } else {
@@ -750,6 +776,11 @@ class _SkipActionsSheet extends StatelessWidget {
   final String? timerSubtitle;
   final VoidCallback? onTimer;
 
+  /// Two-minute-rule row: shown when the task has a tiny version defined.
+  final String? tinyTitle;
+  final String? tinySubtitle;
+  final VoidCallback? onTiny;
+
   final VoidCallback onSkip;
   final VoidCallback onMissed;
 
@@ -759,6 +790,9 @@ class _SkipActionsSheet extends StatelessWidget {
     this.timerTitle,
     this.timerSubtitle,
     this.onTimer,
+    this.tinyTitle,
+    this.tinySubtitle,
+    this.onTiny,
     required this.onSkip,
     required this.onMissed,
   });
@@ -796,6 +830,16 @@ class _SkipActionsSheet extends StatelessWidget {
                   textAlign: TextAlign.center),
             ],
             const SizedBox(height: 20),
+            if (onTiny != null) ...[
+              _OptionRow(
+                icon: Icons.bolt_rounded,
+                iconColor: AppColors.streakOrange,
+                title: tinyTitle ?? 'Do the 2-minute version',
+                subtitle: tinySubtitle ?? 'Half points, full streak credit',
+                onTap: onTiny!,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (onTimer != null) ...[
               _OptionRow(
                 icon: Icons.timer_rounded,

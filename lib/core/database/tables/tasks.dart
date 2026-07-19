@@ -81,6 +81,11 @@ class Tasks extends Table {
   // (deleted anchors, restored backups) are null-checked in code.
   TextColumn get stackedAfterTaskId => text().nullable()();
 
+  // Two-minute rule (Atomic Habits): optional shrunk version of the task
+  // ("Read one page"). Completing it awards half points but FULL streak /
+  // identity / queue credit — showing up is the skill being trained.
+  TextColumn get tinyName => text().nullable()();
+
   TextColumn get status =>
       textEnum<TaskStatus>().withDefault(Constant(TaskStatus.active.value))();
 

@@ -53,8 +53,10 @@ class AppDatabase extends _$AppDatabase {
   //        stacking), `duration_seconds` on task_completions (stopwatch),
   //        `identity` on milestones (identity-based habits), and the new
   //        `change_log` journal table (auto-backup/sync/outbox foundation).
+  // 7 → 8 two-minute rule: `tiny_name` on tasks, `is_tiny` on
+  //        task_completions.
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
@@ -97,6 +99,11 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(taskCompletions, taskCompletions.durationSeconds);
           await m.addColumn(milestones, milestones.identity);
           await m.createTable(changeLog);
+        }
+        if (from < 8) {
+          // v7 → v8: two-minute rule.
+          await m.addColumn(tasks, tasks.tinyName);
+          await m.addColumn(taskCompletions, taskCompletions.isTiny);
         }
       },
     );
@@ -598,29 +605,36 @@ class AppDatabase extends _$AppDatabase {
   /// bonus when earned), and for one-shot tasks flip status → completed.
   /// Single transaction. The bonus row carries taskCompletionId, so
   /// [undoCompletion]'s delete-by-completion refunds it automatically.
+  ///
+  /// [tiny] = the task's two-minute version was done: half points (rounded
+  /// up, min 1), no clutch bonus, but a full real completion in every other
+  /// respect (streak, identity votes, queue unlocking).
   Future<DbCompletionOutcome> completeTaskNow(Task task,
-      {int? durationSeconds}) {
+      {int? durationSeconds, bool tiny = false}) {
     return transaction(() async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final completionId = _generateId();
-      final clutch = isClutchTime(task, now) ? clutchBonusPoints : 0;
+      final base = task.pointsPerCompletion;
+      final awarded = tiny ? (base > 0 ? max(1, (base + 1) ~/ 2) : 0) : base;
+      final clutch = !tiny && isClutchTime(task, now) ? clutchBonusPoints : 0;
 
       await into(taskCompletions).insert(
         TaskCompletionsCompanion.insert(
           id: completionId,
           taskId: task.id,
           completedOn: today,
-          pointsEarned: Value(task.pointsPerCompletion),
+          pointsEarned: Value(awarded),
           durationSeconds: Value.absentIfNull(durationSeconds),
+          isTiny: Value(tiny),
         ),
       );
 
-      if (task.pointsPerCompletion > 0) {
+      if (awarded > 0) {
         await into(pointsHistoryTable).insert(
           PointsHistoryTableCompanion.insert(
             id: _generateId(),
-            points: task.pointsPerCompletion,
+            points: awarded,
             reason: PointsReason.taskCompletion,
             taskCompletionId: Value(completionId),
             taskId: Value(task.id),
@@ -652,14 +666,15 @@ class AppDatabase extends _$AppDatabase {
       await _logChange('completion', completionId, 'create', payload: {
         'taskId': task.id,
         'on': today.toIso8601String(),
-        'points': task.pointsPerCompletion,
+        'points': awarded,
+        if (tiny) 'tiny': true,
         if (clutch > 0) 'clutchBonus': clutch,
         if (durationSeconds != null) 'durationSeconds': durationSeconds,
       });
 
       return (
         completionId: completionId,
-        basePoints: task.pointsPerCompletion,
+        basePoints: awarded,
         clutchBonus: clutch,
       );
     });
