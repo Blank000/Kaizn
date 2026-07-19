@@ -10,7 +10,14 @@ enum PointsReason {
   // ("beat the buzzer"). Wave 2 of the Atomic Habits plan; enum added early
   // so the v7 codegen batch is done once. textEnum stores the Dart name, so
   // adding a value needs no migration.
-  clutchBonus('clutch_bonus');
+  clutchBonus('clutch_bonus'),
+  // Daily quest completed (fixed small bonus; see gamification_plan.md —
+  // total system bonuses stay ≤ ~20% of weekly base to protect the
+  // user-priced reward economy).
+  questBonus('quest_bonus'),
+  // Weekly 5-of-7 quest-chain chest opened (FIXED +50 — anticipation lives
+  // in the animation, never in randomized amounts).
+  chestBonus('chest_bonus');
 
   const PointsReason(this.value);
   final String value;

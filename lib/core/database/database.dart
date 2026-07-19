@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import 'tables/change_log.dart';
+import 'tables/league_weeks.dart';
 import 'tables/milestones.dart';
 import 'tables/tasks.dart';
 import 'tables/task_completions.dart';
@@ -38,6 +39,7 @@ typedef DbCompletionOutcome = ({
   Rewards,
   StreakTable,
   ChangeLog,
+  LeagueWeeks,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -55,8 +57,11 @@ class AppDatabase extends _$AppDatabase {
   //        `change_log` journal table (auto-backup/sync/outbox foundation).
   // 7 → 8 two-minute rule: `tiny_name` on tasks, `is_tiny` on
   //        task_completions.
+  // 8 → 9 gamification wave: `league_weeks` table (weekly close-outs with
+  //        normalized metrics — real-league prep) + quest/chest PointsReason
+  //        values (textEnum, no column change).
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
@@ -104,6 +109,10 @@ class AppDatabase extends _$AppDatabase {
           // v7 → v8: two-minute rule.
           await m.addColumn(tasks, tasks.tinyName);
           await m.addColumn(taskCompletions, taskCompletions.isTiny);
+        }
+        if (from < 9) {
+          // v8 → v9: weekly league close-outs.
+          await m.createTable(leagueWeeks);
         }
       },
     );
@@ -938,6 +947,51 @@ class AppDatabase extends _$AppDatabase {
     final result = await (delete(rewards)..where((r) => r.id.equals(id))).go();
     await _logChange('reward', id, 'delete');
     return result;
+  }
+
+  /// Award system bonus points (quest / chest) not tied to a completion.
+  /// Fixed values only — see gamification_plan.md's anti-inflation rules.
+  Future<void> insertBonusPoints(int points, PointsReason reason) {
+    return transaction(() async {
+      final id = _generateId();
+      await into(pointsHistoryTable).insert(
+        PointsHistoryTableCompanion.insert(
+          id: id,
+          points: points,
+          reason: reason,
+        ),
+      );
+      await _logChange('points', id, 'create',
+          payload: {'points': points, 'reason': reason.name});
+    });
+  }
+
+  /// Point events on/after [since] — league close-out input.
+  Future<List<PointsHistory>> getPointsSince(DateTime since) {
+    return (select(pointsHistoryTable)
+          ..where((r) => r.earnedAt.isBiggerOrEqualValue(since)))
+        .get();
+  }
+
+  // ============ League weeks (weekly close-outs) ============
+
+  Future<LeagueWeek?> getLeagueWeek(DateTime weekStart) {
+    return (select(leagueWeeks)
+          ..where((w) => w.weekStart.equals(weekStart)))
+        .getSingleOrNull();
+  }
+
+  Future<LeagueWeek?> getLatestLeagueWeek() {
+    return (select(leagueWeeks)
+          ..orderBy([(w) => OrderingTerm.desc(w.weekStart)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<void> upsertLeagueWeek(LeagueWeeksCompanion week) async {
+    await into(leagueWeeks).insertOnConflictUpdate(week);
+    await _logChange('league_week', week.weekStart.value.toIso8601String(),
+        'create');
   }
 
   // ============ Streak ============

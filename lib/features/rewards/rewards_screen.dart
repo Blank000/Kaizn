@@ -8,6 +8,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/animated_number.dart';
+import '../../shared/widgets/spring_progress_bar.dart';
 import 'claim_flow.dart';
 import 'widgets/create_reward_sheet.dart';
 
@@ -359,15 +360,11 @@ class _LockedCard extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 10,
-                backgroundColor: context.appBorder,
-                valueColor:
-                    const AlwaysStoppedAnimation(AppColors.primary),
-              ),
+            SpringProgressBar(
+              value: progress,
+              height: 10,
+              color: AppColors.primary,
+              backgroundColor: context.appBorder,
             ),
             const SizedBox(height: 6),
             Row(

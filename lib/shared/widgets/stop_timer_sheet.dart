@@ -10,6 +10,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
+import 'moment_celebrations.dart';
 import 'reward_unlock_snackbar.dart';
 
 /// Stop-flow for the running stopwatch. Completion surface #5 — the MARK
@@ -174,6 +175,10 @@ class _StopTimerSheet extends StatelessWidget {
     final result = await TaskCompletionService.completeToday(db, task);
     HapticFeedback.mediumImpact();
 
+    if (hostContext.mounted) {
+      await surfaceDialogMoments(hostContext, result);
+    }
+
     if (hostContext.mounted && result.hasCelebration) {
       showAchievementSnackbar(
         hostContext,
@@ -193,6 +198,8 @@ class _StopTimerSheet extends StatelessWidget {
         nextStackedTaskName: result.stackedNext.firstOrNull?.name,
         identityLine: result.identityLine,
         undoCompletionId: result.completionId,
+        streakDay: result.streakDay,
+        questBonus: result.questCompleted?.bonus ?? 0,
       ));
     }
   }

@@ -4440,6 +4440,444 @@ class ChangeLogCompanion extends UpdateCompanion<ChangeLogEntry> {
   }
 }
 
+class $LeagueWeeksTable extends LeagueWeeks
+    with TableInfo<$LeagueWeeksTable, LeagueWeek> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LeagueWeeksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _weekStartMeta = const VerificationMeta(
+    'weekStart',
+  );
+  @override
+  late final GeneratedColumn<DateTime> weekStart = GeneratedColumn<DateTime>(
+    'week_start',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pointsMeta = const VerificationMeta('points');
+  @override
+  late final GeneratedColumn<int> points = GeneratedColumn<int>(
+    'points',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _completionsMeta = const VerificationMeta(
+    'completions',
+  );
+  @override
+  late final GeneratedColumn<int> completions = GeneratedColumn<int>(
+    'completions',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _activeDaysMeta = const VerificationMeta(
+    'activeDays',
+  );
+  @override
+  late final GeneratedColumn<int> activeDays = GeneratedColumn<int>(
+    'active_days',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _completionRatioMeta = const VerificationMeta(
+    'completionRatio',
+  );
+  @override
+  late final GeneratedColumn<double> completionRatio = GeneratedColumn<double>(
+    'completion_ratio',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _questsCompletedMeta = const VerificationMeta(
+    'questsCompleted',
+  );
+  @override
+  late final GeneratedColumn<int> questsCompleted = GeneratedColumn<int>(
+    'quests_completed',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    weekStart,
+    points,
+    completions,
+    activeDays,
+    completionRatio,
+    questsCompleted,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'league_weeks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LeagueWeek> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('week_start')) {
+      context.handle(
+        _weekStartMeta,
+        weekStart.isAcceptableOrUnknown(data['week_start']!, _weekStartMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_weekStartMeta);
+    }
+    if (data.containsKey('points')) {
+      context.handle(
+        _pointsMeta,
+        points.isAcceptableOrUnknown(data['points']!, _pointsMeta),
+      );
+    }
+    if (data.containsKey('completions')) {
+      context.handle(
+        _completionsMeta,
+        completions.isAcceptableOrUnknown(
+          data['completions']!,
+          _completionsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('active_days')) {
+      context.handle(
+        _activeDaysMeta,
+        activeDays.isAcceptableOrUnknown(data['active_days']!, _activeDaysMeta),
+      );
+    }
+    if (data.containsKey('completion_ratio')) {
+      context.handle(
+        _completionRatioMeta,
+        completionRatio.isAcceptableOrUnknown(
+          data['completion_ratio']!,
+          _completionRatioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('quests_completed')) {
+      context.handle(
+        _questsCompletedMeta,
+        questsCompleted.isAcceptableOrUnknown(
+          data['quests_completed']!,
+          _questsCompletedMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {weekStart};
+  @override
+  LeagueWeek map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LeagueWeek(
+      weekStart: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}week_start'],
+      )!,
+      points: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}points'],
+      )!,
+      completions: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}completions'],
+      )!,
+      activeDays: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}active_days'],
+      )!,
+      completionRatio: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}completion_ratio'],
+      )!,
+      questsCompleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}quests_completed'],
+      )!,
+    );
+  }
+
+  @override
+  $LeagueWeeksTable createAlias(String alias) {
+    return $LeagueWeeksTable(attachedDatabase, alias);
+  }
+}
+
+class LeagueWeek extends DataClass implements Insertable<LeagueWeek> {
+  /// Monday of the week, date-only. Primary key.
+  final DateTime weekStart;
+
+  /// Points earned that week (personal metric — display only).
+  final int points;
+
+  /// Real (non-skip, non-ND) completions that week.
+  final int completions;
+
+  /// Days with at least one real completion (0–7).
+  final int activeDays;
+
+  /// completions / scheduled-occurrences, clamped 0–1. The future fair
+  /// ranking ingredient.
+  final double completionRatio;
+
+  /// Daily quests completed that week (0–7). Fair-metric ingredient.
+  final int questsCompleted;
+  const LeagueWeek({
+    required this.weekStart,
+    required this.points,
+    required this.completions,
+    required this.activeDays,
+    required this.completionRatio,
+    required this.questsCompleted,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['week_start'] = Variable<DateTime>(weekStart);
+    map['points'] = Variable<int>(points);
+    map['completions'] = Variable<int>(completions);
+    map['active_days'] = Variable<int>(activeDays);
+    map['completion_ratio'] = Variable<double>(completionRatio);
+    map['quests_completed'] = Variable<int>(questsCompleted);
+    return map;
+  }
+
+  LeagueWeeksCompanion toCompanion(bool nullToAbsent) {
+    return LeagueWeeksCompanion(
+      weekStart: Value(weekStart),
+      points: Value(points),
+      completions: Value(completions),
+      activeDays: Value(activeDays),
+      completionRatio: Value(completionRatio),
+      questsCompleted: Value(questsCompleted),
+    );
+  }
+
+  factory LeagueWeek.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LeagueWeek(
+      weekStart: serializer.fromJson<DateTime>(json['weekStart']),
+      points: serializer.fromJson<int>(json['points']),
+      completions: serializer.fromJson<int>(json['completions']),
+      activeDays: serializer.fromJson<int>(json['activeDays']),
+      completionRatio: serializer.fromJson<double>(json['completionRatio']),
+      questsCompleted: serializer.fromJson<int>(json['questsCompleted']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'weekStart': serializer.toJson<DateTime>(weekStart),
+      'points': serializer.toJson<int>(points),
+      'completions': serializer.toJson<int>(completions),
+      'activeDays': serializer.toJson<int>(activeDays),
+      'completionRatio': serializer.toJson<double>(completionRatio),
+      'questsCompleted': serializer.toJson<int>(questsCompleted),
+    };
+  }
+
+  LeagueWeek copyWith({
+    DateTime? weekStart,
+    int? points,
+    int? completions,
+    int? activeDays,
+    double? completionRatio,
+    int? questsCompleted,
+  }) => LeagueWeek(
+    weekStart: weekStart ?? this.weekStart,
+    points: points ?? this.points,
+    completions: completions ?? this.completions,
+    activeDays: activeDays ?? this.activeDays,
+    completionRatio: completionRatio ?? this.completionRatio,
+    questsCompleted: questsCompleted ?? this.questsCompleted,
+  );
+  LeagueWeek copyWithCompanion(LeagueWeeksCompanion data) {
+    return LeagueWeek(
+      weekStart: data.weekStart.present ? data.weekStart.value : this.weekStart,
+      points: data.points.present ? data.points.value : this.points,
+      completions: data.completions.present
+          ? data.completions.value
+          : this.completions,
+      activeDays: data.activeDays.present
+          ? data.activeDays.value
+          : this.activeDays,
+      completionRatio: data.completionRatio.present
+          ? data.completionRatio.value
+          : this.completionRatio,
+      questsCompleted: data.questsCompleted.present
+          ? data.questsCompleted.value
+          : this.questsCompleted,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LeagueWeek(')
+          ..write('weekStart: $weekStart, ')
+          ..write('points: $points, ')
+          ..write('completions: $completions, ')
+          ..write('activeDays: $activeDays, ')
+          ..write('completionRatio: $completionRatio, ')
+          ..write('questsCompleted: $questsCompleted')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    weekStart,
+    points,
+    completions,
+    activeDays,
+    completionRatio,
+    questsCompleted,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LeagueWeek &&
+          other.weekStart == this.weekStart &&
+          other.points == this.points &&
+          other.completions == this.completions &&
+          other.activeDays == this.activeDays &&
+          other.completionRatio == this.completionRatio &&
+          other.questsCompleted == this.questsCompleted);
+}
+
+class LeagueWeeksCompanion extends UpdateCompanion<LeagueWeek> {
+  final Value<DateTime> weekStart;
+  final Value<int> points;
+  final Value<int> completions;
+  final Value<int> activeDays;
+  final Value<double> completionRatio;
+  final Value<int> questsCompleted;
+  final Value<int> rowid;
+  const LeagueWeeksCompanion({
+    this.weekStart = const Value.absent(),
+    this.points = const Value.absent(),
+    this.completions = const Value.absent(),
+    this.activeDays = const Value.absent(),
+    this.completionRatio = const Value.absent(),
+    this.questsCompleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LeagueWeeksCompanion.insert({
+    required DateTime weekStart,
+    this.points = const Value.absent(),
+    this.completions = const Value.absent(),
+    this.activeDays = const Value.absent(),
+    this.completionRatio = const Value.absent(),
+    this.questsCompleted = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : weekStart = Value(weekStart);
+  static Insertable<LeagueWeek> custom({
+    Expression<DateTime>? weekStart,
+    Expression<int>? points,
+    Expression<int>? completions,
+    Expression<int>? activeDays,
+    Expression<double>? completionRatio,
+    Expression<int>? questsCompleted,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (weekStart != null) 'week_start': weekStart,
+      if (points != null) 'points': points,
+      if (completions != null) 'completions': completions,
+      if (activeDays != null) 'active_days': activeDays,
+      if (completionRatio != null) 'completion_ratio': completionRatio,
+      if (questsCompleted != null) 'quests_completed': questsCompleted,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LeagueWeeksCompanion copyWith({
+    Value<DateTime>? weekStart,
+    Value<int>? points,
+    Value<int>? completions,
+    Value<int>? activeDays,
+    Value<double>? completionRatio,
+    Value<int>? questsCompleted,
+    Value<int>? rowid,
+  }) {
+    return LeagueWeeksCompanion(
+      weekStart: weekStart ?? this.weekStart,
+      points: points ?? this.points,
+      completions: completions ?? this.completions,
+      activeDays: activeDays ?? this.activeDays,
+      completionRatio: completionRatio ?? this.completionRatio,
+      questsCompleted: questsCompleted ?? this.questsCompleted,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (weekStart.present) {
+      map['week_start'] = Variable<DateTime>(weekStart.value);
+    }
+    if (points.present) {
+      map['points'] = Variable<int>(points.value);
+    }
+    if (completions.present) {
+      map['completions'] = Variable<int>(completions.value);
+    }
+    if (activeDays.present) {
+      map['active_days'] = Variable<int>(activeDays.value);
+    }
+    if (completionRatio.present) {
+      map['completion_ratio'] = Variable<double>(completionRatio.value);
+    }
+    if (questsCompleted.present) {
+      map['quests_completed'] = Variable<int>(questsCompleted.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LeagueWeeksCompanion(')
+          ..write('weekStart: $weekStart, ')
+          ..write('points: $points, ')
+          ..write('completions: $completions, ')
+          ..write('activeDays: $activeDays, ')
+          ..write('completionRatio: $completionRatio, ')
+          ..write('questsCompleted: $questsCompleted, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4453,6 +4891,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RewardsTable rewards = $RewardsTable(this);
   late final $StreakTableTable streakTable = $StreakTableTable(this);
   late final $ChangeLogTable changeLog = $ChangeLogTable(this);
+  late final $LeagueWeeksTable leagueWeeks = $LeagueWeeksTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4465,6 +4904,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     rewards,
     streakTable,
     changeLog,
+    leagueWeeks,
   ];
 }
 
@@ -7464,6 +7904,233 @@ typedef $$ChangeLogTableProcessedTableManager =
       ChangeLogEntry,
       PrefetchHooks Function()
     >;
+typedef $$LeagueWeeksTableCreateCompanionBuilder =
+    LeagueWeeksCompanion Function({
+      required DateTime weekStart,
+      Value<int> points,
+      Value<int> completions,
+      Value<int> activeDays,
+      Value<double> completionRatio,
+      Value<int> questsCompleted,
+      Value<int> rowid,
+    });
+typedef $$LeagueWeeksTableUpdateCompanionBuilder =
+    LeagueWeeksCompanion Function({
+      Value<DateTime> weekStart,
+      Value<int> points,
+      Value<int> completions,
+      Value<int> activeDays,
+      Value<double> completionRatio,
+      Value<int> questsCompleted,
+      Value<int> rowid,
+    });
+
+class $$LeagueWeeksTableFilterComposer
+    extends Composer<_$AppDatabase, $LeagueWeeksTable> {
+  $$LeagueWeeksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get weekStart => $composableBuilder(
+    column: $table.weekStart,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get points => $composableBuilder(
+    column: $table.points,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get completions => $composableBuilder(
+    column: $table.completions,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get activeDays => $composableBuilder(
+    column: $table.activeDays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get completionRatio => $composableBuilder(
+    column: $table.completionRatio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get questsCompleted => $composableBuilder(
+    column: $table.questsCompleted,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LeagueWeeksTableOrderingComposer
+    extends Composer<_$AppDatabase, $LeagueWeeksTable> {
+  $$LeagueWeeksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get weekStart => $composableBuilder(
+    column: $table.weekStart,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get points => $composableBuilder(
+    column: $table.points,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get completions => $composableBuilder(
+    column: $table.completions,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get activeDays => $composableBuilder(
+    column: $table.activeDays,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get completionRatio => $composableBuilder(
+    column: $table.completionRatio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get questsCompleted => $composableBuilder(
+    column: $table.questsCompleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LeagueWeeksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LeagueWeeksTable> {
+  $$LeagueWeeksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get weekStart =>
+      $composableBuilder(column: $table.weekStart, builder: (column) => column);
+
+  GeneratedColumn<int> get points =>
+      $composableBuilder(column: $table.points, builder: (column) => column);
+
+  GeneratedColumn<int> get completions => $composableBuilder(
+    column: $table.completions,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get activeDays => $composableBuilder(
+    column: $table.activeDays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get completionRatio => $composableBuilder(
+    column: $table.completionRatio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get questsCompleted => $composableBuilder(
+    column: $table.questsCompleted,
+    builder: (column) => column,
+  );
+}
+
+class $$LeagueWeeksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LeagueWeeksTable,
+          LeagueWeek,
+          $$LeagueWeeksTableFilterComposer,
+          $$LeagueWeeksTableOrderingComposer,
+          $$LeagueWeeksTableAnnotationComposer,
+          $$LeagueWeeksTableCreateCompanionBuilder,
+          $$LeagueWeeksTableUpdateCompanionBuilder,
+          (
+            LeagueWeek,
+            BaseReferences<_$AppDatabase, $LeagueWeeksTable, LeagueWeek>,
+          ),
+          LeagueWeek,
+          PrefetchHooks Function()
+        > {
+  $$LeagueWeeksTableTableManager(_$AppDatabase db, $LeagueWeeksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LeagueWeeksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LeagueWeeksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LeagueWeeksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<DateTime> weekStart = const Value.absent(),
+                Value<int> points = const Value.absent(),
+                Value<int> completions = const Value.absent(),
+                Value<int> activeDays = const Value.absent(),
+                Value<double> completionRatio = const Value.absent(),
+                Value<int> questsCompleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LeagueWeeksCompanion(
+                weekStart: weekStart,
+                points: points,
+                completions: completions,
+                activeDays: activeDays,
+                completionRatio: completionRatio,
+                questsCompleted: questsCompleted,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required DateTime weekStart,
+                Value<int> points = const Value.absent(),
+                Value<int> completions = const Value.absent(),
+                Value<int> activeDays = const Value.absent(),
+                Value<double> completionRatio = const Value.absent(),
+                Value<int> questsCompleted = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LeagueWeeksCompanion.insert(
+                weekStart: weekStart,
+                points: points,
+                completions: completions,
+                activeDays: activeDays,
+                completionRatio: completionRatio,
+                questsCompleted: questsCompleted,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LeagueWeeksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LeagueWeeksTable,
+      LeagueWeek,
+      $$LeagueWeeksTableFilterComposer,
+      $$LeagueWeeksTableOrderingComposer,
+      $$LeagueWeeksTableAnnotationComposer,
+      $$LeagueWeeksTableCreateCompanionBuilder,
+      $$LeagueWeeksTableUpdateCompanionBuilder,
+      (
+        LeagueWeek,
+        BaseReferences<_$AppDatabase, $LeagueWeeksTable, LeagueWeek>,
+      ),
+      LeagueWeek,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -7482,4 +8149,6 @@ class $AppDatabaseManager {
       $$StreakTableTableTableManager(_db, _db.streakTable);
   $$ChangeLogTableTableManager get changeLog =>
       $$ChangeLogTableTableManager(_db, _db.changeLog);
+  $$LeagueWeeksTableTableManager get leagueWeeks =>
+      $$LeagueWeeksTableTableManager(_db, _db.leagueWeeks);
 }

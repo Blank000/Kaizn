@@ -2,11 +2,13 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/services/cosmetics_service.dart';
 import '../../../core/services/shield_service.dart';
 import '../../../core/services/streak_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
+import '../../../shared/widgets/celebration_dialog.dart';
 
 /// Shows a milestone celebration dialog or a normal streak bottom sheet.
 /// [onShieldUsed] is called when the user confirms using a Streak Shield.
@@ -52,8 +54,20 @@ class _NormalStreakSheetState extends State<_NormalStreakSheet> {
     widget.onShieldUsed?.call();
     HapticFeedback.mediumImpact();
     setState(() => _shieldUsed = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (mounted) Navigator.of(context).pop();
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    // The relief beat: the scariest moment in the app just turned into a
+    // save — celebrate it (ember confetti, streak voice).
+    await showCelebrationDialog(
+      context,
+      emoji: '🛡️',
+      title: 'STREAK SAVED!',
+      subtitle: '${widget.result.streakBeforeReset} days protected',
+      body: 'One win today keeps it burning.',
+      titleColor: AppColors.streakOrange,
+      style: ConfettiStyle.emberRain,
+    );
   }
 
   @override

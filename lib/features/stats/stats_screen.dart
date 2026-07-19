@@ -8,11 +8,13 @@ import 'package:intl/intl.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
+import '../../core/services/level_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/animated_number.dart';
+import '../../shared/widgets/spring_progress_bar.dart';
 
 /// Local state provider for the heatmap month/year toggle.
 final _heatmapYearModeProvider = StateProvider<bool>((ref) => false);
@@ -88,6 +90,7 @@ class StatsScreen extends ConsumerWidget {
             points: weekPoints,
             completions: weekCompletions,
           ),
+          const _LastWeekRecapLine(),
           const SizedBox(height: 20),
           const _AchievementsEntry(),
           const SizedBox(height: 20),
@@ -449,6 +452,34 @@ class _HeatmapHeader extends StatelessWidget {
   }
 }
 
+/// Tier-free weekly recap (gamification_plan.md §1): one quiet line from the
+/// latest league_weeks close-out. Trend legibility without demotion dread.
+class _LastWeekRecapLine extends ConsumerWidget {
+  const _LastWeekRecapLine();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final db = ref.watch(databaseProvider);
+    return FutureBuilder<LeagueWeek?>(
+      future: db.getLatestLeagueWeek(),
+      builder: (context, snap) {
+        final week = snap.data;
+        if (week == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 8, left: 4),
+          child: Text(
+            'Last week: ${week.points} pts · ${week.activeDays} active '
+            'day${week.activeDays == 1 ? '' : 's'} · '
+            '${(week.completionRatio * 100).round()}% completed',
+            style: AppTypography.caption
+                .copyWith(color: context.appTextSecondary),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _LifetimeCard extends StatelessWidget {
   final int points;
   final int longestStreak;
@@ -457,6 +488,9 @@ class _LifetimeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The unloseable number: lifetime level — computed on earned points,
+    // never the spendable balance, so claiming rewards can't de-level.
+    final level = LevelService.getLevel(points);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
@@ -487,6 +521,43 @@ class _LifetimeCard extends StatelessWidget {
                 Text('points earned',
                     style: AppTypography.caption
                         .copyWith(color: context.appTextSecondary)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.rewardsGold.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '🎖️ Lv ${level.level} · ${level.title}',
+                        style: AppTypography.caption.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: context.appTextPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: 150,
+                  child: SpringProgressBar(
+                    value: level.progress,
+                    height: 6,
+                    color: AppColors.rewardsGold,
+                    backgroundColor:
+                        context.appBorder.withValues(alpha: 0.4),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${NumberFormat.decimalPattern().format(level.nextPoints - points)} pts to Lv ${level.level + 1}',
+                  style: AppTypography.caption.copyWith(
+                      fontSize: 10, color: context.appTextTertiary),
+                ),
               ],
             ),
           ),

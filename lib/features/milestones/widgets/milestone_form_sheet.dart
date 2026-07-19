@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/services/cosmetics_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
@@ -40,6 +41,8 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
   DateTime? _targetDate;
   int _colorIndex = 0;
   bool _saving = false;
+  // Base palette + any cosmetic-unlocked extras (picker gating only).
+  int _paletteLength = AppColors.milestonePalette.length;
 
   bool get _isEdit => widget.milestone != null;
 
@@ -54,6 +57,12 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
         TextEditingController(text: (m?.completionPoints ?? 0).toString());
     _targetDate = m?.targetDate;
     _colorIndex = m?.colorIndex ?? 0;
+    CosmeticsService.unlockedPaletteIds().then((ids) {
+      if (mounted) {
+        setState(() => _paletteLength =
+            AppColors.milestonePalette.length + ids.length);
+      }
+    });
   }
 
   @override
@@ -233,6 +242,7 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
               const SizedBox(height: 8),
               _ColorPickerRow(
                 selectedIndex: _colorIndex,
+                paletteLength: _paletteLength,
                 onChanged: (i) => setState(() => _colorIndex = i),
               ),
               const SizedBox(height: 24),
@@ -253,19 +263,22 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
 
 class _ColorPickerRow extends StatelessWidget {
   final int selectedIndex;
+  final int paletteLength;
   final ValueChanged<int> onChanged;
 
   const _ColorPickerRow({
     required this.selectedIndex,
+    required this.paletteLength,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(AppColors.milestonePalette.length, (i) {
-        final color = AppColors.milestonePalette[i];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: List.generate(paletteLength, (i) {
+        final color = AppColors.milestoneColor(i);
         final isSelected = i == selectedIndex;
         return InkWell(
           onTap: () => onChanged(i),

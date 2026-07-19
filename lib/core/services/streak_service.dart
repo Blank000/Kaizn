@@ -21,6 +21,30 @@ class StreakCheckResult {
   });
 }
 
+/// What the day's first real completion did to the streak — the payload for
+/// same-day celebration (previously milestones celebrated a day late, on the
+/// NEXT morning's app open; personal bests never celebrated at all).
+class StreakAdvanceResult {
+  /// Null when the streak already advanced today (no-op call).
+  final int? advancedTo;
+
+  /// Milestone (7/14/30/60/100/365) crossed by THIS advance, if any.
+  final int? milestoneHit;
+
+  /// This advance set a new all-time longest streak (only reported once the
+  /// streak is long enough to be meaningful).
+  final bool isNewBest;
+
+  final List<AchievementBadge> badges;
+
+  const StreakAdvanceResult({
+    this.advancedTo,
+    this.milestoneHit,
+    this.isNewBest = false,
+    this.badges = const [],
+  });
+}
+
 class StreakService {
   /// Called on every app open. Checks for break, updates milestone.
   static Future<StreakCheckResult> checkOnAppOpen(AppDatabase db) async {
@@ -91,33 +115,57 @@ class StreakService {
   /// Called after the first real log entry of the day.
   /// Uses `AppPrefs.lastStreakAdvanceDate` (not `streak.lastLoggedDate`) as
   /// the once-per-day guard, so that "skip first, real later same day" still
-  /// advances the streak on the real completion. Returns any streak badges
-  /// the advance unlocked (empty list if no advance happened today).
-  static Future<List<AchievementBadge>> recordDayLogged(AppDatabase db) async {
+  /// advances the streak on the real completion.
+  ///
+  /// Milestone detection lives HERE (not just checkOnAppOpen) so day 30 is
+  /// celebrated the moment it's earned, not tomorrow morning. The
+  /// lastMilestoneCelebrated persist keeps checkOnAppOpen from repeating it.
+  static Future<StreakAdvanceResult> recordDayLogged(AppDatabase db) async {
     final streak = await db.getStreak();
-    if (streak == null) return const [];
+    if (streak == null) return const StreakAdvanceResult();
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     final lastAdvance = await AppPrefs.getLastStreakAdvanceDate();
     if (lastAdvance != null && lastAdvance.isAtSameMomentAs(today)) {
-      return const []; // Already advanced today
+      return const StreakAdvanceResult(); // Already advanced today
     }
 
     final newStreak = streak.currentStreak + 1;
+    final isNewBest =
+        newStreak > streak.longestStreak && newStreak >= 3;
     final newLongest =
         newStreak > streak.longestStreak ? newStreak : streak.longestStreak;
+
+    // Same-day milestone: highest uncelebrated threshold this advance crossed.
+    int? milestoneHit;
+    var lastCelebrated = streak.lastMilestoneCelebrated;
+    for (final m in [365, 100, 60, 30, 14, 7]) {
+      if (newStreak >= m && streak.lastMilestoneCelebrated < m) {
+        milestoneHit = m;
+        lastCelebrated = m;
+        break;
+      }
+    }
 
     await db.updateStreak(
       streak.copyWith(
         currentStreak: newStreak,
         longestStreak: newLongest,
         lastLoggedDate: Value(now),
+        lastMilestoneCelebrated: lastCelebrated,
       ),
     );
     await AppPrefs.setLastStreakAdvanceDate(today);
-    return AchievementService.checkStreakBadges(newStreak);
+    final badges = await AchievementService.checkStreakBadges(newStreak);
+    return StreakAdvanceResult(
+      advancedTo: newStreak,
+      milestoneHit: milestoneHit,
+      // A milestone celebration outranks the PB moment when both land at once.
+      isNewBest: isNewBest && milestoneHit == null,
+      badges: badges,
+    );
   }
 
   /// Called when the user marks a task as a skip (intentional rest).

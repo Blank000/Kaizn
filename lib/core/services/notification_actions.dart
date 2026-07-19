@@ -119,6 +119,7 @@ Future<void> _handleDone(AppDatabase db, Map<String, dynamic> data) async {
       nextStackedTaskName: result.stackedNext.firstOrNull?.name,
       identityLine: result.identityLine,
       undoCompletionId: result.completionId,
+      streakDay: result.streakDay,
     ));
   } else {
     AppEventBus.post(TaskActionEvent(

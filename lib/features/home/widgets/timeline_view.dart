@@ -17,6 +17,7 @@ import '../../../shared/models/recurrence_rule.dart';
 import '../../../shared/models/task_stack.dart';
 import '../../../shared/providers/database_provider.dart';
 import '../../../shared/widgets/achievement_snackbar.dart';
+import '../../../shared/widgets/moment_celebrations.dart';
 import '../../../shared/widgets/reward_unlock_snackbar.dart';
 import '../../../shared/widgets/task_tile.dart'
     show TaskRowState, taskRowStateFor;
@@ -1006,6 +1007,8 @@ Future<void> _toggleTask(
   final result = await TaskCompletionService.completeToday(db, task);
   HapticFeedback.mediumImpact();
 
+  if (context.mounted) await surfaceDialogMoments(context, result);
+
   if (context.mounted && result.hasCelebration) {
     showAchievementSnackbar(
         context, [...result.completionBadges, ...result.streakBadges]);
@@ -1023,6 +1026,8 @@ Future<void> _toggleTask(
       nextStackedTaskName: result.stackedNext.firstOrNull?.name,
       identityLine: result.identityLine,
       undoCompletionId: result.completionId,
+      streakDay: result.streakDay,
+      questBonus: result.questCompleted?.bonus ?? 0,
     ));
   }
 }

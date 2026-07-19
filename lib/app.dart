@@ -168,6 +168,8 @@ class _HabitRewardTrackerAppState extends ConsumerState<HabitRewardTrackerApp>
             '+${event.clutchBonus} bonus ⚡'
           else
             'Nice work',
+          if (event.streakDay != null) '🔥 Day ${event.streakDay}',
+          if (event.questBonus > 0) '🎯 Quest +${event.questBonus}',
           if (event.durationSeconds != null)
             '⏱ ${_fmtDuration(event.durationSeconds!)}',
           if (event.nextStackedTaskName != null)

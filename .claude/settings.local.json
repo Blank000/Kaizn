@@ -24,7 +24,10 @@
       "PowerShell(flutter analyze *)",
       "Bash(wait 5)",
       "Read(//c/Users/AlokRaj/AppData/Local/Temp/claude/C--Users-AlokRaj-Documents-personal-projects-habit-reward-tracker/8c2a6213-04a2-4d71-bd23-b8c71de0b988/tasks/**)",
-      "PowerShell(Out-File *)"
+      "PowerShell(Out-File *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(Set-Content *)"
     ]
   }
 }

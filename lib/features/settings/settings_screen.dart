@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/backup_service.dart';
+import '../../core/services/cosmetics_service.dart';
 import '../../core/services/notification_scheduler.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -69,6 +70,10 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          _SectionLabel('Style'),
+          const SizedBox(height: 8),
+          const _StyleCard(),
           const SizedBox(height: 24),
           _SectionLabel('Notifications'),
           const SizedBox(height: 8),
@@ -319,6 +324,78 @@ class SettingsScreen extends ConsumerWidget {
               child: const Text('CLOSE')),
         ],
       ),
+    );
+  }
+}
+
+/// Cosmetic style picker — confetti styles unlocked via levels/chests.
+/// Locked styles show with a lock and the unlock hint; cosmetics never gate
+/// behavior features.
+class _StyleCard extends StatefulWidget {
+  const _StyleCard();
+
+  @override
+  State<_StyleCard> createState() => _StyleCardState();
+}
+
+class _StyleCardState extends State<_StyleCard> {
+  List<ConfettiStyle> _available = const [ConfettiStyle.classic];
+  ConfettiStyle _selected = ConfettiStyle.classic;
+
+  static const _labels = {
+    ConfettiStyle.classic: ('🎊', 'Classic burst'),
+    ConfettiStyle.goldStars: ('🌟', 'Gold Rain'),
+    ConfettiStyle.emberRain: ('🔥', 'Ember Storm'),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final available = await CosmeticsService.availableConfettiStyles();
+    final selected = await CosmeticsService.selectedConfettiStyle();
+    if (mounted) {
+      setState(() {
+        _available = available;
+        _selected = selected;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      children: [
+        for (final style in ConfettiStyle.values) ...[
+          if (style != ConfettiStyle.values.first) _Divider(),
+          Builder(builder: (context) {
+            final unlocked = _available.contains(style);
+            final (emoji, label) = _labels[style]!;
+            return RadioListTile<ConfettiStyle>(
+              value: style,
+              groupValue: _selected,
+              onChanged: unlocked
+                  ? (v) async {
+                      if (v == null) return;
+                      await CosmeticsService.setConfettiStyle(v);
+                      if (mounted) setState(() => _selected = v);
+                    }
+                  : null,
+              title: Text('$emoji $label', style: AppTypography.body),
+              subtitle: unlocked
+                  ? null
+                  : Text('🔒 Unlocks from level-ups and weekly chests',
+                      style: AppTypography.caption
+                          .copyWith(color: context.appTextTertiary)),
+              activeColor: AppColors.primary,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            );
+          }),
+        ],
+      ],
     );
   }
 }

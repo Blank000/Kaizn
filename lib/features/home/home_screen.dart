@@ -6,7 +6,10 @@ import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
 import '../../core/services/app_prefs.dart';
+import '../../core/services/cosmetics_service.dart';
 import '../../core/services/goldilocks_service.dart';
+import '../../core/services/league_service.dart';
+import '../../core/services/quest_service.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/services/timer_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -17,6 +20,7 @@ import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/celebration_dialog.dart';
+import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../../shared/models/task_stack.dart';
 import '../../shared/providers/active_timer_provider.dart';
@@ -56,7 +60,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         : HomeViewMode.list;
     final n = DateTime.now();
     _viewDate = DateTime(n.year, n.month, n.day);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStreakPopup());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeStreakPopup();
+      // Lazy weekly close-out (league_weeks) — at most once per week.
+      LeagueService.maybeCloseOutLastWeek(ref.read(databaseProvider));
+    });
   }
 
   DateTime get _todayDate {
@@ -448,32 +456,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _viewDate = _viewDate.add(const Duration(days: 1))),
               onToday: () => setState(() => _viewDate = _todayDate),
             ),
-          // The single attention-banner slot, shared by both view modes.
-          // Priority: live timer > never-miss-twice (showNmtBanner already
-          // yields when a timer runs). ActiveTimerBanner renders nothing
-          // when no timer is active. Banners are present-tense — hidden
-          // while reviewing a past day.
-          const ActiveTimerBanner(),
-          if (_viewingToday && showNmtBanner)
-            NeverMissTwiceBanner(
-              currentStreak: streak?.currentStreak ?? 0,
-              freshStartCopy: _resetPopupShownThisSession,
-              onDismiss: () async {
-                await AppPrefs.setNmtDismissedDate(DateTime.now());
-                if (mounted) setState(() {});
-              },
+          // The single attention-banner slot, shared by both view modes,
+          // with enter/exit choreography (AnimatedSize + Switcher) so
+          // banners glide in and yield instead of teleporting the list.
+          // Priority: live timer > never-miss-twice > coach. Banners are
+          // present-tense — hidden while reviewing a past day.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween(
+                          begin: const Offset(0, -0.15), end: Offset.zero)
+                      .animate(anim),
+                  child: child,
+                ),
+              ),
+              child: timerRunning
+                  ? const ActiveTimerBanner(key: ValueKey('slot-timer'))
+                  : (_viewingToday && showNmtBanner)
+                      ? NeverMissTwiceBanner(
+                          key: const ValueKey('slot-nmt'),
+                          currentStreak: streak?.currentStreak ?? 0,
+                          freshStartCopy: _resetPopupShownThisSession,
+                          onDismiss: () async {
+                            await AppPrefs
+                                .setNmtDismissedDate(DateTime.now());
+                            if (mounted) setState(() {});
+                          },
+                        )
+                      : (_viewingToday && coachSuggestion != null)
+                          ? _CoachBanner(
+                              key: const ValueKey('slot-coach'),
+                              suggestion: coachSuggestion,
+                              onTap: () => showTaskFormSheet(context,
+                                  milestoneId:
+                                      coachSuggestion.task.milestoneId,
+                                  task: coachSuggestion.task),
+                              onDismiss: () async {
+                                await AppPrefs
+                                    .setCoachDismissedDate(DateTime.now());
+                                if (mounted) setState(() {});
+                              },
+                            )
+                          : const SizedBox.shrink(
+                              key: ValueKey('slot-none')),
             ),
-          if (_viewingToday && coachSuggestion != null)
-            _CoachBanner(
-              suggestion: coachSuggestion,
-              onTap: () => showTaskFormSheet(context,
-                  milestoneId: coachSuggestion.task.milestoneId,
-                  task: coachSuggestion.task),
-              onDismiss: () async {
-                await AppPrefs.setCoachDismissedDate(DateTime.now());
-                if (mounted) setState(() {});
-              },
-            ),
+          ),
           Expanded(
             child: _viewMode == HomeViewMode.timeline
                 ? TimelineView(date: _viewingToday ? null : _viewDate)
@@ -494,6 +527,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               total: totalScheduled,
               pointsToday: todayPoints,
             ),
+          // Daily quest — a quiet list row, deliberately NOT a banner (the
+          // attention slot stays sacred). No missed state ever: an
+          // incomplete quest simply becomes a different quest tomorrow.
+          _QuestRow(tasks: tasks, completions: completions),
           if (claimableRewards.isNotEmpty) ...[
             const SizedBox(height: 20),
             // One-attention-slot policy: while the never-miss-twice banner
@@ -529,6 +566,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 final queue =
                     queueBehind(it.task, childrenByAnchor, inTodaysQueue);
                 return TaskTile(
+                  key: ValueKey(it.task.id),
                   task: it.task,
                   rowState: it.rowState,
                   weeklyChips: weeklyChipsFor(it.task, completions),
@@ -550,6 +588,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 16),
               _SectionHeader('Done today'),
               ...doneToday.map((it) => TaskTile(
+                    key: ValueKey(it.task.id),
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
@@ -566,6 +605,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 16),
               _SectionHeader('Missed today'),
               ...missedToday.map((it) => TaskTile(
+                    key: ValueKey(it.task.id),
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
@@ -582,6 +622,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 16),
               _SectionHeader('Skipped today'),
               ...skippedToday.map((it) => TaskTile(
+                    key: ValueKey(it.task.id),
                     task: it.task,
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
@@ -795,16 +836,10 @@ class _TodayProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: context.appBorder.withValues(alpha: 0.3),
-              valueColor: AlwaysStoppedAnimation(
-                allDone ? AppColors.streakOrange : AppColors.primary,
-              ),
-            ),
+          SpringProgressBar(
+            value: progress,
+            color: allDone ? AppColors.streakOrange : AppColors.primary,
+            backgroundColor: context.appBorder.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 6),
           Text(
@@ -901,6 +936,156 @@ class _ClaimableRewardCard extends StatelessWidget {
   }
 }
 
+/// Daily quest + weekly chest row (gamification_plan.md §4, Session 3).
+/// A quiet list row — never a banner. De-fanged: satisfiable by the day's
+/// existing plan, no missed state, never references the streak.
+class _QuestRow extends ConsumerStatefulWidget {
+  final List<Task> tasks;
+  final List<TaskCompletion> completions;
+  const _QuestRow({required this.tasks, required this.completions});
+
+  @override
+  ConsumerState<_QuestRow> createState() => _QuestRowState();
+}
+
+class _QuestRowState extends ConsumerState<_QuestRow> {
+  QuestStatus? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_QuestRow old) {
+    super.didUpdateWidget(old);
+    _load(); // cheap SharedPrefs read; refreshes as the streams re-emit
+  }
+
+  Future<void> _load() async {
+    final db = ref.read(databaseProvider);
+    final s =
+        await QuestService.today(db, widget.tasks, widget.completions);
+    if (mounted) setState(() => _status = s);
+  }
+
+  Future<void> _openChest() async {
+    final db = ref.read(databaseProvider);
+    final reward = await QuestService.claimChest(db);
+    if (reward == null || !mounted) return;
+    await showCelebrationDialog(
+      context,
+      emoji: '🎁',
+      title: 'CHEST OPENED!',
+      subtitle: '+${reward.points} pts',
+      body: reward.cosmetic == null
+          ? 'Five quests this week. Rhythm looks good on you.'
+          : 'Unlocked: ${reward.cosmetic!.emoji} ${reward.cosmetic!.name}',
+      titleColor: AppColors.rewardsGold,
+      style: ConfettiStyle.goldStars,
+    );
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _status;
+    if (s == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        decoration: BoxDecoration(
+          color: context.appPageBackground,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Text(s.done ? '🎯' : s.quest.emoji,
+                style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.done
+                        ? 'Quest done · +${s.quest.bonus} pts'
+                        : s.quest.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: s.done
+                          ? AppColors.primary
+                          : context.appTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (!s.done && s.quest.target > 1) ...[
+                        SizedBox(
+                          width: 90,
+                          child: SpringProgressBar(
+                            value: s.progress / s.quest.target,
+                            height: 6,
+                            color: AppColors.primary,
+                            backgroundColor:
+                                context.appBorder.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('${s.progress}/${s.quest.target}',
+                            style: AppTypography.caption.copyWith(
+                                color: context.appTextSecondary)),
+                        const SizedBox(width: 10),
+                      ] else if (!s.done) ...[
+                        Text('+${s.quest.bonus} pts',
+                            style: AppTypography.caption.copyWith(
+                                color: context.appTextSecondary)),
+                        const SizedBox(width: 10),
+                      ],
+                      // Weekly chain: 5 dots toward the chest. No red, ever.
+                      for (var i = 0;
+                          i < QuestService.chestChainTarget;
+                          i++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 3),
+                          child: Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: i < s.weekCount
+                                  ? AppColors.rewardsGold
+                                  : context.appBorder
+                                      .withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (s.chestReady)
+              TextButton(
+                onPressed: _openChest,
+                child: const Text('🎁 OPEN'),
+              )
+            else if (s.done)
+              const Icon(Icons.check_circle_rounded,
+                  color: AppColors.primary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Goldilocks coach suggestion — the quietest banner in the attention slot.
 /// Tap opens the task's edit form; X mutes the coach for the day.
 class _CoachBanner extends StatelessWidget {
@@ -909,6 +1094,7 @@ class _CoachBanner extends StatelessWidget {
   final VoidCallback onDismiss;
 
   const _CoachBanner({
+    super.key,
     required this.suggestion,
     required this.onTap,
     required this.onDismiss,

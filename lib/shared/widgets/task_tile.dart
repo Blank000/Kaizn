@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +16,7 @@ import '../models/recurrence_rule.dart';
 import '../providers/active_timer_provider.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
+import 'moment_celebrations.dart';
 import 'reward_unlock_snackbar.dart';
 import 'stop_timer_sheet.dart';
 
@@ -204,6 +207,8 @@ class _TaskTileState extends ConsumerState<TaskTile>
   bool _showFloater = false;
   // Points shown by the +N floater — the ACTUAL award (tiny wins are half).
   int _floaterPoints = 0;
+  // Gold-tint the floater when the completion earned a clutch bonus.
+  bool _floaterClutch = false;
 
   bool get _isChecked => widget.rowState.isChecked;
   bool get _isMissed => widget.rowState.isMissed;
@@ -334,22 +339,35 @@ class _TaskTileState extends ConsumerState<TaskTile>
                       : t > 0.7
                           ? ((1 - t) / 0.3).clamp(0.0, 1.0)
                           : 1.0;
+                  // Ease-out rise (energy released by the tap) + a quick
+                  // scale pop in the first ~120ms — linear motion reads as
+                  // mechanical; this reads as earned.
+                  final rise = Curves.easeOutCubic.transform(t);
+                  final pop = t < 0.13
+                      ? 0.7 + 0.3 * Curves.easeOut.transform(t / 0.13)
+                      : 1.0;
+                  final isClutch = _floaterClutch;
                   return Opacity(
                     opacity: opacity,
                     child: Transform.translate(
-                      offset: Offset(0, -30 * t),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '+$_floaterPoints',
-                          style: AppTypography.caption.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+                      offset: Offset(0, -34 * rise),
+                      child: Transform.scale(
+                        scale: pop,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isClutch
+                                ? AppColors.rewardsGold
+                                : AppColors.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '+$_floaterPoints${isClutch ? ' ⚡' : ''}',
+                            style: AppTypography.caption.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
@@ -401,6 +419,7 @@ class _TaskTileState extends ConsumerState<TaskTile>
     HapticFeedback.mediumImpact();
     if (result.basePoints > 0 && mounted) {
       _floaterPoints = result.basePoints + result.clutchBonus;
+      _floaterClutch = result.clutchBonus > 0;
       _triggerFloater();
     }
 
@@ -414,6 +433,10 @@ class _TaskTileState extends ConsumerState<TaskTile>
     // event post: completing a one-shot removes it from the active-tasks
     // stream and disposes this tile before we get here — the UNDO snackbar
     // must survive that.
+    // Dialog-tier moments first (streak milestone / PB / level-up) — they
+    // outrank every snackbar.
+    if (mounted) await surfaceDialogMoments(context, result);
+
     if (mounted && result.hasCelebration) {
       showAchievementSnackbar(
         context,
@@ -433,6 +456,8 @@ class _TaskTileState extends ConsumerState<TaskTile>
         nextStackedTaskName: result.stackedNext.firstOrNull?.name,
         identityLine: result.identityLine,
         undoCompletionId: result.completionId,
+        streakDay: result.streakDay,
+        questBonus: result.questCompleted?.bonus ?? 0,
       ));
     }
   }
@@ -610,16 +635,19 @@ class _TaskTileState extends ConsumerState<TaskTile>
     final CompletionResult result;
     if (chip.isToday) {
       result = await TaskCompletionService.completeToday(db, widget.task);
-      HapticFeedback.mediumImpact();
-      if (result.basePoints > 0 && mounted) {
-        _floaterPoints = result.basePoints + result.clutchBonus;
-        _triggerFloater();
-      }
     } else {
       result = await TaskCompletionService.completeOn(
           db, widget.task, chip.date);
-      HapticFeedback.mediumImpact();
     }
+    HapticFeedback.mediumImpact();
+    // Retro chips earn the floater too — points are points.
+    if (result.basePoints > 0 && mounted) {
+      _floaterPoints = result.basePoints + result.clutchBonus;
+      _floaterClutch = result.clutchBonus > 0;
+      _triggerFloater();
+    }
+
+    if (mounted) await surfaceDialogMoments(context, result);
 
     if (mounted && result.hasCelebration) {
       showAchievementSnackbar(
@@ -639,18 +667,56 @@ class _TaskTileState extends ConsumerState<TaskTile>
         nextStackedTaskName: result.stackedNext.firstOrNull?.name,
         identityLine: result.identityLine,
         undoCompletionId: result.completionId,
+        streakDay: result.streakDay,
+        questBonus: result.questCompleted?.bonus ?? 0,
       ));
     }
   }
 }
 
-class _CheckButton extends StatelessWidget {
+/// The most-tapped widget in the app, so it gets real motion: tapDown squish
+/// (instant, <16ms feedback), elastic overshoot on release, the icon scaling
+/// in instead of popping, and a one-shot radial dot-burst on completion.
+class _CheckButton extends StatefulWidget {
   final TaskRowState rowState;
   final VoidCallback onTap;
   const _CheckButton({required this.rowState, required this.onTap});
 
   @override
+  State<_CheckButton> createState() => _CheckButtonState();
+}
+
+class _CheckButtonState extends State<_CheckButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _burstCtrl;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _burstCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 380));
+  }
+
+  @override
+  void didUpdateWidget(_CheckButton old) {
+    super.didUpdateWidget(old);
+    // Fire the burst when the state BECOMES checked (from any surface — tap,
+    // notification, timer — the stream update lands here either way).
+    if (!old.rowState.isChecked && widget.rowState.isChecked) {
+      _burstCtrl.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _burstCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final rowState = widget.rowState;
     final Color fill;
     final Color border;
     final IconData? icon;
@@ -671,30 +737,92 @@ class _CheckButton extends StatelessWidget {
       border = context.appBorder;
       icon = null;
     }
+
     return SizedBox(
       width: 44,
       height: 44,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
         borderRadius: BorderRadius.circular(22),
-        child: Center(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: fill,
-              border: Border.all(color: border, width: 2),
-              shape: BoxShape.circle,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _burstCtrl,
+              builder: (_, __) => _burstCtrl.isAnimating
+                  ? CustomPaint(
+                      size: const Size(44, 44),
+                      painter: _BurstPainter(
+                        progress: _burstCtrl.value,
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
-            child: icon != null
-                ? Icon(icon, size: 18, color: Colors.white)
-                : null,
-          ),
+            AnimatedScale(
+              // Squish on press; elastic settle back with slight overshoot.
+              scale: _pressed ? 0.85 : 1.0,
+              duration: _pressed
+                  ? const Duration(milliseconds: 60)
+                  : const Duration(milliseconds: 350),
+              curve: _pressed ? Curves.easeOut : Curves.elasticOut,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: fill,
+                  border: Border.all(color: border, width: 2),
+                  shape: BoxShape.circle,
+                ),
+                child: icon != null
+                    ? AnimatedScale(
+                        scale: 1.0,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutBack,
+                        child: Icon(icon, size: 18, color: Colors.white),
+                      )
+                    : null,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+/// One-shot radial burst: 8 dots flying outward, shrinking and fading.
+class _BurstPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  _BurstPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final eased = Curves.easeOutCubic.transform(progress);
+    final radius = 8.0 + 16.0 * eased;
+    final dotR = 2.4 * (1 - progress);
+    final paint = Paint()
+      ..color = color.withValues(alpha: (1 - progress).clamp(0.0, 1.0));
+    final gold = Paint()
+      ..color = AppColors.rewardsGold
+          .withValues(alpha: (1 - progress).clamp(0.0, 1.0));
+    for (var i = 0; i < 8; i++) {
+      final angle = i * math.pi / 4;
+      final p = center +
+          Offset(radius * math.cos(angle), radius * math.sin(angle));
+      canvas.drawCircle(p, dotR, i.isEven ? paint : gold);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BurstPainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 class _DayChipWidget extends StatelessWidget {

@@ -4,8 +4,11 @@ import '../../features/rewards/reward_unlock_service.dart';
 import '../../shared/models/recurrence_rule.dart';
 import '../database/database.dart';
 import 'achievement_service.dart';
+import 'cosmetics_service.dart';
 import 'identity_voice.dart';
+import 'level_service.dart';
 import 'notification_scheduler.dart';
+import 'quest_service.dart';
 import 'streak_service.dart';
 import 'timer_service.dart';
 
@@ -27,6 +30,27 @@ class CompletionResult {
   final List<Reward> unlockedRewards;
   final String? identityLine;
 
+  /// Streak value after this completion, set only when THIS completion
+  /// advanced the streak (the day's first real one) — drives the '🔥 Day N'
+  /// snackbar segment.
+  final int? streakDay;
+
+  /// Streak milestone (7/30/…) crossed by this completion — same-day
+  /// celebration instead of tomorrow-morning's popup.
+  final int? streakMilestone;
+
+  /// This completion set a new all-time longest streak.
+  final bool isNewBestStreak;
+
+  /// Non-null when this completion's points crossed a level threshold.
+  final LevelInfo? levelUp;
+
+  /// Cosmetic unlocked by the level-up (every 3rd level), if any.
+  final Cosmetic? cosmeticUnlocked;
+
+  /// The daily quest this completion finished, if any (bonus already banked).
+  final Quest? questCompleted;
+
   const CompletionResult({
     required this.completionId,
     required this.basePoints,
@@ -37,11 +61,18 @@ class CompletionResult {
     this.completionBadges = const [],
     this.unlockedRewards = const [],
     this.identityLine,
+    this.streakDay,
+    this.streakMilestone,
+    this.isNewBestStreak = false,
+    this.levelUp,
+    this.cosmeticUnlocked,
+    this.questCompleted,
   });
 
   /// Whether a celebration surface (badge / reward snackbar) should win over
   /// the plain "Logged X + UNDO" feedback. Mirrors the celebration-beats-UNDO
-  /// rule documented in app.dart.
+  /// rule documented in app.dart. Dialog-tier moments (streak milestone, PB,
+  /// level-up) are surfaced separately by callers BEFORE this check.
   bool get hasCelebration =>
       streakBadges.isNotEmpty ||
       completionBadges.isNotEmpty ||
@@ -84,7 +115,17 @@ class TaskCompletionService {
 
     final outcome = await db.completeTaskNow(task,
         durationSeconds: attachSeconds, tiny: tiny);
-    final streakBadges = await StreakService.recordDayLogged(db);
+    final streakAdvance = await StreakService.recordDayLogged(db);
+
+    // Quest progress rides every completion (bonus banked inside when the
+    // quest crosses its target).
+    Quest? questCompleted;
+    if (celebrationChecks) {
+      final allTasks = await db.getAllActiveTasks();
+      final recent =
+          await db.getRecentCompletions(const Duration(days: 45));
+      questCompleted = await QuestService.onCompletion(db, allTasks, recent);
+    }
 
     var completionBadges = const <AchievementBadge>[];
     var unlockedRewards = const <Reward>[];
@@ -93,7 +134,17 @@ class TaskCompletionService {
       unlockedRewards = await RewardUnlockService.checkAfterPointsChange(db);
     }
 
-    final hasCelebration = streakBadges.isNotEmpty ||
+    // Lifetime level check — on EARNED points, so reward claims can never
+    // de-level. Every 3rd level drops the next cosmetic.
+    final lifetime = await db.getLifetimeEarnedPoints();
+    final levelUp = await LevelService.checkAndSaveLevelUp(lifetime);
+    Cosmetic? cosmeticUnlocked;
+    if (levelUp != null) {
+      cosmeticUnlocked =
+          await CosmeticsService.maybeUnlockForLevel(levelUp.level);
+    }
+
+    final hasCelebration = streakAdvance.badges.isNotEmpty ||
         completionBadges.isNotEmpty ||
         unlockedRewards.isNotEmpty;
     final identityLine =
@@ -111,11 +162,17 @@ class TaskCompletionService {
       basePoints: outcome.basePoints,
       clutchBonus: outcome.clutchBonus,
       attachedDurationSeconds: attachSeconds,
-      streakBadges: streakBadges,
+      streakBadges: streakAdvance.badges,
       completionBadges: completionBadges,
       unlockedRewards: unlockedRewards,
       identityLine: identityLine,
       stackedNext: stackedNext,
+      streakDay: streakAdvance.advancedTo,
+      streakMilestone: streakAdvance.milestoneHit,
+      isNewBestStreak: streakAdvance.isNewBest,
+      levelUp: levelUp,
+      cosmeticUnlocked: cosmeticUnlocked,
+      questCompleted: questCompleted,
     );
   }
 

@@ -57,10 +57,22 @@ class AppColors {
     Color(0xFF93A1B5),  // 7 — slate
   ];
 
+  /// Cosmetic-unlock extras (indexes 8+). Rendering ALWAYS resolves any
+  /// stored index safely; only the picker gates these behind unlocks.
+  static const List<Color> milestonePaletteExtras = [
+    Color(0xFF00BCD4), // 8 — Lagoon (cosmetic: palette_lagoon)
+    Color(0xFF7C4DFF), // 9 — Violet Storm (cosmetic: palette_violet)
+  ];
+
+  static const List<Color> milestonePaletteFull = [
+    ...milestonePalette,
+    ...milestonePaletteExtras,
+  ];
+
   static Color milestoneColor(int index) {
-    if (index < 0 || index >= milestonePalette.length) {
-      return milestonePalette[0];
+    if (index < 0 || index >= milestonePaletteFull.length) {
+      return milestonePaletteFull[0];
     }
-    return milestonePalette[index];
+    return milestonePaletteFull[index];
   }
 }

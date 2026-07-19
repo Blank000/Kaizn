@@ -75,6 +75,13 @@ class TaskActionEvent extends AppEvent {
   /// For [TaskActionKind.snooze] only — when the re-fire is scheduled.
   final DateTime? snoozedUntil;
 
+  /// Streak value when THIS action advanced the streak (day's first real
+  /// completion) — renders the '🔥 Day N' segment.
+  final int? streakDay;
+
+  /// Daily-quest bonus banked by this completion, if it finished the quest.
+  final int questBonus;
+
   const TaskActionEvent({
     required this.kind,
     required this.taskId,
@@ -86,5 +93,7 @@ class TaskActionEvent extends AppEvent {
     this.identityLine,
     this.undoCompletionId,
     this.snoozedUntil,
+    this.streakDay,
+    this.questBonus = 0,
   });
 }
