@@ -14,6 +14,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
 import '../../../shared/models/recurrence_rule.dart';
+import '../../../shared/models/task_stack.dart';
 import '../../../shared/providers/database_provider.dart';
 import '../../../shared/widgets/achievement_snackbar.dart';
 import '../../../shared/widgets/reward_unlock_snackbar.dart';
@@ -144,19 +145,61 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
         ref.watch(activeMilestonesProvider).valueOrNull ?? [];
     final milestoneById = {for (final m in milestones) m.id: m};
 
+    final taskById = {for (final t in tasks) t.id: t};
+    final childrenByAnchor = stackChildrenByAnchor(tasks);
+
+    bool hasCompletionToday(String taskId) => completions.any((c) =>
+        c.taskId == taskId &&
+        c.completedOn.year == _now.year &&
+        c.completedOn.month == _now.month &&
+        c.completedOn.day == _now.day);
+
+    // "Due today" in the loose sense queues care about: scheduled today per
+    // recurrence, OR an undated active one-shot (those surface daily).
+    bool dueTodayLoose(Task t) =>
+        _isDueToday(t, _now) ||
+        (t.recurrence == TaskRecurrence.none &&
+            t.status == TaskStatus.active &&
+            t.dueDate == null);
+
+    // Queue member of today's chain: due today and not yet resolved.
+    bool inTodaysQueue(Task c) {
+      if (hasCompletionToday(c.id)) return false;
+      return dueTodayLoose(c);
+    }
+
+    // Waiting queue members are represented inside their anchor's merged
+    // block — keep them out of the Anytime tray.
+    bool waitingOnAnchor(Task t) {
+      if (!isQueueMember(t)) return false;
+      final anchor = taskById[t.stackedAfterTaskId];
+      if (anchor == null) return false;
+      if (!dueTodayLoose(anchor)) return false;
+      return !hasCompletionToday(anchor.id);
+    }
+
     final scheduled = <_TimelineEntry>[];
     final anytime = <_TimelineEntry>[];
 
     for (final task in tasks) {
-      if (!_isDueToday(task, _now)) continue;
+      final ridesAnchor = task.recurrence == TaskRecurrence.none &&
+          task.dueDate == null &&
+          isQueueMember(task);
+      if (!_isDueToday(task, _now) && !ridesAnchor) continue;
       final rowState = taskRowStateFor(task, completions);
+      final queue = task.startMinute == null
+          ? const <Task>[]
+          : queueBehind(task, childrenByAnchor, inTodaysQueue);
       final entry = _TimelineEntry(
         task: task,
         rowState: rowState,
         milestone: milestoneById[task.milestoneId],
+        queueCount: queue.length,
+        queueExtraMinutes:
+            queue.fold<int>(0, (sum, t) => sum + t.durationMinutes),
       );
       if (task.startMinute == null) {
-        anytime.add(entry);
+        if (!waitingOnAnchor(task)) anytime.add(entry);
       } else {
         scheduled.add(entry);
       }
@@ -212,10 +255,18 @@ class _TimelineEntry {
   final Task task;
   final TaskRowState rowState;
   final Milestone? milestone;
+
+  /// Habit-stack queue behind this task (today's unresolved members only).
+  /// A scheduled anchor's block spans its own duration + the queue's.
+  final int queueCount;
+  final int queueExtraMinutes;
+
   _TimelineEntry({
     required this.task,
     required this.rowState,
     this.milestone,
+    this.queueCount = 0,
+    this.queueExtraMinutes = 0,
   });
 }
 
@@ -481,8 +532,11 @@ class _TimeGrid extends StatelessWidget {
                         (e.task.startMinute ?? 0) * _pxPerMinute,
                     // 32 fits one line of the task name comfortably; the card
                     // itself drops the time-range subtitle if it's still too
-                    // short for both lines.
-                    height: (effectiveDuration(e.task) * _pxPerMinute)
+                    // short for both lines. Queue anchors span their whole
+                    // chain's total time.
+                    height: ((effectiveDuration(e.task) +
+                                e.queueExtraMinutes) *
+                            _pxPerMinute)
                         .clamp(32.0, double.infinity),
                     child: _TimelineTaskCard(
                       entry: e,
@@ -727,8 +781,12 @@ class _CardSurface extends StatelessWidget {
     final accent = _accent(context);
     final bg = _bg(context);
     final start = task.startMinute ?? 0;
-    final timeRange =
-        '${_fmt(start)} – ${_fmt(start + effectiveDurationMinutes)}';
+    // Queue anchors display the whole chain: name badge + total time span.
+    final totalMinutes = effectiveDurationMinutes + entry.queueExtraMinutes;
+    final displayName = entry.queueCount > 0
+        ? '🔗 ${task.name} +${entry.queueCount}'
+        : task.name;
+    final timeRange = '${_fmt(start)} – ${_fmt(start + totalMinutes)}';
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
       decoration: BoxDecoration(
@@ -757,7 +815,7 @@ class _CardSurface extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  task.name,
+                  displayName,
                   style: AppTypography.body.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,

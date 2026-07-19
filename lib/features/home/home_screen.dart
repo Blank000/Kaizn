@@ -15,6 +15,7 @@ import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/task_tile.dart';
+import '../../shared/models/task_stack.dart';
 import '../../shared/providers/active_timer_provider.dart';
 import '../milestones/widgets/task_form_sheet.dart';
 import '../rewards/claim_flow.dart';
@@ -133,19 +134,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final taskById = {for (final t in tasks) t.id: t};
     final now = DateTime.now();
 
-    // Habit stacking: a task is "waiting" while its anchor is due today and
-    // unresolved (no completion of any kind yet). Waiting tasks sink to the
-    // bottom of Up next and carry a 🔗 meta line — a suggestion, never a lock.
+    // "Due today" in the loose sense queues care about: scheduled today per
+    // recurrence, OR an undated active one-shot (those surface daily).
+    bool dueTodayLoose(Task t) =>
+        _isScheduledToday(t, now) ||
+        (t.recurrence == TaskRecurrence.none &&
+            t.status == TaskStatus.active &&
+            t.dueDate == null);
+
+    // Habit stacking: a queue member is "waiting" while its anchor is due
+    // today and unresolved (no completion of any kind yet). Waiting tasks
+    // are HIDDEN from Up next — only the head of each queue is actionable;
+    // the next link pops in the moment the head resolves.
     bool waitingOnAnchor(Task t) {
-      final anchorId = t.stackedAfterTaskId;
-      if (anchorId == null) return false;
-      final anchor = taskById[anchorId];
+      if (!isQueueMember(t)) return false;
+      final anchor = taskById[t.stackedAfterTaskId];
       if (anchor == null) return false; // dangling ref (restored backup)
-      if (!_isScheduledToday(anchor, now)) return false;
+      if (!dueTodayLoose(anchor)) return false;
       final anchorToday = _completionsTodayFor(anchor.id, completions, now);
       return anchorToday.real == null &&
           anchorToday.skip == null &&
           anchorToday.nd == null;
+    }
+
+    // Queue lookups for head tiles ("+2 in queue · ~45m") and the honest
+    // progress denominator.
+    final childrenByAnchor = stackChildrenByAnchor(tasks);
+    bool inTodaysQueue(Task c) {
+      final cToday = _completionsTodayFor(c.id, completions, now);
+      if (cToday.real != null || cToday.skip != null || cToday.nd != null) {
+        return false;
+      }
+      return dueTodayLoose(c);
     }
 
     // Whether [t] belongs on today's list. Beyond the recurrence rule,
@@ -170,6 +190,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final doneToday = <_TodayItem>[];
     final skippedToday = <_TodayItem>[];
     final missedToday = <_TodayItem>[];
+    // Queue members hidden behind an unresolved anchor — invisible in Up
+    // next, but still today's work for the progress denominator.
+    var hiddenQueuedCount = 0;
 
     for (final t in tasks) {
       final today = _completionsTodayFor(t.id, completions, now);
@@ -197,14 +220,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           periodState.isMissed ||
           periodState.isSkipped) continue;
       if (surfacesToday(t)) {
-        upNext.add(_TodayItem(t, const TaskRowState()));
+        if (waitingOnAnchor(t)) {
+          hiddenQueuedCount++;
+        } else {
+          upNext.add(_TodayItem(t, const TaskRowState()));
+        }
       }
     }
 
     // Skipped tasks are removed from today's load. Missed tasks stay on the
-    // count (they were scheduled and not done).
-    final totalScheduled =
-        upNext.length + doneToday.length + missedToday.length;
+    // count (they were scheduled and not done), and so do queued tasks
+    // hidden behind their anchor.
+    final totalScheduled = upNext.length +
+        doneToday.length +
+        missedToday.length +
+        hiddenQueuedCount;
     final allDone = totalScheduled > 0 &&
         upNext.isEmpty &&
         missedToday.isEmpty &&
@@ -316,23 +346,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           else ...[
             if (upNext.isNotEmpty) ...[
               _SectionHeader('Up next today'),
-              // Stable partition: anchor-satisfied tasks first, ones still
-              // waiting on their stack anchor last.
-              ...[
-                ...upNext.where((it) => !waitingOnAnchor(it.task)),
-                ...upNext.where((it) => waitingOnAnchor(it.task)),
-              ].map((it) => TaskTile(
-                    task: it.task,
-                    rowState: it.rowState,
-                    weeklyChips: weeklyChipsFor(it.task, completions),
-                    meta: _metaForHome(
-                      it.task,
-                      milestoneById[it.task.milestoneId],
-                      it.rowState,
-                      anchorName:
-                          taskById[it.task.stackedAfterTaskId]?.name,
-                    ),
-                  )),
+              // Queue members waiting on an anchor are hidden — each tile
+              // here is actionable NOW. Heads of queues show what's behind
+              // them instead ("+2 in queue · ~45m").
+              ...upNext.map((it) {
+                final queue =
+                    queueBehind(it.task, childrenByAnchor, inTodaysQueue);
+                return TaskTile(
+                  task: it.task,
+                  rowState: it.rowState,
+                  weeklyChips: weeklyChipsFor(it.task, completions),
+                  meta: _metaForHome(
+                    it.task,
+                    milestoneById[it.task.milestoneId],
+                    it.rowState,
+                    anchorName: taskById[it.task.stackedAfterTaskId]?.name,
+                    queueCount: queue.length,
+                    queueMinutes: queue.isEmpty
+                        ? null
+                        : queueTotalMinutes(it.task, queue),
+                  ),
+                );
+              }),
             ],
             if (doneToday.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -450,12 +485,17 @@ String _cadenceLabel(Task task) => switch (task.recurrence) {
     };
 
 String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState,
-    {String? anchorName}) {
+    {String? anchorName, int queueCount = 0, int? queueMinutes}) {
   final parts = <String>[];
   if (milestone != null) parts.add(milestone.name);
   parts.add(_cadenceLabel(task));
   parts.add('${task.pointsPerCompletion} pts');
-  if (anchorName != null) parts.add('🔗 After $anchorName');
+  if (queueCount > 0) {
+    parts.add('🔗 +$queueCount in queue'
+        '${queueMinutes == null ? '' : ' · ~${formatQueueMinutes(queueMinutes)}'}');
+  } else if (anchorName != null) {
+    parts.add('🔗 After $anchorName');
+  }
   if (rowState.isMissed) {
     parts.add('Missed today');
   } else if (rowState.isSkipped) {

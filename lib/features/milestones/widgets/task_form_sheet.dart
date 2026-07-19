@@ -280,8 +280,12 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final dueDate = _frequency == TaskRecurrence.none ? _dueDate : null;
     final rule = _buildRule();
     final cfg = rule?.toJsonString();
-    final startMin =
-        _startTime == null ? null : _startTime!.hour * 60 + _startTime!.minute;
+    // Queued tasks have no time of day — their start IS "when the anchor
+    // finishes". They keep a duration; the anchor's timeline block spans
+    // the whole queue's total.
+    final startMin = (_stackedAfterTaskId != null || _startTime == null)
+        ? null
+        : _startTime!.hour * 60 + _startTime!.minute;
     // Persist the override only; a null reminderMinute with reminderEnabled on
     // means "follow the start time".
     final reminderMin = _reminderOverride == null
@@ -654,6 +658,34 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   }
 
   Widget _buildScheduleTimeRow() {
+    // Queued tasks: no time-of-day picker, just "how long does it take" —
+    // the duration feeds the anchor's merged timeline block.
+    if (_stackedAfterTaskId != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Takes about', style: AppTypography.caption),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _DurationStepper(
+                minutes: _durationMinutes,
+                onChanged: (v) => setState(() => _durationMinutes = v),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Runs whenever you finish its anchor — no start time needed',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     final has = _startTime != null;
     final timeLabel = has
         ? _startTime!.format(context)
@@ -999,8 +1031,11 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
       ),
     );
     if (picked == null) return; // dismissed
-    setState(() =>
-        _stackedAfterTaskId = picked == '__none__' ? null : picked);
+    setState(() {
+      _stackedAfterTaskId = picked == '__none__' ? null : picked;
+      // A queued task has no time of day of its own.
+      if (_stackedAfterTaskId != null) _startTime = null;
+    });
   }
 
   Widget _buildDueDatePicker() {
