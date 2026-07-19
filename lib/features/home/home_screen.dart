@@ -149,16 +149,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // Whether [t] belongs on today's list. Beyond the recurrence rule,
-    // stacked one-shots with no due date ride their anchor's schedule —
-    // otherwise "Journal after Meditate" would never appear anywhere.
+    // one-shot tasks with no due date surface every day until they're done —
+    // a captured task must never be invisible. Stacked undated one-shots
+    // ride their anchor's schedule instead (they belong to the anchor's
+    // days); a dangling anchor falls back to always-surface.
     bool surfacesToday(Task t) {
       if (_isScheduledToday(t, now)) return true;
       if (t.recurrence == TaskRecurrence.none &&
           t.status == TaskStatus.active &&
-          t.dueDate == null &&
-          t.stackedAfterTaskId != null) {
-        final anchor = taskById[t.stackedAfterTaskId];
-        return anchor != null && _isScheduledToday(anchor, now);
+          t.dueDate == null) {
+        final anchorId = t.stackedAfterTaskId;
+        if (anchorId == null) return true;
+        final anchor = taskById[anchorId];
+        return anchor == null || _isScheduledToday(anchor, now);
       }
       return false;
     }
@@ -437,10 +440,20 @@ bool _isScheduledToday(Task task, DateTime today) {
   return RecurrenceRule.fromTask(task).isDueOn(today);
 }
 
+/// Short cadence hint so a glance tells recurring habits and one-time tasks
+/// apart on the Home list.
+String _cadenceLabel(Task task) => switch (task.recurrence) {
+      TaskRecurrence.none => 'Once',
+      TaskRecurrence.daily => 'Daily',
+      TaskRecurrence.weekly => 'Weekly',
+      TaskRecurrence.monthly => 'Monthly',
+    };
+
 String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState,
     {String? anchorName}) {
   final parts = <String>[];
   if (milestone != null) parts.add(milestone.name);
+  parts.add(_cadenceLabel(task));
   parts.add('${task.pointsPerCompletion} pts');
   if (anchorName != null) parts.add('🔗 After $anchorName');
   if (rowState.isMissed) {
