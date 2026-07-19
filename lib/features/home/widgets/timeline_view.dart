@@ -33,7 +33,11 @@ const double _resizeHandleHeight = 14;
 const double _minResizableCardHeight = 40;
 
 class TimelineView extends ConsumerStatefulWidget {
-  const TimelineView({super.key});
+  /// Which day to render. Null = live today (now-indicator, interactive).
+  /// A past date renders that day's record read-only.
+  final DateTime? date;
+
+  const TimelineView({super.key, this.date});
 
   @override
   ConsumerState<TimelineView> createState() => _TimelineViewState();
@@ -66,11 +70,17 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     super.dispose();
   }
 
-  void _maybeAutoScroll() {
+  @override
+  void didUpdateWidget(TimelineView old) {
+    super.didUpdateWidget(old);
+    // Re-run the initial scroll when the viewed date changes.
+    if (old.date != widget.date) _autoScrolled = false;
+  }
+
+  void _maybeAutoScroll(int anchorMinute) {
     if (_autoScrolled || !_scrollCtrl.hasClients) return;
     _autoScrolled = true;
-    final nowMin = _now.hour * 60 + _now.minute;
-    final target = (nowMin - 60) * _pxPerMinute;
+    final target = (anchorMinute - 60) * _pxPerMinute;
     _scrollCtrl.jumpTo(
         target.clamp(0.0, _scrollCtrl.position.maxScrollExtent));
   }
@@ -151,16 +161,23 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final taskById = {for (final t in tasks) t.id: t};
     final childrenByAnchor = stackChildrenByAnchor(tasks);
 
+    final today = DateTime(_now.year, _now.month, _now.day);
+    final day = widget.date == null
+        ? today
+        : DateTime(
+            widget.date!.year, widget.date!.month, widget.date!.day);
+    final isToday = day.isAtSameMomentAs(today);
+
     bool hasCompletionToday(String taskId) => completions.any((c) =>
         c.taskId == taskId &&
-        c.completedOn.year == _now.year &&
-        c.completedOn.month == _now.month &&
-        c.completedOn.day == _now.day);
+        c.completedOn.year == day.year &&
+        c.completedOn.month == day.month &&
+        c.completedOn.day == day.day);
 
     // "Due today" in the loose sense queues care about: scheduled today per
     // recurrence, OR an undated active one-shot (those surface daily).
     bool dueTodayLoose(Task t) =>
-        _isDueToday(t, _now) ||
+        _isDueToday(t, day) ||
         (t.recurrence == TaskRecurrence.none &&
             t.status == TaskStatus.active &&
             t.dueDate == null);
@@ -185,25 +202,27 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final anytime = <_TimelineEntry>[];
 
     for (final task in tasks) {
-      // Undated active one-shots surface daily (parity with Home) — queued
-      // ones get hidden further down while their anchor is unresolved.
+      // Undated active one-shots surface daily (parity with Home; live day
+      // only — for past days, only what was actually due or logged shows).
       final undatedActiveOneShot = task.recurrence == TaskRecurrence.none &&
           task.status == TaskStatus.active &&
           task.dueDate == null;
-      // One-shots finished today stay visible, crossed out, until midnight;
-      // on later days they drop off the timeline.
-      final finishedToday = task.recurrence == TaskRecurrence.none &&
-          task.status == TaskStatus.completed &&
-          hasCompletionToday(task.id);
-      if (!_isDueToday(task, _now) &&
-          !undatedActiveOneShot &&
-          !finishedToday) {
+      // Anything with a completion row on the viewed day belongs on that
+      // day's record (incl. one-shots finished that day, crossed out).
+      final loggedOnDay = hasCompletionToday(task.id);
+      if (!_isDueToday(task, day) &&
+          !loggedOnDay &&
+          !(isToday && undatedActiveOneShot)) {
         continue;
       }
-      final rowState = taskRowStateFor(task, completions);
-      final queue = task.startMinute == null
-          ? const <Task>[]
-          : queueBehind(task, childrenByAnchor, inTodaysQueue);
+      // Live day uses rule-period semantics; past days show exactly what
+      // was logged on that date.
+      final rowState = isToday
+          ? taskRowStateFor(task, completions)
+          : _rowStateOn(task, completions, day);
+      final queue = (isToday && task.startMinute != null)
+          ? queueBehind(task, childrenByAnchor, inTodaysQueue)
+          : const <Task>[];
       final entry = _TimelineEntry(
         task: task,
         rowState: rowState,
@@ -213,31 +232,46 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             queue.fold<int>(0, (sum, t) => sum + t.durationMinutes),
       );
       if (task.startMinute == null) {
-        if (!waitingOnAnchor(task)) anytime.add(entry);
+        if (!isToday || !waitingOnAnchor(task)) anytime.add(entry);
       } else {
         scheduled.add(entry);
       }
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
+    // Live day scrolls to "now"; a past day scrolls to its first scheduled
+    // block (or 8 AM when the day had none).
+    final scrollAnchor = isToday
+        ? _now.hour * 60 + _now.minute
+        : scheduled
+                .map((e) => e.task.startMinute ?? 8 * 60)
+                .fold<int?>(null, (m, v) => m == null || v < m ? v : m) ??
+            8 * 60;
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _maybeAutoScroll(scrollAnchor));
 
     if (scheduled.isEmpty && anytime.isEmpty) {
       return const _EmptyTimeline();
     }
 
+    // Past days are a read-only record — scrolling stays, but no drag,
+    // resize, toggle, or long-press (readOnly threads down to cards/chips).
+    // Deliberate retro-logging lives in the weekly chips on the list view.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Anytime tray is always rendered so it can accept "drag-to-unschedule"
-        // even when there are currently no untimed tasks.
+        // Anytime tray is always rendered so it can accept
+        // "drag-to-unschedule" even when there are no untimed tasks.
         _AnytimeTray(
           entries: anytime,
+          readOnly: !isToday,
           onAccept: _unscheduleTask,
         ),
         Expanded(
           child: _TimeGrid(
             scheduled: scheduled,
             now: _now,
+            showNowIndicator: isToday,
+            readOnly: !isToday,
             scrollCtrl: _scrollCtrl,
             gridKey: _gridKey,
             resizeTaskId: _resizeTaskId,
@@ -251,6 +285,31 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
       ],
     );
   }
+}
+
+/// Row state for a specific past date: exactly what was logged on that day.
+TaskRowState _rowStateOn(
+    Task task, List<TaskCompletion> completions, DateTime day) {
+  TaskCompletion? real;
+  TaskCompletion? skip;
+  TaskCompletion? nd;
+  for (final c in completions) {
+    if (c.taskId != task.id) continue;
+    if (c.completedOn.year != day.year ||
+        c.completedOn.month != day.month ||
+        c.completedOn.day != day.day) {
+      continue;
+    }
+    if (c.isSkip) {
+      skip ??= c;
+    } else if (c.isNd) {
+      nd ??= c;
+    } else {
+      real ??= c;
+    }
+  }
+  return TaskRowState(
+      checkedCompletion: real, skipCompletion: skip, ndCompletion: nd);
 }
 
 bool _isDueToday(Task task, DateTime today) {
@@ -318,8 +377,13 @@ class _EmptyTimeline extends StatelessWidget {
 
 class _AnytimeTray extends StatelessWidget {
   final List<_TimelineEntry> entries;
+  final bool readOnly;
   final Future<void> Function(Task task) onAccept;
-  const _AnytimeTray({required this.entries, required this.onAccept});
+  const _AnytimeTray({
+    required this.entries,
+    required this.onAccept,
+    this.readOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -377,8 +441,8 @@ class _AnytimeTray extends StatelessWidget {
                         itemCount: entries.length,
                         separatorBuilder: (_, __) =>
                             const SizedBox(width: 8),
-                        itemBuilder: (_, i) =>
-                            _AnytimeChip(entry: entries[i]),
+                        itemBuilder: (_, i) => _AnytimeChip(
+                            entry: entries[i], readOnly: readOnly),
                       ),
               ),
             ],
@@ -412,13 +476,17 @@ class _EmptyTrayHint extends StatelessWidget {
 
 class _AnytimeChip extends ConsumerWidget {
   final _TimelineEntry entry;
-  const _AnytimeChip({required this.entry});
+  final bool readOnly;
+  const _AnytimeChip({required this.entry, this.readOnly = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = entry.rowState;
     final isChecked = state.isChecked;
     final body = _AnytimeChipBody(entry: entry, isChecked: isChecked);
+
+    // Past-day record: plain visual, no tap/drag.
+    if (readOnly) return body;
 
     return LongPressDraggable<Task>(
       data: entry.task,
@@ -489,6 +557,8 @@ class _AnytimeChipBody extends StatelessWidget {
 class _TimeGrid extends StatelessWidget {
   final List<_TimelineEntry> scheduled;
   final DateTime now;
+  final bool showNowIndicator;
+  final bool readOnly;
   final ScrollController scrollCtrl;
   final GlobalKey gridKey;
   final String? resizeTaskId;
@@ -501,6 +571,8 @@ class _TimeGrid extends StatelessWidget {
   const _TimeGrid({
     required this.scheduled,
     required this.now,
+    required this.showNowIndicator,
+    required this.readOnly,
     required this.scrollCtrl,
     required this.gridKey,
     required this.resizeTaskId,
@@ -554,6 +626,7 @@ class _TimeGrid extends StatelessWidget {
                         .clamp(32.0, double.infinity),
                     child: _TimelineTaskCard(
                       entry: e,
+                      readOnly: readOnly,
                       isResizing: resizeTaskId == e.task.id,
                       effectiveDurationMinutes: effectiveDuration(e.task),
                       onResizeStart: () => onResizeStart(e.task),
@@ -561,12 +634,13 @@ class _TimeGrid extends StatelessWidget {
                       onResizeEnd: onResizeEnd,
                     ),
                   ),
-                Positioned(
-                  left: 0,
-                  right: 12,
-                  top: _gridTopPadding + nowMin * _pxPerMinute - 1,
-                  child: const _NowIndicator(),
-                ),
+                if (showNowIndicator)
+                  Positioned(
+                    left: 0,
+                    right: 12,
+                    top: _gridTopPadding + nowMin * _pxPerMinute - 1,
+                    child: const _NowIndicator(),
+                  ),
               ],
             );
           },
@@ -659,6 +733,7 @@ class _NowIndicator extends StatelessWidget {
 
 class _TimelineTaskCard extends ConsumerWidget {
   final _TimelineEntry entry;
+  final bool readOnly;
   final bool isResizing;
   final int effectiveDurationMinutes;
   final VoidCallback onResizeStart;
@@ -667,6 +742,7 @@ class _TimelineTaskCard extends ConsumerWidget {
 
   const _TimelineTaskCard({
     required this.entry,
+    required this.readOnly,
     required this.isResizing,
     required this.effectiveDurationMinutes,
     required this.onResizeStart,
@@ -682,13 +758,17 @@ class _TimelineTaskCard extends ConsumerWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardHeight = constraints.maxHeight;
-        final canShowHandle = cardHeight >= _minResizableCardHeight;
+        final canShowHandle =
+            !readOnly && cardHeight >= _minResizableCardHeight;
 
         final surface = _CardSurface(
           entry: entry,
           isResizing: isResizing,
           effectiveDurationMinutes: effectiveDurationMinutes,
         );
+
+        // Past-day record: static card, no toggle/drag/resize.
+        if (readOnly) return surface;
 
         return LongPressDraggable<Task>(
           data: task,

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/services/goldilocks_service.dart';
 import '../../core/services/streak_service.dart';
+import '../../core/services/timer_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
@@ -42,18 +44,149 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _resetPopupShownThisSession = false;
   late HomeViewMode _viewMode;
 
+  // The day being viewed (date-only). Today = the normal live Home; a past
+  // date renders that day's record read-only.
+  late DateTime _viewDate;
+
   @override
   void initState() {
     super.initState();
     _viewMode = AppPrefs.homeViewModeSync == 'timeline'
         ? HomeViewMode.timeline
         : HomeViewMode.list;
+    final n = DateTime.now();
+    _viewDate = DateTime(n.year, n.month, n.day);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStreakPopup());
+  }
+
+  DateTime get _todayDate {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  bool get _viewingToday => _viewDate.isAtSameMomentAs(_todayDate);
+
+  Future<void> _pickViewDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _viewDate,
+      firstDate: _todayDate.subtract(const Duration(days: 365)),
+      lastDate: _todayDate,
+    );
+    if (picked != null) {
+      setState(() =>
+          _viewDate = DateTime(picked.year, picked.month, picked.day));
+    }
   }
 
   void _switchView(HomeViewMode mode) {
     setState(() => _viewMode = mode);
     AppPrefs.setHomeViewMode(mode == HomeViewMode.timeline ? 'timeline' : 'list');
+  }
+
+  /// Read-only record of a past day: what was done / missed / skipped, plus
+  /// recurring tasks that were scheduled but never logged. Static rows —
+  /// retro-logging stays a deliberate act (weekly chips / milestone detail).
+  Widget _buildPastDayList(
+    List<Task> tasks,
+    List<TaskCompletion> completions,
+    Map<String, Milestone> milestoneById,
+    Map<String, Task> taskById,
+  ) {
+    final done = <(Task, TaskCompletion)>[];
+    final missed = <Task>[];
+    final skipped = <Task>[];
+    final notLogged = <Task>[];
+
+    for (final t in tasks) {
+      final c = _completionsTodayFor(t.id, completions, _viewDate);
+      if (c.real != null) {
+        done.add((t, c.real!));
+      } else if (c.nd != null) {
+        missed.add(t);
+      } else if (c.skip != null) {
+        skipped.add(t);
+      } else if (t.recurrence != TaskRecurrence.none &&
+          RecurrenceRule.fromTask(t).isDueOn(_viewDate)) {
+        notLogged.add(t);
+      }
+    }
+
+    String metaFor(Task t) {
+      final parts = <String>[];
+      final m = milestoneById[t.milestoneId];
+      if (m != null) parts.add(m.name);
+      parts.add(_cadenceLabel(t));
+      return parts.join(' · ');
+    }
+
+    if (done.isEmpty &&
+        missed.isEmpty &&
+        skipped.isEmpty &&
+        notLogged.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Text(
+            'Nothing was scheduled or logged this day 🗓',
+            style: AppTypography.body
+                .copyWith(color: context.appTextSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      children: [
+        if (done.isNotEmpty) ...[
+          _SectionHeader('Done'),
+          ...done.map((e) => _ReviewRow(
+                icon: Icons.check_rounded,
+                color: AppColors.primary,
+                title: e.$1.name,
+                meta: [
+                  metaFor(e.$1),
+                  if (e.$2.pointsEarned > 0) '+${e.$2.pointsEarned} pts',
+                  if (e.$2.isTiny) '⚡ 2-min version',
+                  if (e.$2.durationSeconds != null)
+                    '⏱ ${TimerService.formatElapsed(e.$2.durationSeconds!)}',
+                ].join(' · '),
+              )),
+          const SizedBox(height: 16),
+        ],
+        if (missed.isNotEmpty) ...[
+          _SectionHeader('Missed'),
+          ...missed.map((t) => _ReviewRow(
+                icon: Icons.close_rounded,
+                color: Colors.red.shade400,
+                title: t.name,
+                meta: metaFor(t),
+              )),
+          const SizedBox(height: 16),
+        ],
+        if (skipped.isNotEmpty) ...[
+          _SectionHeader('Skipped'),
+          ...skipped.map((t) => _ReviewRow(
+                icon: Icons.remove_rounded,
+                color: context.appTextTertiary,
+                title: t.name,
+                meta: '${metaFor(t)} · Intentional rest',
+              )),
+          const SizedBox(height: 16),
+        ],
+        if (notLogged.isNotEmpty) ...[
+          _SectionHeader('Scheduled · not logged'),
+          ...notLogged.map((t) => _ReviewRow(
+                icon: Icons.radio_button_unchecked,
+                color: context.appTextTertiary,
+                title: t.name,
+                meta: metaFor(t),
+              )),
+        ],
+      ],
+    );
   }
 
   Future<void> _maybeAllDoneCelebration(int doneCount, int pointsToday) async {
@@ -240,7 +373,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         upNext.isEmpty &&
         missedToday.isEmpty &&
         doneToday.isNotEmpty;
-    if (allDone && !_allDoneCelebrationFiredThisSession) {
+    if (_viewingToday && allDone && !_allDoneCelebrationFiredThisSession) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _maybeAllDoneCelebration(doneToday.length, todayPoints);
       });
@@ -300,13 +433,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
       body: Column(
         children: [
-          _ViewToggle(value: _viewMode, onChanged: _switchView),
+          _ViewToggle(
+            value: _viewMode,
+            onChanged: _switchView,
+            viewingToday: _viewingToday,
+            onPickDate: _pickViewDate,
+          ),
+          if (!_viewingToday)
+            _DateNavStrip(
+              date: _viewDate,
+              onPrev: () => setState(() =>
+                  _viewDate = _viewDate.subtract(const Duration(days: 1))),
+              onNext: () => setState(() =>
+                  _viewDate = _viewDate.add(const Duration(days: 1))),
+              onToday: () => setState(() => _viewDate = _todayDate),
+            ),
           // The single attention-banner slot, shared by both view modes.
           // Priority: live timer > never-miss-twice (showNmtBanner already
           // yields when a timer runs). ActiveTimerBanner renders nothing
-          // when no timer is active.
+          // when no timer is active. Banners are present-tense — hidden
+          // while reviewing a past day.
           const ActiveTimerBanner(),
-          if (showNmtBanner)
+          if (_viewingToday && showNmtBanner)
             NeverMissTwiceBanner(
               currentStreak: streak?.currentStreak ?? 0,
               freshStartCopy: _resetPopupShownThisSession,
@@ -315,7 +463,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 if (mounted) setState(() {});
               },
             ),
-          if (coachSuggestion != null)
+          if (_viewingToday && coachSuggestion != null)
             _CoachBanner(
               suggestion: coachSuggestion,
               onTap: () => showTaskFormSheet(context,
@@ -328,8 +476,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           Expanded(
             child: _viewMode == HomeViewMode.timeline
-                ? const TimelineView()
-                : ListView(
+                ? TimelineView(date: _viewingToday ? null : _viewDate)
+                : !_viewingToday
+                    ? _buildPastDayList(
+                        tasks, completions, milestoneById, taskById)
+                    : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                     children: [
           _StatsHeader(
@@ -908,34 +1059,162 @@ class _NothingTodayState extends StatelessWidget {
 class _ViewToggle extends StatelessWidget {
   final HomeViewMode value;
   final ValueChanged<HomeViewMode> onChanged;
-  const _ViewToggle({required this.value, required this.onChanged});
+  final bool viewingToday;
+  final VoidCallback onPickDate;
+
+  const _ViewToggle({
+    required this.value,
+    required this.onChanged,
+    required this.viewingToday,
+    required this.onPickDate,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: SegmentedButton<HomeViewMode>(
-        // expandedInsets makes each segment fill an equal share of the
-        // available width — otherwise SegmentedButton sizes segments to their
-        // content and "Timeline" wraps to two lines. softWrap:false on the
-        // labels belt-and-suspenders that in case the layout still gets
-        // squeezed on some rotation / font-scale combo.
-        segments: const [
-          ButtonSegment(
-            value: HomeViewMode.list,
-            label: Text('List', softWrap: false, maxLines: 1),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: SegmentedButton<HomeViewMode>(
+              // expandedInsets makes each segment fill an equal share of the
+              // available width — otherwise SegmentedButton sizes segments to
+              // their content and "Timeline" wraps to two lines.
+              segments: const [
+                ButtonSegment(
+                  value: HomeViewMode.list,
+                  label: Text('List', softWrap: false, maxLines: 1),
+                ),
+                ButtonSegment(
+                  value: HomeViewMode.timeline,
+                  label: Text('Timeline', softWrap: false, maxLines: 1),
+                ),
+              ],
+              selected: {value},
+              onSelectionChanged: (s) => onChanged(s.first),
+              showSelectedIcon: false,
+              expandedInsets: EdgeInsets.zero,
+              style: const ButtonStyle(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
           ),
-          ButtonSegment(
-            value: HomeViewMode.timeline,
-            label: Text('Timeline', softWrap: false, maxLines: 1),
+          IconButton(
+            icon: Icon(
+              Icons.calendar_month_rounded,
+              color: viewingToday
+                  ? context.appTextSecondary
+                  : AppColors.primary,
+            ),
+            tooltip: 'View another day',
+            onPressed: onPickDate,
           ),
         ],
-        selected: {value},
-        onSelectionChanged: (s) => onChanged(s.first),
-        showSelectedIcon: false,
-        expandedInsets: EdgeInsets.zero,
-        style: const ButtonStyle(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+}
+
+/// Thin day-stepper shown while reviewing a past date.
+class _DateNavStrip extends StatelessWidget {
+  final DateTime date;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onToday;
+
+  const _DateNavStrip({
+    required this.date,
+    required this.onPrev,
+    required this.onNext,
+    required this.onToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left_rounded),
+            visualDensity: VisualDensity.compact,
+            onPressed: onPrev,
+          ),
+          Expanded(
+            child: Text(
+              DateFormat('EEE, MMM d').format(date),
+              textAlign: TextAlign.center,
+              style: AppTypography.body.copyWith(
+                fontWeight: FontWeight.w800,
+                color: context.appTextPrimary,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right_rounded),
+            visualDensity: VisualDensity.compact,
+            onPressed: onNext,
+          ),
+          TextButton(
+            onPressed: onToday,
+            child: const Text('TODAY'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Static row on the past-day record — deliberately non-interactive.
+class _ReviewRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String meta;
+
+  const _ReviewRow({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.meta,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 16, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body),
+                  Text(meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption
+                          .copyWith(color: context.appTextSecondary)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
