@@ -138,7 +138,10 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(activeTasksProvider).valueOrNull ?? [];
+    // All non-archived tasks — a one-shot completed today must stay on the
+    // timeline crossed-out for the rest of the day (the day's record),
+    // exactly like Home's "Done today".
+    final tasks = ref.watch(allTasksProvider).valueOrNull ?? [];
     final completions =
         ref.watch(recentCompletionsAllProvider).valueOrNull ?? [];
     final milestones =
@@ -182,10 +185,21 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final anytime = <_TimelineEntry>[];
 
     for (final task in tasks) {
-      final ridesAnchor = task.recurrence == TaskRecurrence.none &&
-          task.dueDate == null &&
-          isQueueMember(task);
-      if (!_isDueToday(task, _now) && !ridesAnchor) continue;
+      // Undated active one-shots surface daily (parity with Home) — queued
+      // ones get hidden further down while their anchor is unresolved.
+      final undatedActiveOneShot = task.recurrence == TaskRecurrence.none &&
+          task.status == TaskStatus.active &&
+          task.dueDate == null;
+      // One-shots finished today stay visible, crossed out, until midnight;
+      // on later days they drop off the timeline.
+      final finishedToday = task.recurrence == TaskRecurrence.none &&
+          task.status == TaskStatus.completed &&
+          hasCompletionToday(task.id);
+      if (!_isDueToday(task, _now) &&
+          !undatedActiveOneShot &&
+          !finishedToday) {
+        continue;
+      }
       final rowState = taskRowStateFor(task, completions);
       final queue = task.startMinute == null
           ? const <Task>[]
