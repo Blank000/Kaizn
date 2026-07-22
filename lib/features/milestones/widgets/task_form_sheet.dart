@@ -19,19 +19,26 @@ Future<void> showTaskFormSheet(
   BuildContext context, {
   String? milestoneId,
   Task? task,
+  TimeOfDay? initialStartTime,
 }) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _TaskFormSheet(milestoneId: milestoneId, task: task),
+    builder: (_) => _TaskFormSheet(
+        milestoneId: milestoneId, task: task, initialStartTime: initialStartTime),
   );
 }
 
 class _TaskFormSheet extends ConsumerStatefulWidget {
   final String? milestoneId;
   final Task? task;
-  const _TaskFormSheet({required this.milestoneId, this.task});
+
+  /// Pre-fills the timeline start time (tap-to-create on the time grid).
+  final TimeOfDay? initialStartTime;
+
+  const _TaskFormSheet(
+      {required this.milestoneId, this.task, this.initialStartTime});
 
   @override
   ConsumerState<_TaskFormSheet> createState() => _TaskFormSheetState();
@@ -94,6 +101,10 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     _daysOfWeek = {today.weekday};
     _dayOfMonth = today.day;
     _weekdayMonthly = today.weekday;
+    // Tap-to-create on the timeline grid pre-fills the tapped slot.
+    if (widget.task == null && widget.initialStartTime != null) {
+      _startTime = widget.initialStartTime;
+    }
 
     if (t != null) {
       _frequency = t.recurrence;

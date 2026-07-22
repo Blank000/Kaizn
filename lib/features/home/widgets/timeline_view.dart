@@ -19,6 +19,7 @@ import '../../../shared/providers/database_provider.dart';
 import '../../../shared/widgets/achievement_snackbar.dart';
 import '../../../shared/widgets/moment_celebrations.dart';
 import '../../../shared/widgets/reward_unlock_snackbar.dart';
+import '../../milestones/widgets/task_form_sheet.dart';
 import '../../../shared/widgets/task_tile.dart'
     show TaskRowState, taskRowStateFor;
 
@@ -47,6 +48,7 @@ class TimelineView extends ConsumerStatefulWidget {
 class _TimelineViewState extends ConsumerState<TimelineView> {
   final ScrollController _scrollCtrl = ScrollController();
   final GlobalKey _gridKey = GlobalKey();
+  final GlobalKey _viewportKey = GlobalKey();
   Timer? _nowTicker;
   DateTime _now = DateTime.now();
   bool _autoScrolled = false;
@@ -55,6 +57,17 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
   String? _resizeTaskId;
   int? _resizeOriginalMin;
   double _resizeDeltaPx = 0;
+
+  // Live drag preview (Google-Calendar feel): snapped landing slot + time
+  // label, rendered as an outline the card will settle into. ValueNotifier
+  // so only the preview layer repaints per drag frame — never the 24h grid.
+  final ValueNotifier<_DragPreview?> _dragPreview = ValueNotifier(null);
+
+  // Edge auto-scroll while dragging near the viewport's top/bottom.
+  Timer? _autoScrollTimer;
+  double _autoScrollVelocity = 0;
+  static const _edgeZone = 90.0;
+  static const _maxScrollSpeed = 14.0; // px per 16ms tick
 
   @override
   void initState() {
@@ -67,8 +80,85 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
   @override
   void dispose() {
     _nowTicker?.cancel();
+    _autoScrollTimer?.cancel();
+    _dragPreview.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  /// Snap a global drag/tap position to a grid minute (same math as the
+  /// drop handler, so the preview always matches the landing slot exactly).
+  int? _minuteAt(Offset globalOffset, {int snap = _snapMin}) {
+    final box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return null;
+    final local = box.globalToLocal(globalOffset);
+    final rawMin = ((local.dy - _gridTopPadding) / _pxPerMinute).round();
+    return ((rawMin / snap).round() * snap).clamp(0, 24 * 60 - snap);
+  }
+
+  void _onDragMove(Task task, Offset globalOffset) {
+    final snapped = _minuteAt(globalOffset);
+    if (snapped == null) return;
+    final clamped = snapped.clamp(0, 24 * 60 - task.durationMinutes);
+    final prev = _dragPreview.value;
+    if (prev == null ||
+        prev.minute != clamped ||
+        prev.durationMinutes != task.durationMinutes) {
+      _dragPreview.value =
+          _DragPreview(minute: clamped, durationMinutes: task.durationMinutes);
+      // Detent tick each time the snap slot changes — mechanical-planner feel.
+      HapticFeedback.selectionClick();
+    }
+    _maybeAutoScrollDuringDrag(globalOffset);
+  }
+
+  void _clearDragPreview() {
+    _dragPreview.value = null;
+    _stopAutoScroll();
+  }
+
+  void _maybeAutoScrollDuringDrag(Offset globalPos) {
+    final vp = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (vp == null) return;
+    final local = vp.globalToLocal(globalPos);
+    double v = 0;
+    if (local.dy < _edgeZone) {
+      v = -_maxScrollSpeed * (1 - local.dy / _edgeZone).clamp(0.0, 1.0);
+    } else if (local.dy > vp.size.height - _edgeZone) {
+      v = _maxScrollSpeed *
+          (1 - (vp.size.height - local.dy) / _edgeZone).clamp(0.0, 1.0);
+    }
+    _autoScrollVelocity = v;
+    if (v != 0 && _autoScrollTimer == null) {
+      _autoScrollTimer =
+          Timer.periodic(const Duration(milliseconds: 16), (_) {
+        if (_autoScrollVelocity == 0 || !_scrollCtrl.hasClients) {
+          _stopAutoScroll();
+          return;
+        }
+        _scrollCtrl.jumpTo((_scrollCtrl.offset + _autoScrollVelocity)
+            .clamp(0.0, _scrollCtrl.position.maxScrollExtent));
+      });
+    } else if (v == 0) {
+      _stopAutoScroll();
+    }
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    _autoScrollVelocity = 0;
+  }
+
+  /// Tap-to-create (GCal): tap an empty slot → new-task form with that time
+  /// pre-filled. 30-min snap for creation — cleaner default blocks.
+  void _createTaskAt(Offset globalOffset) {
+    final minute = _minuteAt(globalOffset, snap: 30);
+    if (minute == null) return;
+    showTaskFormSheet(
+      context,
+      initialStartTime: TimeOfDay(hour: minute ~/ 60, minute: minute % 60),
+    );
   }
 
   @override
@@ -87,6 +177,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
   }
 
   Future<void> _scheduleTask(Task task, Offset globalDropOffset) async {
+    _clearDragPreview();
     final box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
     final local = box.globalToLocal(globalDropOffset);
@@ -305,9 +396,15 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             readOnly: !isToday,
             scrollCtrl: _scrollCtrl,
             gridKey: _gridKey,
+            viewportKey: _viewportKey,
+            dragPreview: _dragPreview,
             resizeTaskId: _resizeTaskId,
             effectiveDuration: _effectiveDuration,
             onTaskDrop: _scheduleTask,
+            onDragMove: _onDragMove,
+            onDragLeave: _clearDragPreview,
+            onDragEnded: _clearDragPreview,
+            onEmptySlotTap: _createTaskAt,
             onResizeStart: _onResizeStart,
             onResizeUpdate: _onResizeUpdate,
             onResizeEnd: _onResizeEnd,
@@ -592,9 +689,15 @@ class _TimeGrid extends StatelessWidget {
   final bool readOnly;
   final ScrollController scrollCtrl;
   final GlobalKey gridKey;
+  final GlobalKey viewportKey;
+  final ValueNotifier<_DragPreview?> dragPreview;
   final String? resizeTaskId;
   final int Function(Task task) effectiveDuration;
   final Future<void> Function(Task task, Offset globalDrop) onTaskDrop;
+  final void Function(Task task, Offset globalPos) onDragMove;
+  final VoidCallback onDragLeave;
+  final VoidCallback onDragEnded;
+  final void Function(Offset globalPos) onEmptySlotTap;
   final void Function(Task task) onResizeStart;
   final void Function(double dy) onResizeUpdate;
   final Future<void> Function() onResizeEnd;
@@ -606,9 +709,15 @@ class _TimeGrid extends StatelessWidget {
     required this.readOnly,
     required this.scrollCtrl,
     required this.gridKey,
+    required this.viewportKey,
+    required this.dragPreview,
     required this.resizeTaskId,
     required this.effectiveDuration,
     required this.onTaskDrop,
+    required this.onDragMove,
+    required this.onDragLeave,
+    required this.onDragEnded,
+    required this.onEmptySlotTap,
     required this.onResizeStart,
     required this.onResizeUpdate,
     required this.onResizeEnd,
@@ -618,14 +727,23 @@ class _TimeGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final nowMin = now.hour * 60 + now.minute;
     return SingleChildScrollView(
+      key: viewportKey,
       controller: scrollCtrl,
       child: SizedBox(
         height: _totalGridHeight + _gridTopPadding + _gridBottomPadding,
         child: DragTarget<Task>(
           onWillAcceptWithDetails: (_) => true,
+          onMove: (d) => onDragMove(d.data, d.offset),
+          onLeave: (_) => onDragLeave(),
           onAcceptWithDetails: (d) => onTaskDrop(d.data, d.offset),
           builder: (context, candidate, rejected) {
-            return Stack(
+            return GestureDetector(
+              // Empty-slot taps only — cards sit on top and claim their own.
+              behavior: HitTestBehavior.translucent,
+              onTapUp: readOnly
+                  ? null
+                  : (details) => onEmptySlotTap(details.globalPosition),
+              child: Stack(
               key: gridKey,
               clipBehavior: Clip.none,
               children: [
@@ -660,6 +778,7 @@ class _TimeGrid extends StatelessWidget {
                       readOnly: readOnly,
                       isResizing: resizeTaskId == e.task.id,
                       effectiveDurationMinutes: effectiveDuration(e.task),
+                      onDragEnded: onDragEnded,
                       onResizeStart: () => onResizeStart(e.task),
                       onResizeUpdate: onResizeUpdate,
                       onResizeEnd: onResizeEnd,
@@ -672,13 +791,80 @@ class _TimeGrid extends StatelessWidget {
                     top: _gridTopPadding + nowMin * _pxPerMinute - 1,
                     child: const _NowIndicator(),
                   ),
+                // Snap-preview outline + live time chip — topmost layer, so
+                // it stays visible over existing cards. Repaints alone per
+                // drag frame via the ValueNotifier; the grid never rebuilds.
+                ValueListenableBuilder<_DragPreview?>(
+                  valueListenable: dragPreview,
+                  builder: (context, p, __) {
+                    if (p == null) return const SizedBox.shrink();
+                    return Positioned(
+                      left: _hourLabelWidth,
+                      right: 12,
+                      top: _gridTopPadding + p.minute * _pxPerMinute,
+                      height: (p.durationMinutes * _pxPerMinute)
+                          .clamp(28.0, double.infinity),
+                      child: IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color:
+                                AppColors.primary.withValues(alpha: 0.10),
+                            border: Border.all(
+                                color: AppColors.primary, width: 2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(6),
+                                  bottomRight: Radius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                '${_fmtMinutes(p.minute)} – ${_fmtMinutes(p.minute + p.durationMinutes)}',
+                                style: AppTypography.caption.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ],
+            ),
             );
           },
         ),
       ),
     );
   }
+}
+
+/// Live drag-preview payload: where the dragged block would land.
+class _DragPreview {
+  final int minute;
+  final int durationMinutes;
+  const _DragPreview({required this.minute, required this.durationMinutes});
+}
+
+/// Shared clock formatting for cards and the drag chip.
+String _fmtMinutes(int min) {
+  final wrapped = min % (24 * 60);
+  final h = wrapped ~/ 60;
+  final m = wrapped % 60;
+  final hh = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+  final ampm = h < 12 ? 'AM' : 'PM';
+  return '$hh:${m.toString().padLeft(2, '0')} $ampm';
 }
 
 class _HourLinesPainter extends CustomPainter {
@@ -767,6 +953,7 @@ class _TimelineTaskCard extends ConsumerWidget {
   final bool readOnly;
   final bool isResizing;
   final int effectiveDurationMinutes;
+  final VoidCallback onDragEnded;
   final VoidCallback onResizeStart;
   final void Function(double dy) onResizeUpdate;
   final Future<void> Function() onResizeEnd;
@@ -776,6 +963,7 @@ class _TimelineTaskCard extends ConsumerWidget {
     required this.readOnly,
     required this.isResizing,
     required this.effectiveDurationMinutes,
+    required this.onDragEnded,
     required this.onResizeStart,
     required this.onResizeUpdate,
     required this.onResizeEnd,
@@ -804,6 +992,9 @@ class _TimelineTaskCard extends ConsumerWidget {
         return LongPressDraggable<Task>(
           data: task,
           hapticFeedbackOnStart: true,
+          // Clears the snap preview when the drag ends anywhere (accepted,
+          // cancelled, or dropped outside a target).
+          onDragEnd: (_) => onDragEnded(),
           feedback: Material(
             color: Colors.transparent,
             elevation: 8,
@@ -897,7 +1088,8 @@ class _CardSurface extends StatelessWidget {
     final displayName = entry.queueCount > 0
         ? '🔗 ${task.name} +${entry.queueCount}'
         : task.name;
-    final timeRange = '${_fmt(start)} – ${_fmt(start + totalMinutes)}';
+    final timeRange =
+        '${_fmtMinutes(start)} – ${_fmtMinutes(start + totalMinutes)}';
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
       decoration: BoxDecoration(
@@ -958,15 +1150,6 @@ class _CardSurface extends StatelessWidget {
     );
   }
 
-  String _fmt(int min) {
-    final wrapped = min % (24 * 60);
-    final h = wrapped ~/ 60;
-    final m = wrapped % 60;
-    final hh = h == 0 ? 12 : (h > 12 ? h - 12 : h);
-    final ampm = h < 12 ? 'AM' : 'PM';
-    final mm = m.toString().padLeft(2, '0');
-    return '$hh:$mm $ampm';
-  }
 }
 
 class _ResizeHandle extends StatelessWidget {
