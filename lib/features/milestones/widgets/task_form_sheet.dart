@@ -1036,6 +1036,25 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               ),
             ),
           ),
+          // Temptation bundling (Atomic Habits): nudge shown only in the
+          // "+ Add to this queue" flow — the moment someone is designing
+          // a chain is the moment to suggest ending it on a treat.
+          if (!_isEdit && widget.initialStackedAfterTaskId != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.rewardsGold.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '💡 End with something you enjoy — a queue that finishes '
+                'with a treat gets started more.',
+                style: AppTypography.caption
+                    .copyWith(color: context.appTextSecondary),
+              ),
+            ),
+          ],
         ],
       ],
     );
