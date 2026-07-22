@@ -95,7 +95,11 @@ class MilestoneDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
-          _Header(milestone: milestone, taskCount: tasks.length),
+          _Header(
+            milestone: milestone,
+            taskCount: tasks.length,
+            votes: ref.watch(milestoneVotesProvider(milestoneId)).valueOrNull,
+          ),
           const SizedBox(height: 24),
           if (tasks.isEmpty)
             _NoTasksState(
@@ -249,7 +253,12 @@ class _Header extends StatelessWidget {
   final Milestone milestone;
   final int taskCount;
 
-  const _Header({required this.milestone, required this.taskCount});
+  /// Lifetime real completions across this milestone's tasks — "votes for
+  /// the person you're becoming" (Atomic Habits). Null while loading.
+  final int? votes;
+
+  const _Header(
+      {required this.milestone, required this.taskCount, this.votes});
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +284,16 @@ class _Header extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+            if (votes != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                votes! > 0
+                    ? '🗳 $votes ${votes == 1 ? 'vote' : 'votes'} cast for that identity'
+                    : '🗳 Every completion casts a vote',
+                style: AppTypography.caption
+                    .copyWith(color: context.appTextSecondary),
+              ),
+            ],
             const SizedBox(height: 8),
           ],
           if (milestone.description != null &&

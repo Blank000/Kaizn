@@ -123,6 +123,14 @@ final tasksForMilestoneProvider =
   return database.watchAllTasksForMilestone(milestoneId);
 });
 
+/// Lifetime "identity votes" for a milestone — every real completion of its
+/// tasks, all-time. The Atomic Habits ballot box on milestone detail.
+final milestoneVotesProvider =
+    StreamProvider.family<int, String>((ref, milestoneId) {
+  final database = ref.watch(databaseProvider);
+  return database.watchMilestoneVoteCount(milestoneId);
+});
+
 /// Recent (last year) completions for every task in a milestone. Used by the
 /// detail screen to compute rule-based "checked this period" per task without
 /// a per-task DB roundtrip on every rebuild.

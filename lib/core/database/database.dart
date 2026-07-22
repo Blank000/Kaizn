@@ -1211,6 +1211,19 @@ class AppDatabase extends _$AppDatabase {
     ).watchSingle().map((r) => r.read<int>('c'));
   }
 
+  /// Lifetime "identity votes" for a milestone: every real completion
+  /// (non-skip, non-nd) of any of its tasks, all-time. Powers the ballot-box
+  /// line on milestone detail ("🗳 217 votes cast").
+  Stream<int> watchMilestoneVoteCount(String milestoneId) {
+    return customSelect(
+      "SELECT COUNT(*) AS c FROM task_completions tc "
+      "JOIN tasks t ON t.id = tc.task_id "
+      "WHERE t.milestone_id = :mid AND tc.is_skip = 0 AND tc.is_nd = 0",
+      variables: [Variable.withString(milestoneId)],
+      readsFrom: {taskCompletions, tasks},
+    ).watchSingle().map((r) => r.read<int>('c'));
+  }
+
   /// Live version of [getTaskIdsCompletedToday]. Emits a fresh set whenever a
   /// completion is inserted/deleted.
   Stream<Set<String>> watchTaskIdsCompletedToday() {
