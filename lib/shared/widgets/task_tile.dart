@@ -479,6 +479,9 @@ class _TaskTileState extends ConsumerState<TaskTile>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      // The sheet can carry up to 6 rows (queue/tiny/timer/skip/missed/
+      // cancel) — let it grow past the default half-screen cap.
+      isScrollControlled: true,
       builder: (ctx) {
         final ownsTimer =
             TimerService.current?.taskId == widget.task.id;
@@ -1003,7 +1006,10 @@ class _SkipActionsSheet extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       child: SafeArea(
         top: false,
-        child: Column(
+        // Scrollable so the full row set (up to 6) never overflows on
+        // short screens — the sheet grows to content, then scrolls.
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -1081,6 +1087,7 @@ class _SkipActionsSheet extends StatelessWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
