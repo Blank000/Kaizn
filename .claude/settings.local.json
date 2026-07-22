@@ -27,7 +27,9 @@
       "PowerShell(Out-File *)",
       "PowerShell(Remove-Item *)",
       "PowerShell(Select-String *)",
-      "PowerShell(Set-Content *)"
+      "PowerShell(Set-Content *)",
+      "PowerShell(adb devices *)",
+      "PowerShell(adb *)"
     ]
   }
 }

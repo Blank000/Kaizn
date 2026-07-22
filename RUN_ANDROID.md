@@ -54,6 +54,22 @@ adb devices
 
 ## 3. Run the app (development — hot reload)
 
+> **⚠ iQOO/Vivo: `r`/`R` DON'T work with plain `flutter run`.** Funtouch OS
+> suppresses/masks the "Dart VM service is listening on http://…" logcat
+> line that Flutter parses to attach — the tool hangs at "Waiting for VM
+> Service port", never prints the key-commands banner, and hot reload never
+> enables (app logs still stream, which makes it LOOK attached). Verified
+> 2026-07-22: the URL line is absent from logcat entirely.
+>
+> **Use the helper script instead** (fixed, tokenless VM-service port +
+> explicit `flutter attach` — bypasses logcat discovery):
+> ```powershell
+> .\dev.ps1
+> ```
+> Prefer a **USB cable** for dev sessions: wireless adb on this phone drops
+> whenever the screen sleeps (ports change per reconnect, sessions die).
+
+On non-Vivo devices, plain run works:
 ```powershell
 flutter run
 ```
@@ -62,6 +78,8 @@ Or pin to a device if multiple are attached:
 flutter run -d <DEVICE_ID>
 ```
 - First build takes a few minutes; then `r` = hot reload, `R` = hot restart, `q` = quit.
+- `r` for UI/logic edits; `R` when initState/services/constants changed;
+  full re-run only for schema (codegen), manifest, or pubspec changes.
 - **Accept the notification + exact-alarm prompts** on first launch, or reminders won't fire.
 
 ---
