@@ -93,6 +93,36 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final rawMin = ((local.dy - _gridTopPadding) / _pxPerMinute).round();
     final snapped = (rawMin / _snapMin).round() * _snapMin;
     final clamped = snapped.clamp(0, 24 * 60 - task.durationMinutes);
+
+    // Unified long-press grammar: lift-and-MOVE reschedules; lift-and-
+    // RELEASE-IN-PLACE (same snapped slot) opens the action menu instead —
+    // one gesture, two natural outcomes, no per-state gesture conflicts.
+    if (clamped == task.startMinute) {
+      final completions =
+          ref.read(recentCompletionsAllProvider).valueOrNull ??
+              const <TaskCompletion>[];
+      final state = taskRowStateFor(task, completions);
+      if (state.isUnchecked && mounted) {
+        _showSkipMissedSheet(
+          context,
+          taskName: task.name,
+          onTimer: () => _handleTimerAction(context, ref, task),
+          onSkip: () async {
+            final db = ref.read(databaseProvider);
+            await db.skipTaskNow(task);
+            await StreakService.recordSkipDay(db);
+            HapticFeedback.lightImpact();
+          },
+          onMissed: () async {
+            final db = ref.read(databaseProvider);
+            await db.markTaskMissed(task);
+            HapticFeedback.lightImpact();
+          },
+        );
+      }
+      return;
+    }
+
     final db = ref.read(databaseProvider);
     await db.setTaskStartMinute(task.id, clamped);
     HapticFeedback.lightImpact();
@@ -791,27 +821,13 @@ class _TimelineTaskCard extends ConsumerWidget {
             ),
           ),
           childWhenDragging: Opacity(opacity: 0.25, child: surface),
+          // No onLongPress here: long-press belongs EXCLUSIVELY to the
+          // LongPressDraggable (calendar grammar — lift and drag). The
+          // action menu opens via lift-and-release-in-place, handled in
+          // _scheduleTask when the drop lands on the unchanged slot.
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => _toggleTask(context, ref, entry),
-            onLongPress: rowState.isUnchecked
-                ? () => _showSkipMissedSheet(
-                      context,
-                      taskName: task.name,
-                      onTimer: () => _handleTimerAction(context, ref, task),
-                      onSkip: () async {
-                        final db = ref.read(databaseProvider);
-                        await db.skipTaskNow(task);
-                        await StreakService.recordSkipDay(db);
-                        HapticFeedback.lightImpact();
-                      },
-                      onMissed: () async {
-                        final db = ref.read(databaseProvider);
-                        await db.markTaskMissed(task);
-                        HapticFeedback.lightImpact();
-                      },
-                    )
-                : null,
             child: Stack(
               children: [
                 surface,
