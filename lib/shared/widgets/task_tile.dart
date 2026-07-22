@@ -13,10 +13,12 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../models/recurrence_rule.dart';
+import '../models/task_stack.dart';
 import '../providers/active_timer_provider.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
 import 'moment_celebrations.dart';
+import 'queue_sheet.dart';
 import 'reward_unlock_snackbar.dart';
 import 'stop_timer_sheet.dart';
 
@@ -186,6 +188,14 @@ class TaskTile extends ConsumerStatefulWidget {
   /// the stopwatch is discoverable without knowing the gesture.
   final bool showTimerButton;
 
+  /// Habit-stack queue behind this task (queue heads only — callers that
+  /// computed the chain pass its size). When > 0 the tile shows a tappable
+  /// "🔗 N · ~45m" chip that opens the queue sheet.
+  final int queueCount;
+
+  /// Total minutes for this task + its queue (the chip's "~45m" part).
+  final int? queueMinutes;
+
   const TaskTile({
     super.key,
     required this.task,
@@ -195,6 +205,8 @@ class TaskTile extends ConsumerStatefulWidget {
     this.weeklyChips,
     this.allowInlineUndo = false,
     this.showTimerButton = false,
+    this.queueCount = 0,
+    this.queueMinutes,
   });
 
   @override
@@ -317,6 +329,7 @@ class _TaskTileState extends ConsumerState<TaskTile>
                       ],
                     ),
                   ),
+                  if (widget.queueCount > 0) _buildQueueChip(),
                   if (widget.showTimerButton && _isUnchecked)
                     _buildTimerButton(),
                   if (widget.trailing != null) widget.trailing!,
@@ -472,8 +485,23 @@ class _TaskTileState extends ConsumerState<TaskTile>
         final tiny = widget.task.tinyName;
         final base = widget.task.pointsPerCompletion;
         final tinyPts = base > 0 ? (base + 1) ~/ 2 : 0;
+        final inChain = widget.queueCount > 0 ||
+            widget.task.stackedAfterTaskId != null;
         return _SkipActionsSheet(
           taskName: widget.task.name,
+          queueTitle: inChain ? 'See the queue' : null,
+          queueSubtitle: !inChain
+              ? null
+              : widget.queueCount > 0
+                  ? '${widget.queueCount + 1} tasks'
+                      '${widget.queueMinutes == null ? '' : ' · ~${formatQueueMinutes(widget.queueMinutes!)}'}'
+                  : 'The full chain this task is part of',
+          onQueue: !inChain
+              ? null
+              : () {
+                  Navigator.of(ctx).pop();
+                  showQueueSheet(context, widget.task);
+                },
           tinyTitle: tiny == null ? null : 'Do the 2-minute version',
           tinySubtitle: tiny == null
               ? null
@@ -502,6 +530,38 @@ class _TaskTileState extends ConsumerState<TaskTile>
           },
         );
       },
+    );
+  }
+
+  /// Tappable "🔗 N · ~45m" pill on queue-head tiles — the one-tap answer to
+  /// "what am I committing to if I start this?" Opens the queue sheet.
+  Widget _buildQueueChip() {
+    final label = widget.queueMinutes == null
+        ? '🔗 ${widget.queueCount}'
+        : '🔗 ${widget.queueCount} · ~${formatQueueMinutes(widget.queueMinutes!)}';
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: InkWell(
+        onTap: () => showQueueSheet(context, widget.task),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.infoBlue.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: AppColors.infoBlue.withValues(alpha: 0.35)),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.infoBlue,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -909,6 +969,11 @@ class _SkipActionsSheet extends StatelessWidget {
   final String? tinySubtitle;
   final VoidCallback? onTiny;
 
+  /// Habit-stack row: shown when the task heads or belongs to a queue.
+  final String? queueTitle;
+  final String? queueSubtitle;
+  final VoidCallback? onQueue;
+
   final VoidCallback onSkip;
   final VoidCallback onMissed;
 
@@ -921,6 +986,9 @@ class _SkipActionsSheet extends StatelessWidget {
     this.tinyTitle,
     this.tinySubtitle,
     this.onTiny,
+    this.queueTitle,
+    this.queueSubtitle,
+    this.onQueue,
     required this.onSkip,
     required this.onMissed,
   });
@@ -928,9 +996,9 @@ class _SkipActionsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: context.appCardSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
       child: SafeArea(
@@ -958,6 +1026,16 @@ class _SkipActionsSheet extends StatelessWidget {
                   textAlign: TextAlign.center),
             ],
             const SizedBox(height: 20),
+            if (onQueue != null) ...[
+              _OptionRow(
+                icon: Icons.link_rounded,
+                iconColor: AppColors.infoBlue,
+                title: queueTitle ?? 'See the queue',
+                subtitle: queueSubtitle ?? 'The full chain, link by link',
+                onTap: onQueue!,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (onTiny != null) ...[
               _OptionRow(
                 icon: Icons.bolt_rounded,

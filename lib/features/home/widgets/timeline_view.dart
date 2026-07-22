@@ -18,6 +18,7 @@ import '../../../shared/models/task_stack.dart';
 import '../../../shared/providers/database_provider.dart';
 import '../../../shared/widgets/achievement_snackbar.dart';
 import '../../../shared/widgets/moment_celebrations.dart';
+import '../../../shared/widgets/queue_sheet.dart';
 import '../../../shared/widgets/reward_unlock_snackbar.dart';
 import '../../milestones/widgets/task_form_sheet.dart';
 import '../../../shared/widgets/task_tile.dart'
@@ -194,9 +195,21 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
               const <TaskCompletion>[];
       final state = taskRowStateFor(task, completions);
       if (state.isUnchecked && mounted) {
+        // Queue entry point: merged blocks promise a chain ("🔗 X +2") —
+        // the release-in-place menu is where that promise opens up.
+        final allTasks =
+            ref.read(allTasksProvider).valueOrNull ?? const <Task>[];
+        final queue = queueBehind(
+            task, stackChildrenByAnchor(allTasks), (_) => true);
+        final inChain = queue.isNotEmpty || task.stackedAfterTaskId != null;
         _showSkipMissedSheet(
           context,
           taskName: task.name,
+          queueSubtitle: queue.isEmpty
+              ? null
+              : '${queue.length + 1} tasks · ~${formatQueueMinutes(queueTotalMinutes(task, queue))}',
+          onQueue:
+              inChain ? () => showQueueSheet(context, task) : null,
           onTimer: () => _handleTimerAction(context, ref, task),
           onSkip: () async {
             final db = ref.read(databaseProvider);
@@ -1258,6 +1271,8 @@ Future<void> _handleTimerAction(
 void _showSkipMissedSheet(
   BuildContext context, {
   required String taskName,
+  String? queueSubtitle,
+  VoidCallback? onQueue,
   required Future<void> Function() onTimer,
   required Future<void> Function() onSkip,
   required Future<void> Function() onMissed,
@@ -1291,6 +1306,20 @@ void _showSkipMissedSheet(
                   style: AppTypography.heading2,
                   textAlign: TextAlign.center),
               const SizedBox(height: 20),
+              if (onQueue != null) ...[
+                _SheetOption(
+                  icon: Icons.link_rounded,
+                  iconColor: AppColors.infoBlue,
+                  title: 'See the queue',
+                  subtitle:
+                      queueSubtitle ?? 'The full chain, link by link',
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    onQueue();
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               _SheetOption(
                 icon: Icons.timer_rounded,
                 iconColor: AppColors.primary,

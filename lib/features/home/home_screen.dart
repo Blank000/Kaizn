@@ -655,15 +655,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   rowState: it.rowState,
                   weeklyChips: weeklyChipsFor(it.task, completions),
                   showTimerButton: true,
+                  // Queue info lives on the tappable 🔗 chip (opens the
+                  // queue sheet), not in the meta string.
+                  queueCount: queue.length,
+                  queueMinutes: queue.isEmpty
+                      ? null
+                      : queueTotalMinutes(it.task, queue),
                   meta: _metaForHome(
                     it.task,
                     milestoneById[it.task.milestoneId],
                     it.rowState,
                     anchorName: taskById[it.task.stackedAfterTaskId]?.name,
-                    queueCount: queue.length,
-                    queueMinutes: queue.isEmpty
-                        ? null
-                        : queueTotalMinutes(it.task, queue),
                   ),
                 );
               }),
@@ -787,7 +789,7 @@ String _cadenceLabel(Task task) => switch (task.recurrence) {
     };
 
 String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState,
-    {String? anchorName, int queueCount = 0, int? queueMinutes}) {
+    {String? anchorName}) {
   final parts = <String>[];
   if (milestone != null) parts.add(milestone.name);
   parts.add(_cadenceLabel(task));
@@ -797,10 +799,7 @@ String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState,
     if (ends != null) parts.add('ends $ends');
   }
   parts.add('${task.pointsPerCompletion} pts');
-  if (queueCount > 0) {
-    parts.add('🔗 +$queueCount in queue'
-        '${queueMinutes == null ? '' : ' · ~${formatQueueMinutes(queueMinutes)}'}');
-  } else if (anchorName != null) {
+  if (anchorName != null) {
     parts.add('🔗 After $anchorName');
   }
   if (rowState.isMissed) {

@@ -20,13 +20,17 @@ Future<void> showTaskFormSheet(
   String? milestoneId,
   Task? task,
   TimeOfDay? initialStartTime,
+  String? initialStackedAfterTaskId,
 }) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _TaskFormSheet(
-        milestoneId: milestoneId, task: task, initialStartTime: initialStartTime),
+        milestoneId: milestoneId,
+        task: task,
+        initialStartTime: initialStartTime,
+        initialStackedAfterTaskId: initialStackedAfterTaskId),
   );
 }
 
@@ -37,8 +41,15 @@ class _TaskFormSheet extends ConsumerStatefulWidget {
   /// Pre-fills the timeline start time (tap-to-create on the time grid).
   final TimeOfDay? initialStartTime;
 
+  /// Pre-fills the habit-stack anchor ("+ Add to this queue" in the queue
+  /// sheet) and expands More options so the chain is visible.
+  final String? initialStackedAfterTaskId;
+
   const _TaskFormSheet(
-      {required this.milestoneId, this.task, this.initialStartTime});
+      {required this.milestoneId,
+      this.task,
+      this.initialStartTime,
+      this.initialStackedAfterTaskId});
 
   @override
   ConsumerState<_TaskFormSheet> createState() => _TaskFormSheetState();
@@ -107,6 +118,12 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     // Tap-to-create on the timeline grid pre-fills the tapped slot.
     if (widget.task == null && widget.initialStartTime != null) {
       _startTime = widget.initialStartTime;
+    }
+    // "+ Add to this queue" pre-fills the anchor; expand More options so
+    // the chain link is visible, not silently applied.
+    if (widget.task == null && widget.initialStackedAfterTaskId != null) {
+      _stackedAfterTaskId = widget.initialStackedAfterTaskId;
+      _moreOptions = true;
     }
 
     if (t != null) {

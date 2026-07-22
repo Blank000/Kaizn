@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/models/recurrence_rule.dart';
+import '../../shared/models/task_stack.dart';
 import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/reward_unlock_snackbar.dart';
@@ -360,6 +361,9 @@ class _TaskGroup extends ConsumerWidget {
     // Anchor names can live in OTHER milestones — resolve against all tasks.
     final allTasks = ref.watch(allTasksProvider).valueOrNull ?? const <Task>[];
     final anchorNameById = {for (final t in allTasks) t.id: t.name};
+    // Structural queue sizes (every link, today-or-not) — detail is the
+    // management surface, so it shows the whole chain on the 🔗 chip.
+    final childrenByAnchor = stackChildrenByAnchor(allTasks);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -380,9 +384,13 @@ class _TaskGroup extends ConsumerWidget {
           ...tasks.map((t) {
             final state = taskRowStateFor(t, completions);
             final chips = weeklyChipsFor(t, completions);
+            final queue = queueBehind(t, childrenByAnchor, (_) => true);
             return TaskTile(
               task: t,
               rowState: state,
+              queueCount: queue.length,
+              queueMinutes:
+                  queue.isEmpty ? null : queueTotalMinutes(t, queue),
               meta: _metaForDetail(t, state,
                   anchorName: anchorNameById[t.stackedAfterTaskId]),
               weeklyChips: chips,
