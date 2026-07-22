@@ -85,6 +85,15 @@ class _QueueSheet extends ConsumerWidget {
     final totalPoints =
         chain.fold<int>(0, (sum, t) => sum + t.pointsPerCompletion);
 
+    // Derived clock times: when the root is scheduled, every link inherits
+    // root start + the durations before it (same math as the timeline).
+    final times = <int?>[];
+    var cursor = root.startMinute;
+    for (final t in chain) {
+      times.add(cursor);
+      if (cursor != null) cursor = cursor + t.durationMinutes;
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: context.appCardSurface,
@@ -135,6 +144,7 @@ class _QueueSheet extends ConsumerWidget {
                   state: states[i],
                   isNext: i == nextIdx,
                   runsToday: runsToday(chain[i]),
+                  startMinute: times[i],
                   onTap: () => showTaskFormSheet(context,
                       milestoneId: chain[i].milestoneId, task: chain[i]),
                 ),
@@ -163,6 +173,10 @@ class _QueueRow extends StatelessWidget {
   final TaskRowState state;
   final bool isNext;
   final bool runsToday;
+
+  /// Derived clock slot (root start + earlier durations); null when the
+  /// chain's root has no start time.
+  final int? startMinute;
   final VoidCallback onTap;
 
   const _QueueRow({
@@ -171,8 +185,19 @@ class _QueueRow extends StatelessWidget {
     required this.state,
     required this.isNext,
     required this.runsToday,
+    this.startMinute,
     required this.onTap,
   });
+
+  static String _fmtClock(int m) {
+    final h = (m ~/ 60) % 24;
+    final min = m % 60;
+    final ampm = h >= 12 ? 'PM' : 'AM';
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    return min == 0
+        ? '$h12 $ampm'
+        : '$h12:${min.toString().padLeft(2, '0')} $ampm';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -200,6 +225,7 @@ class _QueueRow extends StatelessWidget {
     }
 
     final meta = <String>[
+      if (startMinute != null) _fmtClock(startMinute!),
       '~${formatQueueMinutes(task.durationMinutes)}',
       '${task.pointsPerCompletion} pts',
       if (task.recurrence != TaskRecurrence.none)

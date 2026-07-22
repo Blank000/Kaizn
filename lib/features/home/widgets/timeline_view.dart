@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -186,19 +187,25 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final snapped = (rawMin / _snapMin).round() * _snapMin;
     final clamped = snapped.clamp(0, 24 * 60 - task.durationMinutes);
 
+    final allTasks =
+        ref.read(allTasksProvider).valueOrNull ?? const <Task>[];
+    final completions =
+        ref.read(recentCompletionsAllProvider).valueOrNull ??
+            const <TaskCompletion>[];
+    // Where the block currently sits: its own start time, or the slot
+    // derived from its chain (queue members have no start of their own).
+    final visualMinute = task.startMinute ??
+        _derivedChainMinute(task, allTasks, completions,
+            widget.date ?? DateTime.now());
+
     // Unified long-press grammar: lift-and-MOVE reschedules; lift-and-
     // RELEASE-IN-PLACE (same snapped slot) opens the action menu instead —
     // one gesture, two natural outcomes, no per-state gesture conflicts.
-    if (clamped == task.startMinute) {
-      final completions =
-          ref.read(recentCompletionsAllProvider).valueOrNull ??
-              const <TaskCompletion>[];
+    if (clamped == visualMinute) {
       final state = taskRowStateFor(task, completions);
       if (state.isUnchecked && mounted) {
-        // Queue entry point: merged blocks promise a chain ("🔗 X +2") —
+        // Queue entry point: chained blocks promise a chain ("🔗 X") —
         // the release-in-place menu is where that promise opens up.
-        final allTasks =
-            ref.read(allTasksProvider).valueOrNull ?? const <Task>[];
         final queue = queueBehind(
             task, stackChildrenByAnchor(allTasks), (_) => true);
         final inChain = queue.isNotEmpty || task.stackedAfterTaskId != null;
@@ -228,8 +235,55 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     }
 
     final db = ref.read(databaseProvider);
-    await db.setTaskStartMinute(task.id, clamped);
+    if (isQueueMember(task)) {
+      // Dragging a chained block to a slot of its own detaches it from the
+      // queue — a stacked task's time IS its place in the chain, so giving
+      // it a time makes it standalone.
+      await db.updateTask(task.copyWith(
+        stackedAfterTaskId: const Value(null),
+        startMinute: Value(clamped),
+      ));
+    } else {
+      await db.setTaskStartMinute(task.id, clamped);
+    }
     HapticFeedback.lightImpact();
+  }
+
+  /// The minute a queue member's block sits at on [day]: chain root's start
+  /// plus every earlier displayed link's duration. Must mirror the build
+  /// method's chain walk exactly (same BFS, same filter), or release-in-place
+  /// detection breaks. Null when the root isn't scheduled.
+  int? _derivedChainMinute(Task task, List<Task> all,
+      List<TaskCompletion> completions, DateTime day) {
+    final byId = {for (final t in all) t.id: t};
+    var root = task;
+    final seen = <String>{root.id};
+    while (root.stackedAfterTaskId != null) {
+      final p = byId[root.stackedAfterTaskId];
+      if (p == null || !seen.add(p.id)) break;
+      root = p;
+    }
+    if (root.startMinute == null) return null;
+
+    bool loggedOnDay(Task t) => completions.any((c) =>
+        c.taskId == t.id &&
+        c.completedOn.year == day.year &&
+        c.completedOn.month == day.month &&
+        c.completedOn.day == day.day);
+    bool inChainDisplay(Task t) =>
+        loggedOnDay(t) ||
+        _isDueToday(t, day) ||
+        (t.recurrence == TaskRecurrence.none &&
+            t.status == TaskStatus.active &&
+            t.dueDate == null);
+
+    var cursor = root.startMinute! + root.durationMinutes;
+    for (final m in queueBehind(
+        root, stackChildrenByAnchor(all), inChainDisplay)) {
+      if (m.id == task.id) return cursor;
+      cursor += m.durationMinutes;
+    }
+    return null;
   }
 
   Future<void> _unscheduleTask(Task task) async {
@@ -293,7 +347,6 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
         ref.watch(activeMilestonesProvider).valueOrNull ?? [];
     final milestoneById = {for (final m in milestones) m.id: m};
 
-    final taskById = {for (final t in tasks) t.id: t};
     final childrenByAnchor = stackChildrenByAnchor(tasks);
 
     final today = DateTime(_now.year, _now.month, _now.day);
@@ -317,21 +370,10 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             t.status == TaskStatus.active &&
             t.dueDate == null);
 
-    // Queue member of today's chain: due today and not yet resolved.
-    bool inTodaysQueue(Task c) {
-      if (hasCompletionToday(c.id)) return false;
-      return dueTodayLoose(c);
-    }
-
-    // Waiting queue members are represented inside their anchor's merged
-    // block — keep them out of the Anytime tray.
-    bool waitingOnAnchor(Task t) {
-      if (!isQueueMember(t)) return false;
-      final anchor = taskById[t.stackedAfterTaskId];
-      if (anchor == null) return false;
-      if (!dueTodayLoose(anchor)) return false;
-      return !hasCompletionToday(anchor.id);
-    }
+    // A chained task shows on the day when it's due or was logged —
+    // undated one-shot members always ride their chain.
+    bool inChainDisplay(Task t) =>
+        hasCompletionToday(t.id) || dueTodayLoose(t);
 
     final scheduled = <_TimelineEntry>[];
     final anytime = <_TimelineEntry>[];
@@ -355,22 +397,46 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
       final rowState = isToday
           ? taskRowStateFor(task, completions)
           : _rowStateOn(task, completions, day);
-      final queue = (isToday && task.startMinute != null)
-          ? queueBehind(task, childrenByAnchor, inTodaysQueue)
-          : const <Task>[];
       final entry = _TimelineEntry(
         task: task,
         rowState: rowState,
         milestone: milestoneById[task.milestoneId],
-        queueCount: queue.length,
-        queueExtraMinutes:
-            queue.fold<int>(0, (sum, t) => sum + t.durationMinutes),
+        displayStartMinute: task.startMinute,
       );
       if (task.startMinute == null) {
-        if (!isToday || !waitingOnAnchor(task)) anytime.add(entry);
+        anytime.add(entry);
       } else {
         scheduled.add(entry);
       }
+    }
+
+    // Derived slots: every chained task gets its OWN block, back-to-back
+    // behind its anchor (anchor start + cumulative durations). Live and
+    // future days only — a past day shows exactly what was logged (its
+    // members sit in the tray as chips).
+    if (!day.isBefore(today)) {
+      final placedInChain = <String>{};
+      for (final head in List<_TimelineEntry>.of(scheduled)) {
+        if (head.isChained) continue;
+        var cursor =
+            head.task.startMinute! + head.task.durationMinutes;
+        for (final m
+            in queueBehind(head.task, childrenByAnchor, inChainDisplay)) {
+          scheduled.add(_TimelineEntry(
+            task: m,
+            rowState: isToday
+                ? taskRowStateFor(m, completions)
+                : _rowStateOn(m, completions, day),
+            milestone: milestoneById[m.milestoneId],
+            displayStartMinute: cursor,
+            isChained: true,
+          ));
+          placedInChain.add(m.id);
+          cursor += m.durationMinutes;
+        }
+      }
+      // A member with a derived block leaves the Anytime tray.
+      anytime.removeWhere((e) => placedInChain.contains(e.task.id));
     }
 
     // Live day scrolls to "now"; a past day scrolls to its first scheduled
@@ -378,7 +444,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     final scrollAnchor = isToday
         ? _now.hour * 60 + _now.minute
         : scheduled
-                .map((e) => e.task.startMinute ?? 8 * 60)
+                .map((e) => e.displayStartMinute ?? 8 * 60)
                 .fold<int?>(null, (m, v) => m == null || v < m ? v : m) ??
             8 * 60;
     WidgetsBinding.instance
@@ -470,17 +536,21 @@ class _TimelineEntry {
   final TaskRowState rowState;
   final Milestone? milestone;
 
-  /// Habit-stack queue behind this task (today's unresolved members only).
-  /// A scheduled anchor's block spans its own duration + the queue's.
-  final int queueCount;
-  final int queueExtraMinutes;
+  /// The minute this block sits at: the task's own startMinute, or the
+  /// slot DERIVED from its chain (anchor start + earlier links' durations)
+  /// for queue members. Null only for Anytime-tray entries.
+  final int? displayStartMinute;
+
+  /// True for queue members riding a derived slot — their card gets the 🔗
+  /// prefix and dragging them to a new slot detaches them from the chain.
+  final bool isChained;
 
   _TimelineEntry({
     required this.task,
     required this.rowState,
     this.milestone,
-    this.queueCount = 0,
-    this.queueExtraMinutes = 0,
+    this.displayStartMinute,
+    this.isChained = false,
   });
 }
 
@@ -777,14 +847,11 @@ class _TimeGrid extends StatelessWidget {
                     left: _hourLabelWidth,
                     right: 12,
                     top: _gridTopPadding +
-                        (e.task.startMinute ?? 0) * _pxPerMinute,
+                        (e.displayStartMinute ?? 0) * _pxPerMinute,
                     // 32 fits one line of the task name comfortably; the card
                     // itself drops the time-range subtitle if it's still too
-                    // short for both lines. Queue anchors span their whole
-                    // chain's total time.
-                    height: ((effectiveDuration(e.task) +
-                                e.queueExtraMinutes) *
-                            _pxPerMinute)
+                    // short for both lines.
+                    height: (effectiveDuration(e.task) * _pxPerMinute)
                         .clamp(32.0, double.infinity),
                     child: _TimelineTaskCard(
                       entry: e,
@@ -1095,14 +1162,13 @@ class _CardSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = _accent(context);
     final bg = _bg(context);
-    final start = task.startMinute ?? 0;
-    // Queue anchors display the whole chain: name badge + total time span.
-    final totalMinutes = effectiveDurationMinutes + entry.queueExtraMinutes;
-    final displayName = entry.queueCount > 0
-        ? '🔗 ${task.name} +${entry.queueCount}'
-        : task.name;
+    final start = entry.displayStartMinute ?? 0;
+    // Chained blocks carry the 🔗 marker — their slot is derived from the
+    // anchor, not their own start time.
+    final displayName =
+        entry.isChained ? '🔗 ${task.name}' : task.name;
     final timeRange =
-        '${_fmtMinutes(start)} – ${_fmtMinutes(start + totalMinutes)}';
+        '${_fmtMinutes(start)} – ${_fmtMinutes(start + effectiveDurationMinutes)}';
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
       decoration: BoxDecoration(
@@ -1280,6 +1346,9 @@ void _showSkipMissedSheet(
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
+    // Up to 5 rows + cancel — allow past the half-screen cap, and scroll
+    // as the safety net on short screens.
+    isScrollControlled: true,
     builder: (ctx) {
       return Container(
         decoration: BoxDecoration(
@@ -1290,7 +1359,8 @@ void _showSkipMissedSheet(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         child: SafeArea(
           top: false,
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
@@ -1363,6 +1433,7 @@ void _showSkipMissedSheet(
                 ),
               ),
             ],
+            ),
           ),
         ),
       );
