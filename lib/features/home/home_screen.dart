@@ -73,13 +73,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   bool get _viewingToday => _viewDate.isAtSameMomentAs(_todayDate);
+  bool get _viewingFuture => _viewDate.isAfter(_todayDate);
 
   Future<void> _pickViewDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _viewDate,
       firstDate: _todayDate.subtract(const Duration(days: 365)),
-      lastDate: _todayDate,
+      lastDate: _todayDate.add(const Duration(days: 365)),
     );
     if (picked != null) {
       setState(() =>
@@ -193,6 +194,87 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 meta: metaFor(t),
               )),
         ],
+      ],
+    );
+  }
+
+  /// Preview of a future day's plan: what will surface on Home that day.
+  /// Static rows — tasks are acted on when the day arrives.
+  Widget _buildFutureDayList(
+    List<Task> tasks,
+    Map<String, Milestone> milestoneById,
+    Map<String, Task> taskById,
+  ) {
+    // Same surfacing rules as the live Home list, evaluated for _viewDate:
+    // recurrence hit or open dated one-shot; undated one-shots surface every
+    // day until done, stacked ones ride their anchor's schedule.
+    bool plannedOn(Task t) {
+      if (_isScheduledToday(t, _viewDate)) return true;
+      if (t.recurrence == TaskRecurrence.none &&
+          t.status == TaskStatus.active &&
+          t.dueDate == null) {
+        final anchorId = t.stackedAfterTaskId;
+        if (anchorId == null) return true;
+        final anchor = taskById[anchorId];
+        return anchor == null || _isScheduledToday(anchor, _viewDate);
+      }
+      return false;
+    }
+
+    final planned = tasks.where(plannedOn).toList()
+      ..sort((a, b) {
+        final am = a.startMinute ?? 24 * 60;
+        final bm = b.startMinute ?? 24 * 60;
+        if (am != bm) return am.compareTo(bm);
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+
+    if (planned.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Text(
+            'Nothing planned for this day yet 🗓',
+            style: AppTypography.body
+                .copyWith(color: context.appTextSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    String metaFor(Task t) {
+      final parts = <String>[];
+      if (t.startMinute != null) {
+        parts.add(TimeOfDay(
+                hour: t.startMinute! ~/ 60, minute: t.startMinute! % 60)
+            .format(context));
+      }
+      final m = milestoneById[t.milestoneId];
+      if (m != null) parts.add(m.name);
+      parts.add(_cadenceLabel(t));
+      if (t.recurrence == TaskRecurrence.none && t.dueDate != null) {
+        parts.add('due ${DateFormat.MMMd().format(t.dueDate!)}');
+      } else if (t.recurrence != TaskRecurrence.none) {
+        final ends = RecurrenceRule.fromTask(t).untilLabel;
+        if (ends != null) parts.add('ends $ends');
+      }
+      parts.add('~${formatQueueMinutes(t.durationMinutes)}');
+      final anchorName = taskById[t.stackedAfterTaskId]?.name;
+      if (anchorName != null) parts.add('🔗 After $anchorName');
+      return parts.join(' · ');
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      children: [
+        _SectionHeader('Planned · ${planned.length}'),
+        ...planned.map((t) => _ReviewRow(
+              icon: Icons.schedule_rounded,
+              color: AppColors.infoBlue,
+              title: t.name,
+              meta: metaFor(t),
+            )),
       ],
     );
   }
@@ -510,7 +592,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Expanded(
             child: _viewMode == HomeViewMode.timeline
                 ? TimelineView(date: _viewingToday ? null : _viewDate)
-                : !_viewingToday
+                : _viewingFuture
+                    ? _buildFutureDayList(tasks, milestoneById, taskById)
+                    : !_viewingToday
                     ? _buildPastDayList(
                         tasks, completions, milestoneById, taskById)
                     : ListView(
@@ -707,6 +791,11 @@ String _metaForHome(Task task, Milestone? milestone, TaskRowState rowState,
   final parts = <String>[];
   if (milestone != null) parts.add(milestone.name);
   parts.add(_cadenceLabel(task));
+  // Deadline pressure, quietly: a recurring task with an end date shows it.
+  if (task.recurrence != TaskRecurrence.none) {
+    final ends = RecurrenceRule.fromTask(task).untilLabel;
+    if (ends != null) parts.add('ends $ends');
+  }
   parts.add('${task.pointsPerCompletion} pts');
   if (queueCount > 0) {
     parts.add('🔗 +$queueCount in queue'

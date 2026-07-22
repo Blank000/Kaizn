@@ -12,6 +12,10 @@ enum MonthlyKind {
 }
 
 const _weekdayShortNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _monthShortNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
 
 /// Parsed recurrence rule for a task. Encapsulates schedule logic and storage.
 ///
@@ -20,6 +24,8 @@ const _weekdayShortNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 ///   Weekly  : {"interval": N, "daysOfWeek": [1..7], "anchor": "ISO"}
 ///   Monthly : {"interval": N, "kind": "day", "dayOfMonth": 1..31, "anchor": "ISO"}
 ///         or  {"interval": N, "kind": "weekday", "weekdayOrdinal": 1..4|-1, "weekday": 1..7, "anchor": "ISO"}
+/// Any shape may add "until": "ISO" — the last day (inclusive) the task
+/// repeats. Absent = repeats forever.
 class RecurrenceRule {
   final TaskRecurrence frequency;
   final int interval;
@@ -29,6 +35,7 @@ class RecurrenceRule {
   final int? weekdayOrdinal;
   final int? weekday;
   final DateTime anchor;
+  final DateTime? until;
 
   const RecurrenceRule._({
     required this.frequency,
@@ -39,6 +46,7 @@ class RecurrenceRule {
     this.dayOfMonth,
     this.weekdayOrdinal,
     this.weekday,
+    this.until,
   });
 
   factory RecurrenceRule.once() => RecurrenceRule._(
@@ -47,29 +55,34 @@ class RecurrenceRule {
         anchor: DateTime.now(),
       );
 
-  factory RecurrenceRule.daily({required int interval, DateTime? anchor}) =>
+  factory RecurrenceRule.daily(
+          {required int interval, DateTime? anchor, DateTime? until}) =>
       RecurrenceRule._(
         frequency: TaskRecurrence.daily,
         interval: interval,
         anchor: anchor ?? DateTime.now(),
+        until: until,
       );
 
   factory RecurrenceRule.weekly({
     required int interval,
     required List<int> daysOfWeek,
     DateTime? anchor,
+    DateTime? until,
   }) =>
       RecurrenceRule._(
         frequency: TaskRecurrence.weekly,
         interval: interval,
         daysOfWeek: List.unmodifiable(daysOfWeek..sort()),
         anchor: anchor ?? DateTime.now(),
+        until: until,
       );
 
   factory RecurrenceRule.monthlyByDay({
     required int interval,
     required int dayOfMonth,
     DateTime? anchor,
+    DateTime? until,
   }) =>
       RecurrenceRule._(
         frequency: TaskRecurrence.monthly,
@@ -77,6 +90,7 @@ class RecurrenceRule {
         anchor: anchor ?? DateTime.now(),
         monthlyKind: MonthlyKind.dayOfMonth,
         dayOfMonth: dayOfMonth,
+        until: until,
       );
 
   factory RecurrenceRule.monthlyByWeekday({
@@ -84,6 +98,7 @@ class RecurrenceRule {
     required int weekdayOrdinal, // 1-4 or -1 for last
     required int weekday, // 1-7
     DateTime? anchor,
+    DateTime? until,
   }) =>
       RecurrenceRule._(
         frequency: TaskRecurrence.monthly,
@@ -92,6 +107,7 @@ class RecurrenceRule {
         monthlyKind: MonthlyKind.weekdayPosition,
         weekdayOrdinal: weekdayOrdinal,
         weekday: weekday,
+        until: until,
       );
 
   /// Parse from a Task. Falls back to sensible defaults if config is missing
@@ -120,10 +136,14 @@ class RecurrenceRule {
 
     final interval = (cfg?['interval'] as int?) ?? 1;
     final anchor = parseAnchor(cfg?['anchor']);
+    final untilRaw = cfg?['until'];
+    final until =
+        untilRaw is String ? DateTime.tryParse(untilRaw) : null;
 
     switch (task.recurrence) {
       case TaskRecurrence.daily:
-        return RecurrenceRule.daily(interval: interval, anchor: anchor);
+        return RecurrenceRule.daily(
+            interval: interval, anchor: anchor, until: until);
       case TaskRecurrence.weekly:
         final days = (cfg?['daysOfWeek'] as List?)
                 ?.cast<int>()
@@ -134,6 +154,7 @@ class RecurrenceRule {
           interval: interval,
           daysOfWeek: days.isEmpty ? [anchor.weekday] : days,
           anchor: anchor,
+          until: until,
         );
       case TaskRecurrence.monthly:
         final kind = cfg?['kind'] == 'weekday'
@@ -145,12 +166,14 @@ class RecurrenceRule {
             weekdayOrdinal: (cfg?['weekdayOrdinal'] as int?) ?? 1,
             weekday: (cfg?['weekday'] as int?) ?? anchor.weekday,
             anchor: anchor,
+            until: until,
           );
         }
         return RecurrenceRule.monthlyByDay(
           interval: interval,
           dayOfMonth: (cfg?['dayOfMonth'] as int?) ?? anchor.day,
           anchor: anchor,
+          until: until,
         );
       case TaskRecurrence.none:
         return RecurrenceRule.once();
@@ -164,6 +187,7 @@ class RecurrenceRule {
     final base = {
       'interval': interval,
       'anchor': anchor.toIso8601String(),
+      if (until != null) 'until': until!.toIso8601String(),
     };
     switch (frequency) {
       case TaskRecurrence.daily:
@@ -194,6 +218,8 @@ class RecurrenceRule {
     final d = _dateOnly(date);
     final a = _dateOnly(anchor);
     if (d.isBefore(a)) return false;
+    // Deadline: the task's run is over after `until` (inclusive last day).
+    if (until != null && d.isAfter(_dateOnly(until!))) return false;
 
     switch (frequency) {
       case TaskRecurrence.none:
@@ -269,19 +295,29 @@ class RecurrenceRule {
   }
 
   /// Human-readable summary, e.g. "Mon · Wed · Fri", "Every 2 weeks · Mon",
-  /// "Day 1 of every month", "Last Friday of every month".
+  /// "Day 1 of every month · until Jul 26", "Last Friday of every month".
   String summary() {
     switch (frequency) {
       case TaskRecurrence.none:
         return 'One-time';
       case TaskRecurrence.daily:
-        return interval == 1 ? 'Every day' : 'Every $interval days';
+        final base = interval == 1 ? 'Every day' : 'Every $interval days';
+        return '$base$_untilSuffix';
       case TaskRecurrence.weekly:
-        return _weeklySummary();
+        return '${_weeklySummary()}$_untilSuffix';
       case TaskRecurrence.monthly:
-        return _monthlySummary();
+        return '${_monthlySummary()}$_untilSuffix';
     }
   }
+
+  String get _untilSuffix => until == null
+      ? ''
+      : ' · until ${untilLabel!}';
+
+  /// Short "Jul 26" label for the deadline (null when the rule never ends).
+  String? get untilLabel => until == null
+      ? null
+      : '${_monthShortNames[until!.month - 1]} ${until!.day}';
 
   String _weeklySummary() {
     final dayLabels = daysOfWeek.map((d) => _weekdayShortNames[d - 1]).toList();

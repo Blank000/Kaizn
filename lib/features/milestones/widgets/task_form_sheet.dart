@@ -63,6 +63,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   int _weekdayOrdinal = 1;
   late int _weekdayMonthly;
   DateTime? _anchor;
+  // Optional deadline for recurring tasks: last day (inclusive) the task
+  // repeats. Null = repeats forever.
+  DateTime? _until;
 
   DateTime? _dueDate;
 
@@ -134,6 +137,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         // shift. (For interval=1 this has no effect, but keeps later edits
         // safe if interval is bumped up.)
         _anchor = rule.anchor;
+        _until = rule.until;
         if (rule.frequency == TaskRecurrence.weekly) {
           _daysOfWeek = rule.daysOfWeek.toSet();
         }
@@ -223,17 +227,34 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     if (picked != null) setState(() => _anchor = picked);
   }
 
+  Future<void> _pickUntil() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // An already-passed deadline (editing an ended task) still needs to be
+    // a legal initialDate, so the window opens at whichever is earlier.
+    final initial = _until ?? today.add(const Duration(days: 7));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: initial.isBefore(today) ? initial : today,
+      lastDate: DateTime(now.year + 5),
+    );
+    if (picked != null) setState(() => _until = picked);
+  }
+
   RecurrenceRule? _buildRule() {
     switch (_frequency) {
       case TaskRecurrence.none:
         return null;
       case TaskRecurrence.daily:
-        return RecurrenceRule.daily(interval: _interval, anchor: _anchor);
+        return RecurrenceRule.daily(
+            interval: _interval, anchor: _anchor, until: _until);
       case TaskRecurrence.weekly:
         return RecurrenceRule.weekly(
           interval: _interval,
           daysOfWeek: _daysOfWeek.toList(),
           anchor: _anchor,
+          until: _until,
         );
       case TaskRecurrence.monthly:
         if (_monthlyKind == MonthlyKind.weekdayPosition) {
@@ -242,12 +263,14 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
             weekdayOrdinal: _weekdayOrdinal,
             weekday: _weekdayMonthly,
             anchor: _anchor,
+            until: _until,
           );
         }
         return RecurrenceRule.monthlyByDay(
           interval: _interval,
           dayOfMonth: _dayOfMonth,
           anchor: _anchor,
+          until: _until,
         );
     }
   }
@@ -439,6 +462,10 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               if (_frequency != TaskRecurrence.none && _interval > 1) ...[
                 const SizedBox(height: 16),
                 _buildAnchorPicker(),
+              ],
+              if (_frequency != TaskRecurrence.none) ...[
+                const SizedBox(height: 16),
+                _buildUntilPicker(),
               ],
               if (_frequency == TaskRecurrence.none) ...[
                 const SizedBox(height: 8),
@@ -652,6 +679,35 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               : DateFormat.yMMMMd().format(_anchor!),
           style: AppTypography.body.copyWith(
             color: _anchor == null
+                ? context.appTextSecondary
+                : context.appTextPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUntilPicker() {
+    return InkWell(
+      onTap: _pickUntil,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Ends on',
+          helperText: 'Last day this repeats — leave empty to repeat forever',
+          suffixIcon: _until == null
+              ? const Icon(Icons.event_outlined)
+              : IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => setState(() => _until = null),
+                ),
+        ),
+        child: Text(
+          _until == null
+              ? 'Repeats forever'
+              : DateFormat.yMMMMd().format(_until!),
+          style: AppTypography.body.copyWith(
+            color: _until == null
                 ? context.appTextSecondary
                 : context.appTextPrimary,
           ),
