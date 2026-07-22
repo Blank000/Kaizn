@@ -37,6 +37,12 @@ function Test-VmSocket {
 }
 
 Write-Host "[dev] Device: $Device  VM-service port: $Port" -ForegroundColor Green
+
+# Kill any already-running instance FIRST. A live pid would fool the
+# launch detector below into thinking the fresh install finished, the
+# build job would be stopped mid-Gradle, and we'd attach to STALE code.
+adb -s $Device shell am force-stop $App | Out-Null
+
 Write-Host "[dev] Step 1/3: build + install + launch (progress below)..." -ForegroundColor Green
 
 $job = Start-Job -ScriptBlock {
@@ -86,11 +92,12 @@ if (-not $appUp) {
 }
 
 Write-Host "[dev] Step 2/3: cold-starting with fixed VM-service port..." -ForegroundColor Green
-if (-not (Test-VmSocket)) {
-  adb -s $Device shell am force-stop $App | Out-Null
-  Start-Sleep -Seconds 1
-  adb -s $Device shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x20000000 --ez enable-dart-profiling true --ez enable-checked-mode true --ez verify-entry-points true --ei vm-service-port $Port --ei observatory-port $Port --ez disable-service-auth-codes true "$App/.MainActivity" | Out-Null
-}
+# ALWAYS restart, even if a socket is already listening — a listening
+# socket could belong to a stale process running old code. A cold start
+# guarantees the process runs the APK we just installed.
+adb -s $Device shell am force-stop $App | Out-Null
+Start-Sleep -Seconds 1
+adb -s $Device shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x20000000 --ez enable-dart-profiling true --ez enable-checked-mode true --ez verify-entry-points true --ei vm-service-port $Port --ei observatory-port $Port --ez disable-service-auth-codes true "$App/.MainActivity" | Out-Null
 
 $sockDeadline = (Get-Date).AddSeconds(45)
 while (-not (Test-VmSocket)) {
