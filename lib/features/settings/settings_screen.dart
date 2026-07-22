@@ -510,17 +510,17 @@ class _AccountCard extends StatelessWidget {
   Future<void> _confirmSignOut(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dctx) => AlertDialog(
         title: const Text('Sign out?'),
         content: const Text(
             "Your data stays in your Google Drive backup. Sign back in on this or another device to restore it."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dctx).pop(false),
             child: const Text('CANCEL'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dctx).pop(true),
             style: TextButton.styleFrom(
                 foregroundColor: AppColors.missedRed),
             child: const Text('SIGN OUT'),
@@ -596,17 +596,17 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
   Future<void> _restore() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dctx) => AlertDialog(
         title: const Text('Restore from backup?'),
         content: const Text(
             "Replaces all current data on this device with your latest Drive backup. This can't be undone."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dctx).pop(false),
             child: const Text('CANCEL'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dctx).pop(true),
             child: const Text('RESTORE'),
           ),
         ],

@@ -134,20 +134,24 @@ class MilestoneDetailScreen extends ConsumerWidget {
 
   Future<void> _markComplete(
       BuildContext context, WidgetRef ref, Milestone milestone) async {
+    // NOTE: dialogs must pop with the DIALOG's context (dctx). This screen
+    // lives inside the bottom-nav shell navigator, but showDialog mounts on
+    // the root navigator — popping with the screen's context targets the
+    // wrong navigator and the await never resolves.
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dctx) => AlertDialog(
         title: const Text('Mark milestone complete?'),
         content: Text(milestone.completionPoints > 0
             ? "You'll earn a ${milestone.completionPoints}-point bonus. This can't be undone."
             : "This can't be undone."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dctx).pop(false),
             child: const Text('CANCEL'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dctx).pop(true),
             child: const Text('COMPLETE'),
           ),
         ],
@@ -184,20 +188,21 @@ class MilestoneDetailScreen extends ConsumerWidget {
     Milestone milestone,
     int taskCount,
   ) async {
+    // Pops MUST use the dialog's context (dctx) — see _markComplete note.
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dctx) => AlertDialog(
         title: const Text('Delete milestone?'),
         content: Text(taskCount == 0
             ? '"${milestone.name}" will be permanently deleted.'
             : '"${milestone.name}" and its $taskCount task${taskCount == 1 ? '' : 's'} (with all completion history) will be permanently deleted.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(dctx).pop(false),
             child: const Text('CANCEL'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('DELETE'),
           ),
@@ -391,19 +396,22 @@ class _TaskGroup extends ConsumerWidget {
                     showTaskFormSheet(context,
                         milestoneId: t.milestoneId, task: t);
                   } else if (v == 'delete') {
+                    // Pops MUST use the dialog's context (dctx) — this
+                    // screen is inside the shell navigator; the dialog is
+                    // on the root one.
                     final ok = await showDialog<bool>(
                       context: context,
-                      builder: (_) => AlertDialog(
+                      builder: (dctx) => AlertDialog(
                         title: const Text('Delete task?'),
                         content: Text(
                             '"${t.name}" and its completion history will be permanently deleted.'),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
+                            onPressed: () => Navigator.of(dctx).pop(false),
                             child: const Text('CANCEL'),
                           ),
                           TextButton(
-                            onPressed: () => Navigator.of(context).pop(true),
+                            onPressed: () => Navigator.of(dctx).pop(true),
                             style: TextButton.styleFrom(
                                 foregroundColor: Colors.red),
                             child: const Text('DELETE'),
