@@ -103,6 +103,8 @@ while (-not (Test-VmSocket)) {
 Write-Host "      device socket 127.0.0.1:$Port is LISTENING" -ForegroundColor DarkGray
 
 Write-Host "[dev] Step 3/3: forward + attach (r / R / q work below once connected)" -ForegroundColor Green
-adb -s $Device forward --remove "tcp:$Port" 2>$null | Out-Null
+# cmd /c isolates adb's stderr — under EAP=Stop, PowerShell 5.1 turns a
+# harmless "listener not found" stderr line into a script-killing error.
+cmd /c "adb -s $Device forward --remove tcp:$Port >nul 2>&1"
 adb -s $Device forward "tcp:$Port" "tcp:$Port" | Out-Null
 flutter attach -d $Device --debug-url="http://127.0.0.1:$Port/"
