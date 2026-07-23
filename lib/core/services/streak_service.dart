@@ -57,22 +57,43 @@ class StreakService {
     final today = DateTime(now.year, now.month, now.day);
     Streak current = streak;
 
-    if (streak.lastLoggedDate != null) {
+    // Rest mode: every day of the window counts as intentional rest — roll
+    // lastLoggedDate forward (up to yesterday, or the window's end if that
+    // came first) so the gap can't read as a break. Days AFTER the window
+    // count normally again, no cleanup needed.
+    final restUntil = AppPrefs.restModeUntilSync;
+    if (restUntil != null && current.lastLoggedDate != null) {
+      final restEnd =
+          DateTime(restUntil.year, restUntil.month, restUntil.day);
+      final yesterday = today.subtract(const Duration(days: 1));
+      final cover = restEnd.isBefore(yesterday) ? restEnd : yesterday;
       final lastLogged = DateTime(
-        streak.lastLoggedDate!.year,
-        streak.lastLoggedDate!.month,
-        streak.lastLoggedDate!.day,
+        current.lastLoggedDate!.year,
+        current.lastLoggedDate!.month,
+        current.lastLoggedDate!.day,
+      );
+      if (cover.isAfter(lastLogged)) {
+        current = current.copyWith(lastLoggedDate: Value(cover));
+        await db.updateStreak(current);
+      }
+    }
+
+    if (current.lastLoggedDate != null) {
+      final lastLogged = DateTime(
+        current.lastLoggedDate!.year,
+        current.lastLoggedDate!.month,
+        current.lastLoggedDate!.day,
       );
       if (today.difference(lastLogged).inDays >= 2) {
-        final oldStreak = streak.currentStreak;
-        current = streak.copyWith(
+        final oldStreak = current.currentStreak;
+        current = current.copyWith(
           currentStreak: 0,
           lastMilestoneCelebrated: 0,
         );
         await db.updateStreak(current);
         return StreakCheckResult(
           currentStreak: 0,
-          longestStreak: streak.longestStreak,
+          longestStreak: current.longestStreak,
           wasReset: true,
           streakBeforeReset: oldStreak,
         );

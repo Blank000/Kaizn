@@ -122,6 +122,39 @@ class AppPrefs {
     _activeTimerStartedAtCache = p.getInt(_activeTimerStartedAtKey);
     final coachIso = p.getString(_coachDismissedKey);
     _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
+    final restIso = p.getString(_restModeUntilKey);
+    _restModeUntilCache = restIso == null ? null : DateTime.tryParse(restIso);
+  }
+
+  // ── Rest mode (guilt-free multi-day pause) ────────────────────────────────
+  // While today <= restModeUntil: streak treats the window as intentional
+  // rest, notifications/quests/celebrations stand down. Expires by itself.
+
+  static const _restModeUntilKey = 'rest_mode_until';
+  static DateTime? _restModeUntilCache;
+
+  /// Last day (inclusive, date-only) of the rest window; null = not resting.
+  static DateTime? get restModeUntilSync => _restModeUntilCache;
+
+  /// True while the rest window covers today.
+  static bool get isRestingSync {
+    final until = _restModeUntilCache;
+    if (until == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return !today.isAfter(DateTime(until.year, until.month, until.day));
+  }
+
+  static Future<void> setRestModeUntil(DateTime? date) async {
+    final p = await SharedPreferences.getInstance();
+    if (date == null) {
+      await p.remove(_restModeUntilKey);
+      _restModeUntilCache = null;
+    } else {
+      final dateOnly = DateTime(date.year, date.month, date.day);
+      await p.setString(_restModeUntilKey, dateOnly.toIso8601String());
+      _restModeUntilCache = dateOnly;
+    }
   }
 
   static bool get isOnboardingCompleteSync => _onboardingCompleteCache;

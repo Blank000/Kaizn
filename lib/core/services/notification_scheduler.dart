@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
 
 import '../../shared/models/recurrence_rule.dart';
 import '../database/database.dart';
+import 'app_prefs.dart';
 import 'notification_prefs.dart';
 import 'notification_service.dart';
 
@@ -77,6 +78,15 @@ class NotificationScheduler {
     }
     _running = true;
     try {
+      // Rest mode: the calm IS the feature — no pings of any kind while the
+      // window covers today. Cancel everything; the first reschedule after
+      // the window expires (app open/resume) restores the full set.
+      if (AppPrefs.isRestingSync) {
+        debugPrint('🔔 reschedule: rest mode — cancelling managed alarms');
+        await NotificationService.cancelManaged();
+        return;
+      }
+
       final morningEnabled = await NotificationPrefs.isDailyEnabled();
       final morningTime = await NotificationPrefs.getDailyTime();
       final eveningEnabled = await NotificationPrefs.isStreakAlertEnabled();

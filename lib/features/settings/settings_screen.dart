@@ -111,6 +111,65 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 24),
+          _SectionLabel('Rest'),
+          const SizedBox(height: 8),
+          _Card(
+            children: [
+              // Guilt-free multi-day pause: streak safe, notifications and
+              // quests stand down, resumes by itself on the end date.
+              StatefulBuilder(builder: (context, setTileState) {
+                final until = AppPrefs.restModeUntilSync;
+                final resting = AppPrefs.isRestingSync;
+                return ListTile(
+                  leading: const Text('😴',
+                      style: TextStyle(fontSize: 22)),
+                  title: Text(
+                      resting ? 'Resting' : 'Rest mode',
+                      style: AppTypography.body),
+                  subtitle: Text(
+                    resting
+                        ? 'Until ${DateFormat.MMMd().format(until!)} · streak safe, no pings'
+                        : 'Travel, illness, burnout — pause everything guilt-free',
+                    style: AppTypography.caption.copyWith(
+                      color: context.appTextSecondary,
+                    ),
+                  ),
+                  trailing: resting
+                      ? TextButton(
+                          onPressed: () async {
+                            await AppPrefs.setRestModeUntil(null);
+                            await NotificationScheduler.reschedule();
+                            setTileState(() {});
+                          },
+                          child: const Text('END NOW'),
+                        )
+                      : Icon(Icons.chevron_right_rounded,
+                          color: context.appTextSecondary),
+                  onTap: resting
+                      ? null
+                      : () async {
+                          final now = DateTime.now();
+                          final today = DateTime(
+                              now.year, now.month, now.day);
+                          final picked = await showDatePicker(
+                            context: context,
+                            helpText: 'Rest until (last day included)',
+                            initialDate:
+                                today.add(const Duration(days: 7)),
+                            firstDate: today,
+                            lastDate:
+                                today.add(const Duration(days: 90)),
+                          );
+                          if (picked == null) return;
+                          await AppPrefs.setRestModeUntil(picked);
+                          await NotificationScheduler.reschedule();
+                          setTileState(() {});
+                        },
+                );
+              }),
+            ],
+          ),
+          const SizedBox(height: 24),
           _SectionLabel('More'),
           const SizedBox(height: 8),
           _Card(
