@@ -27,6 +27,10 @@ class TaskCompletions extends Table {
   BoolColumn get isSkip => boolean().withDefault(const Constant(false))();
   BoolColumn get isNd => boolean().withDefault(const Constant(false))();
 
+  // Miss check-in tag (on is_nd rows only): 'not_seen' | 'too_hard' |
+  // 'no_time' | 'no_mood'. Null = user dismissed the check-in.
+  TextColumn get missReason => text().nullable()();
+
   TextColumn get note => text().nullable()();
 
   // Exact timestamp of the log event.

@@ -18,6 +18,7 @@ import '../../../shared/models/recurrence_rule.dart';
 import '../../../shared/models/task_stack.dart';
 import '../../../shared/providers/database_provider.dart';
 import '../../../shared/widgets/achievement_snackbar.dart';
+import '../../../shared/widgets/miss_check_in_sheet.dart';
 import '../../../shared/widgets/moment_celebrations.dart';
 import '../../../shared/widgets/queue_sheet.dart';
 import '../../../shared/widgets/reward_unlock_snackbar.dart';
@@ -226,8 +227,11 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
           },
           onMissed: () async {
             final db = ref.read(databaseProvider);
-            await db.markTaskMissed(task);
+            final cid = await db.markTaskMissed(task);
             HapticFeedback.lightImpact();
+            if (mounted) {
+              await showMissCheckInSheet(context, ref, task, cid);
+            }
           },
         );
       }

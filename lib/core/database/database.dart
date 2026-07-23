@@ -60,8 +60,10 @@ class AppDatabase extends _$AppDatabase {
   // 8 → 9 gamification wave: `league_weeks` table (weekly close-outs with
   //        normalized metrics — real-league prep) + quest/chest PointsReason
   //        values (textEnum, no column change).
+  // 9 → 10 miss check-in: `miss_reason` on task_completions (self-compassion
+  //        triage tag; powers Goldilocks "3× same reason" suggestions later).
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration {
@@ -113,6 +115,10 @@ class AppDatabase extends _$AppDatabase {
         if (from < 9) {
           // v8 → v9: weekly league close-outs.
           await m.createTable(leagueWeeks);
+        }
+        if (from < 10) {
+          // v9 → v10: miss check-in reason tag.
+          await m.addColumn(taskCompletions, taskCompletions.missReason);
         }
       },
     );
@@ -494,7 +500,8 @@ class AppDatabase extends _$AppDatabase {
   /// Mark a task as missed (Not Done) today: insert a `task_completion` row
   /// with `is_nd = true`. No points awarded, no streak update — ND is purely
   /// honest tracking, equivalent to "didn't do it" except the row exists.
-  Future<void> markTaskMissed(Task task) {
+  /// Returns the completion id so the miss check-in can tag a reason on it.
+  Future<String> markTaskMissed(Task task) {
     return transaction(() async {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -509,6 +516,19 @@ class AppDatabase extends _$AppDatabase {
       );
       await _logChange('completion', id, 'create',
           payload: {'taskId': task.id, 'kind': 'missed'});
+      return id;
+    });
+  }
+
+  /// Tag a miss with what got in the way ('not_seen' | 'too_hard' |
+  /// 'no_time' | 'no_mood'). No-op if the completion was undone meanwhile.
+  Future<void> setMissReason(String completionId, String reason) {
+    return transaction(() async {
+      await (update(taskCompletions)
+            ..where((c) => c.id.equals(completionId)))
+          .write(TaskCompletionsCompanion(missReason: Value(reason)));
+      await _logChange('completion', completionId, 'update',
+          payload: {'missReason': reason});
     });
   }
 
@@ -1105,6 +1125,17 @@ class AppDatabase extends _$AppDatabase {
           ..where((t) =>
               t.milestoneId.equals(milestoneId) &
               t.status.equals(TaskStatus.archived.value).not())
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .watch();
+  }
+
+  /// Shelved (archived) tasks of a milestone — the comeback flow parks
+  /// tasks here; milestone detail offers the way back.
+  Stream<List<Task>> watchShelvedTasksForMilestone(String milestoneId) {
+    return (select(tasks)
+          ..where((t) =>
+              t.milestoneId.equals(milestoneId) &
+              t.status.equals(TaskStatus.archived.value))
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .watch();
   }

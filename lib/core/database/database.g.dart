@@ -1905,6 +1905,17 @@ class $TaskCompletionsTable extends TaskCompletions
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _missReasonMeta = const VerificationMeta(
+    'missReason',
+  );
+  @override
+  late final GeneratedColumn<String> missReason = GeneratedColumn<String>(
+    'miss_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
   late final GeneratedColumn<String> note = GeneratedColumn<String>(
@@ -1937,6 +1948,7 @@ class $TaskCompletionsTable extends TaskCompletions
     isTiny,
     isSkip,
     isNd,
+    missReason,
     note,
     createdAt,
   ];
@@ -2018,6 +2030,12 @@ class $TaskCompletionsTable extends TaskCompletions
         isNd.isAcceptableOrUnknown(data['is_nd']!, _isNdMeta),
       );
     }
+    if (data.containsKey('miss_reason')) {
+      context.handle(
+        _missReasonMeta,
+        missReason.isAcceptableOrUnknown(data['miss_reason']!, _missReasonMeta),
+      );
+    }
     if (data.containsKey('note')) {
       context.handle(
         _noteMeta,
@@ -2075,6 +2093,10 @@ class $TaskCompletionsTable extends TaskCompletions
         DriftSqlType.bool,
         data['${effectivePrefix}is_nd'],
       )!,
+      missReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}miss_reason'],
+      ),
       note: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}note'],
@@ -2102,6 +2124,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
   final bool isTiny;
   final bool isSkip;
   final bool isNd;
+  final String? missReason;
   final String? note;
   final DateTime createdAt;
   const TaskCompletion({
@@ -2114,6 +2137,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     required this.isTiny,
     required this.isSkip,
     required this.isNd,
+    this.missReason,
     this.note,
     required this.createdAt,
   });
@@ -2131,6 +2155,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     map['is_tiny'] = Variable<bool>(isTiny);
     map['is_skip'] = Variable<bool>(isSkip);
     map['is_nd'] = Variable<bool>(isNd);
+    if (!nullToAbsent || missReason != null) {
+      map['miss_reason'] = Variable<String>(missReason);
+    }
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
     }
@@ -2151,6 +2178,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       isTiny: Value(isTiny),
       isSkip: Value(isSkip),
       isNd: Value(isNd),
+      missReason: missReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(missReason),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       createdAt: Value(createdAt),
     );
@@ -2171,6 +2201,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       isTiny: serializer.fromJson<bool>(json['isTiny']),
       isSkip: serializer.fromJson<bool>(json['isSkip']),
       isNd: serializer.fromJson<bool>(json['isNd']),
+      missReason: serializer.fromJson<String?>(json['missReason']),
       note: serializer.fromJson<String?>(json['note']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -2188,6 +2219,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       'isTiny': serializer.toJson<bool>(isTiny),
       'isSkip': serializer.toJson<bool>(isSkip),
       'isNd': serializer.toJson<bool>(isNd),
+      'missReason': serializer.toJson<String?>(missReason),
       'note': serializer.toJson<String?>(note),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -2203,6 +2235,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     bool? isTiny,
     bool? isSkip,
     bool? isNd,
+    Value<String?> missReason = const Value.absent(),
     Value<String?> note = const Value.absent(),
     DateTime? createdAt,
   }) => TaskCompletion(
@@ -2217,6 +2250,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     isTiny: isTiny ?? this.isTiny,
     isSkip: isSkip ?? this.isSkip,
     isNd: isNd ?? this.isNd,
+    missReason: missReason.present ? missReason.value : this.missReason,
     note: note.present ? note.value : this.note,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -2237,6 +2271,9 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
       isTiny: data.isTiny.present ? data.isTiny.value : this.isTiny,
       isSkip: data.isSkip.present ? data.isSkip.value : this.isSkip,
       isNd: data.isNd.present ? data.isNd.value : this.isNd,
+      missReason: data.missReason.present
+          ? data.missReason.value
+          : this.missReason,
       note: data.note.present ? data.note.value : this.note,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -2254,6 +2291,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
           ..write('isTiny: $isTiny, ')
           ..write('isSkip: $isSkip, ')
           ..write('isNd: $isNd, ')
+          ..write('missReason: $missReason, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -2271,6 +2309,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
     isTiny,
     isSkip,
     isNd,
+    missReason,
     note,
     createdAt,
   );
@@ -2287,6 +2326,7 @@ class TaskCompletion extends DataClass implements Insertable<TaskCompletion> {
           other.isTiny == this.isTiny &&
           other.isSkip == this.isSkip &&
           other.isNd == this.isNd &&
+          other.missReason == this.missReason &&
           other.note == this.note &&
           other.createdAt == this.createdAt);
 }
@@ -2301,6 +2341,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
   final Value<bool> isTiny;
   final Value<bool> isSkip;
   final Value<bool> isNd;
+  final Value<String?> missReason;
   final Value<String?> note;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -2314,6 +2355,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     this.isTiny = const Value.absent(),
     this.isSkip = const Value.absent(),
     this.isNd = const Value.absent(),
+    this.missReason = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2328,6 +2370,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     this.isTiny = const Value.absent(),
     this.isSkip = const Value.absent(),
     this.isNd = const Value.absent(),
+    this.missReason = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2344,6 +2387,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     Expression<bool>? isTiny,
     Expression<bool>? isSkip,
     Expression<bool>? isNd,
+    Expression<String>? missReason,
     Expression<String>? note,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -2358,6 +2402,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
       if (isTiny != null) 'is_tiny': isTiny,
       if (isSkip != null) 'is_skip': isSkip,
       if (isNd != null) 'is_nd': isNd,
+      if (missReason != null) 'miss_reason': missReason,
       if (note != null) 'note': note,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -2374,6 +2419,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     Value<bool>? isTiny,
     Value<bool>? isSkip,
     Value<bool>? isNd,
+    Value<String?>? missReason,
     Value<String?>? note,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -2388,6 +2434,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
       isTiny: isTiny ?? this.isTiny,
       isSkip: isSkip ?? this.isSkip,
       isNd: isNd ?? this.isNd,
+      missReason: missReason ?? this.missReason,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -2424,6 +2471,9 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
     if (isNd.present) {
       map['is_nd'] = Variable<bool>(isNd.value);
     }
+    if (missReason.present) {
+      map['miss_reason'] = Variable<String>(missReason.value);
+    }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
@@ -2448,6 +2498,7 @@ class TaskCompletionsCompanion extends UpdateCompanion<TaskCompletion> {
           ..write('isTiny: $isTiny, ')
           ..write('isSkip: $isSkip, ')
           ..write('isNd: $isNd, ')
+          ..write('missReason: $missReason, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -6155,6 +6206,7 @@ typedef $$TaskCompletionsTableCreateCompanionBuilder =
       Value<bool> isTiny,
       Value<bool> isSkip,
       Value<bool> isNd,
+      Value<String?> missReason,
       Value<String?> note,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -6170,6 +6222,7 @@ typedef $$TaskCompletionsTableUpdateCompanionBuilder =
       Value<bool> isTiny,
       Value<bool> isSkip,
       Value<bool> isNd,
+      Value<String?> missReason,
       Value<String?> note,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -6276,6 +6329,11 @@ class $$TaskCompletionsTableFilterComposer
 
   ColumnFilters<bool> get isNd => $composableBuilder(
     column: $table.isNd,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get missReason => $composableBuilder(
+    column: $table.missReason,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6387,6 +6445,11 @@ class $$TaskCompletionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get missReason => $composableBuilder(
+    column: $table.missReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get note => $composableBuilder(
     column: $table.note,
     builder: (column) => ColumnOrderings(column),
@@ -6459,6 +6522,11 @@ class $$TaskCompletionsTableAnnotationComposer
 
   GeneratedColumn<bool> get isNd =>
       $composableBuilder(column: $table.isNd, builder: (column) => column);
+
+  GeneratedColumn<String> get missReason => $composableBuilder(
+    column: $table.missReason,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
@@ -6555,6 +6623,7 @@ class $$TaskCompletionsTableTableManager
                 Value<bool> isTiny = const Value.absent(),
                 Value<bool> isSkip = const Value.absent(),
                 Value<bool> isNd = const Value.absent(),
+                Value<String?> missReason = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6568,6 +6637,7 @@ class $$TaskCompletionsTableTableManager
                 isTiny: isTiny,
                 isSkip: isSkip,
                 isNd: isNd,
+                missReason: missReason,
                 note: note,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -6583,6 +6653,7 @@ class $$TaskCompletionsTableTableManager
                 Value<bool> isTiny = const Value.absent(),
                 Value<bool> isSkip = const Value.absent(),
                 Value<bool> isNd = const Value.absent(),
+                Value<String?> missReason = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6596,6 +6667,7 @@ class $$TaskCompletionsTableTableManager
                 isTiny: isTiny,
                 isSkip: isSkip,
                 isNd: isNd,
+                missReason: missReason,
                 note: note,
                 createdAt: createdAt,
                 rowid: rowid,

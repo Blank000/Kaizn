@@ -17,6 +17,7 @@ import '../models/task_stack.dart';
 import '../providers/active_timer_provider.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
+import 'miss_check_in_sheet.dart';
 import 'moment_celebrations.dart';
 import 'queue_sheet.dart';
 import 'reward_unlock_snackbar.dart';
@@ -613,8 +614,13 @@ class _TaskTileState extends ConsumerState<TaskTile>
 
   Future<void> _markMissed() async {
     final db = ref.read(databaseProvider);
-    await db.markTaskMissed(widget.task);
+    final completionId = await db.markTaskMissed(widget.task);
     HapticFeedback.lightImpact();
+    // Self-compassion check-in: kind line + "what got in the way?" chips,
+    // routing to the tool that fixes THAT kind of miss. Fully dismissible.
+    if (mounted) {
+      await showMissCheckInSheet(context, ref, widget.task, completionId);
+    }
   }
 
   /// Long-press on a day chip: surface skip/missed options for that
