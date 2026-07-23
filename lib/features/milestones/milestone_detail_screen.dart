@@ -133,6 +133,9 @@ class MilestoneDetailScreen extends ConsumerWidget {
                 tasks: oneShot,
                 completions: completions,
               ),
+            // Shelved tasks (parked by the comeback flow) — quiet rows with
+            // a one-tap way back. History intact, zero daily presence.
+            _ShelvedGroup(milestoneId: milestoneId),
           ],
         ],
       ),
@@ -252,6 +255,68 @@ String _metaForDetail(Task task, TaskRowState state,
     }
   }
   return parts.join(' · ');
+}
+
+/// Shelved (archived) tasks with a RESTORE action. Renders nothing when the
+/// milestone has no shelf.
+class _ShelvedGroup extends ConsumerWidget {
+  final String milestoneId;
+  const _ShelvedGroup({required this.milestoneId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final shelved = ref
+            .watch(shelvedTasksForMilestoneProvider(milestoneId))
+            .valueOrNull ??
+        const <Task>[];
+    if (shelved.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 0, 8),
+            child: Text(
+              'SHELVED',
+              style: AppTypography.caption.copyWith(
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w800,
+                color: context.appTextSecondary,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          ...shelved.map((t) => Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  dense: true,
+                  title: Text(
+                    t.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body
+                        .copyWith(color: context.appTextTertiary),
+                  ),
+                  subtitle: Text(
+                    'Resting — history kept',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextTertiary),
+                  ),
+                  trailing: TextButton(
+                    onPressed: () async {
+                      await ref.read(databaseProvider).updateTask(
+                          t.copyWith(status: TaskStatus.active));
+                      HapticFeedback.lightImpact();
+                    },
+                    child: const Text('RESTORE'),
+                  ),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
 }
 
 class _Header extends StatelessWidget {

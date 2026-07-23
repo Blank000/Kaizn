@@ -123,6 +123,14 @@ final tasksForMilestoneProvider =
   return database.watchAllTasksForMilestone(milestoneId);
 });
 
+/// Shelved (archived) tasks of a milestone — parked by the comeback flow,
+/// restorable from milestone detail.
+final shelvedTasksForMilestoneProvider =
+    StreamProvider.family<List<Task>, String>((ref, milestoneId) {
+  final database = ref.watch(databaseProvider);
+  return database.watchShelvedTasksForMilestone(milestoneId);
+});
+
 /// Lifetime "identity votes" for a milestone — every real completion of its
 /// tasks, all-time. The Atomic Habits ballot box on milestone detail.
 final milestoneVotesProvider =

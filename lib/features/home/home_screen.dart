@@ -9,6 +9,7 @@ import '../../core/services/app_prefs.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/goldilocks_service.dart';
 import '../../core/services/league_service.dart';
+import '../../core/services/notification_scheduler.dart';
 import '../../core/services/quest_service.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/services/timer_service.dart';
@@ -323,6 +324,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (lastOpen != null && lastOpen.isAtSameMomentAs(today)) return;
 
     final db = ref.read(databaseProvider);
+
+    // Long-gap comeback: 7+ days away gets a warm restart screen — never a
+    // broken-streak popup over a graveyard of overdue tasks. The streak
+    // state still settles quietly underneath.
+    if (lastOpen != null && today.difference(lastOpen).inDays >= 7) {
+      await StreakService.checkOnAppOpen(db);
+      await AppPrefs.setLastAppOpenDate(today);
+      if (!mounted) return;
+      // Fresh-start framing everywhere else this session.
+      setState(() => _resetPopupShownThisSession = true);
+      context.push('/comeback');
+      return;
+    }
+
     final result = await StreakService.checkOnAppOpen(db);
     await AppPrefs.setLastAppOpenDate(today);
     if (!mounted) return;
@@ -464,7 +479,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         upNext.isEmpty &&
         missedToday.isEmpty &&
         doneToday.isNotEmpty;
-    if (_viewingToday && allDone && !_allDoneCelebrationFiredThisSession) {
+    if (_viewingToday &&
+        allDone &&
+        !AppPrefs.isRestingSync &&
+        !_allDoneCelebrationFiredThisSession) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _maybeAllDoneCelebration(doneToday.length, todayPoints);
       });
@@ -478,12 +496,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         skippedToday.isEmpty &&
         missedToday.isEmpty;
 
+    // Rest mode: streak safe, no pings, no quests, no judgment. Owns the
+    // attention slot outright while active.
+    final resting = AppPrefs.isRestingSync;
+
     // Never-miss-twice banner (Atomic Habits). Auto-hides reactively the
     // moment a real completion lands today (the completions stream re-emits).
     // One-attention-slot policy: the live timer banner outranks it.
     final timerRunning =
         ref.watch(activeTimerProvider).valueOrNull != null;
-    final showNmtBanner = !timerRunning &&
+    final showNmtBanner = !resting &&
+        !timerRunning &&
         shouldShowNeverMissTwice(
           completions: completions,
           now: now,
@@ -495,7 +518,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // suggestion per day max; dormant until the user's own history triggers
     // it (3 straight misses → shrink; 14-for-14 → level up).
     final coachDismissed = AppPrefs.coachDismissedDateSync;
-    final coachEligible = !timerRunning &&
+    final coachEligible = !resting &&
+        !timerRunning &&
         !showNmtBanner &&
         (coachDismissed == null ||
             !coachDismissed
@@ -564,7 +588,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: child,
                 ),
               ),
-              child: timerRunning
+              child: resting
+                  ? _RestBanner(
+                      key: const ValueKey('slot-rest'),
+                      until: AppPrefs.restModeUntilSync!,
+                      onEnd: () async {
+                        await AppPrefs.setRestModeUntil(null);
+                        await NotificationScheduler.reschedule();
+                        if (mounted) setState(() {});
+                      },
+                    )
+                  : timerRunning
                   ? const ActiveTimerBanner(key: ValueKey('slot-timer'))
                   : (_viewingToday && showNmtBanner)
                       ? NeverMissTwiceBanner(
@@ -611,7 +645,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             currentStreak: streak?.currentStreak ?? 0,
           ),
           const SizedBox(height: 20),
-          if (totalScheduled > 0)
+          if (totalScheduled > 0 && !resting)
             _TodayProgressCard(
               done: doneToday.length,
               total: totalScheduled,
@@ -620,7 +654,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Daily quest — a quiet list row, deliberately NOT a banner (the
           // attention slot stays sacred). No missed state ever: an
           // incomplete quest simply becomes a different quest tomorrow.
-          _QuestRow(tasks: tasks, completions: completions),
+          // Rest mode stands the quest down entirely.
+          if (!resting) _QuestRow(tasks: tasks, completions: completions),
           if (claimableRewards.isNotEmpty) ...[
             const SizedBox(height: 20),
             // One-attention-slot policy: while the never-miss-twice banner
@@ -1412,6 +1447,56 @@ class _ViewToggle extends StatelessWidget {
             ),
             tooltip: 'View another day',
             onPressed: onPickDate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rest-mode banner — owns the attention slot while active. Calm copy,
+/// zero pressure, one exit.
+class _RestBanner extends StatelessWidget {
+  final DateTime until;
+  final Future<void> Function() onEnd;
+
+  const _RestBanner({super.key, required this.until, required this.onEnd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.infoBlue.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border:
+            Border.all(color: AppColors.infoBlue.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Text('😴', style: TextStyle(fontSize: 24)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rest mode · until ${DateFormat.MMMd().format(until)}',
+                  style: AppTypography.body
+                      .copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  'Streak safe · no pings · no quests. Recovery is training.',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onEnd,
+            child: const Text('END NOW'),
           ),
         ],
       ),
