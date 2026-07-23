@@ -134,6 +134,17 @@ class _StopTimerSheet extends StatelessWidget {
                     .copyWith(color: context.appTextTertiary),
                 textAlign: TextAlign.center,
               ),
+            ] else ...[
+              // Estimate calibration: neutral fact, no judgment color —
+              // seeing planned-vs-actual is how time estimates get honest.
+              const SizedBox(height: 4),
+              Text(
+                'Planned ~${task.durationMinutes}m · '
+                'took ${TimerService.formatElapsed(cappedSeconds)}',
+                style: AppTypography.caption
+                    .copyWith(color: context.appTextTertiary),
+                textAlign: TextAlign.center,
+              ),
             ],
             const SizedBox(height: 20),
             if (alreadyDoneToday)

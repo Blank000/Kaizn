@@ -1211,6 +1211,21 @@ class AppDatabase extends _$AppDatabase {
     ).watchSingle().map((r) => r.read<int>('c'));
   }
 
+  /// Average timed-session length for a task in seconds, from completions
+  /// that carried a stopwatch duration. Null when the task was never timed.
+  /// Powers the "usually takes ~45m" hint in the duration picker.
+  Future<int?> getAvgDurationSeconds(String taskId) async {
+    final row = await customSelect(
+      "SELECT AVG(duration_seconds) AS avg_s FROM task_completions "
+      "WHERE task_id = :tid AND duration_seconds IS NOT NULL "
+      "AND is_skip = 0 AND is_nd = 0",
+      variables: [Variable.withString(taskId)],
+      readsFrom: {taskCompletions},
+    ).getSingle();
+    final avg = row.readNullable<double>('avg_s');
+    return avg?.round();
+  }
+
   /// Lifetime "identity votes" for a milestone: every real completion
   /// (non-skip, non-nd) of any of its tasks, all-time. Powers the ballot-box
   /// line on milestone detail ("🗳 217 votes cast").

@@ -12,6 +12,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
 import '../../../shared/models/recurrence_rule.dart';
+import '../../../shared/models/task_stack.dart';
 import '../../../shared/providers/database_provider.dart';
 import 'milestone_form_sheet.dart';
 
@@ -83,6 +84,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   // Optional timeline scheduling
   TimeOfDay? _startTime;
   int _durationMinutes = 30;
+  // Average of past timed sessions — the "usually takes ~45m" hint.
+  int? _usualSeconds;
 
   // Optional reminder. When enabled with no override, the reminder follows the
   // timeline start time; an override sets an independent time. When
@@ -170,6 +173,18 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadMilestones());
+    // Estimate calibration: how long past timed sessions actually took.
+    final editing = widget.task;
+    if (editing != null) {
+      Future(() async {
+        final avg = await ref
+            .read(databaseProvider)
+            .getAvgDurationSeconds(editing.id);
+        if (mounted && avg != null) {
+          setState(() => _usualSeconds = avg);
+        }
+      });
+    }
   }
 
   Future<void> _loadMilestones() async {
@@ -754,11 +769,16 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final timeLabel = has
         ? _startTime!.format(context)
         : 'No time — shows in Anytime tray';
-    final durationHint = anchored
-        ? 'Runs whenever you finish its anchor — no start time needed'
-        : has
-            ? 'Sets the size of its timeline block'
-            : 'Feeds timeline blocks and task-queue totals';
+    // Real-session average beats any hint we could write.
+    final usual = _usualSeconds == null
+        ? ''
+        : ' · usually takes ~${formatQueueMinutes(((_usualSeconds! / 60).round()).clamp(1, 24 * 60))}';
+    final durationHint = (anchored
+            ? 'Runs whenever you finish its anchor — no start time needed'
+            : has
+                ? 'Sets the size of its timeline block'
+                : 'Feeds timeline blocks and task-queue totals') +
+        usual;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

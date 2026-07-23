@@ -28,6 +28,7 @@ import '../milestones/widgets/task_form_sheet.dart';
 import '../rewards/claim_flow.dart';
 import 'widgets/active_timer_banner.dart';
 import 'widgets/never_miss_twice_banner.dart';
+import 'widgets/quick_capture_sheet.dart';
 import 'widgets/streak_popup.dart';
 import 'widgets/timeline_view.dart';
 
@@ -508,6 +509,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: Text(_greeting(), style: AppTypography.heading1),
         actions: [
           IconButton(
+            icon: const Icon(Icons.bolt_rounded),
+            tooltip: 'Quick capture',
+            onPressed: () => showQuickCaptureSheet(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'Settings',
             onPressed: () => context.push('/settings'),
@@ -643,6 +649,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           else ...[
             if (upNext.isNotEmpty) ...[
               _SectionHeader('Up next today'),
+              // Projected finish (time-blindness aid): total remaining load
+              // incl. hidden queue members, projected from right now.
+              Builder(builder: (context) {
+                var total = 0;
+                for (final it in upNext) {
+                  final queue = queueBehind(
+                      it.task, childrenByAnchor, inTodaysQueue);
+                  total += it.task.durationMinutes +
+                      queue.fold<int>(
+                          0, (s, t) => s + t.durationMinutes);
+                }
+                final finish =
+                    DateTime.now().add(Duration(minutes: total));
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '~${formatQueueMinutes(total)} of work · done by '
+                    '${TimeOfDay.fromDateTime(finish).format(context)} '
+                    'if you start now',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextTertiary),
+                  ),
+                );
+              }),
               // Queue members waiting on an anchor are hidden — each tile
               // here is actionable NOW. Heads of queues show what's behind
               // them instead ("+2 in queue · ~45m").
