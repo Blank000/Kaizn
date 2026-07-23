@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/database/database.dart';
+import '../../core/services/habit_strength.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
@@ -99,6 +100,7 @@ class MilestoneDetailScreen extends ConsumerWidget {
             milestone: milestone,
             taskCount: tasks.length,
             votes: ref.watch(milestoneVotesProvider(milestoneId)).valueOrNull,
+            strength: HabitStrength.milestoneAverage(tasks, completions),
           ),
           const SizedBox(height: 24),
           if (tasks.isEmpty)
@@ -223,7 +225,8 @@ class MilestoneDetailScreen extends ConsumerWidget {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-String _metaForDetail(Task task, TaskRowState state, {String? anchorName}) {
+String _metaForDetail(Task task, TaskRowState state,
+    {String? anchorName, int? strength}) {
   final parts = <String>['${task.pointsPerCompletion} pts'];
   if (anchorName != null) parts.add('🔗 After $anchorName');
   if (task.recurrence == TaskRecurrence.none) {
@@ -238,6 +241,8 @@ String _metaForDetail(Task task, TaskRowState state, {String? anchorName}) {
     }
   } else {
     parts.add(RecurrenceRule.fromTask(task).summary());
+    // Long-horizon consistency — forgiving where the streak is fragile.
+    if (strength != null) parts.add('$strength% strong');
     if (state.isChecked) {
       parts.add('Done');
     } else if (state.isMissed) {
@@ -257,8 +262,15 @@ class _Header extends StatelessWidget {
   /// the person you're becoming" (Atomic Habits). Null while loading.
   final int? votes;
 
+  /// Average habit strength (0–100) of the active recurring tasks; null
+  /// until at least one has enough history to score.
+  final int? strength;
+
   const _Header(
-      {required this.milestone, required this.taskCount, this.votes});
+      {required this.milestone,
+      required this.taskCount,
+      this.votes,
+      this.strength});
 
   @override
   Widget build(BuildContext context) {
@@ -304,6 +316,10 @@ class _Header extends StatelessWidget {
           Row(
             children: [
               _StatBox(label: 'TASKS', value: '$taskCount'),
+              if (strength != null) ...[
+                const SizedBox(width: 12),
+                _StatBox(label: 'STRENGTH', value: '$strength%'),
+              ],
               const SizedBox(width: 12),
               if (milestone.targetDate != null)
                 _StatBox(
@@ -411,7 +427,8 @@ class _TaskGroup extends ConsumerWidget {
               queueMinutes:
                   queue.isEmpty ? null : queueTotalMinutes(t, queue),
               meta: _metaForDetail(t, state,
-                  anchorName: anchorNameById[t.stackedAfterTaskId]),
+                  anchorName: anchorNameById[t.stackedAfterTaskId],
+                  strength: HabitStrength.scoreFor(t, completions)),
               weeklyChips: chips,
               // Milestone detail is the "management" surface — the escape hatch
               // when a completion has already fallen out of the 6-second UNDO
