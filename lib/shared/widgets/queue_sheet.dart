@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/database/database.dart';
 import '../../core/theme/app_colors.dart';
@@ -41,22 +42,10 @@ class _QueueSheet extends ConsumerWidget {
     final self = byId[taskId];
     if (self == null) return const SizedBox.shrink(); // deleted mid-view
 
-    // Walk UP to the chain's root (cycle-safe). The root may be a normal
-    // scheduled/recurring task — only members are start-time-less.
-    var root = self;
-    final visited = <String>{root.id};
-    while (root.stackedAfterTaskId != null) {
-      final parent = byId[root.stackedAfterTaskId];
-      if (parent == null || !visited.add(parent.id)) break;
-      root = parent;
-    }
-
-    // Full structural chain (every link, whether or not it runs today).
-    final childrenByAnchor = stackChildrenByAnchor(tasks);
-    final chain = <Task>[
-      root,
-      ...queueBehind(root, childrenByAnchor, (_) => true),
-    ];
+    // Full structural chain (every link, whether or not it runs today),
+    // rooted at the top of the stack.
+    final chain = chainFor(self, tasks);
+    final root = chain.first;
 
     final today = DateTime.now();
     bool runsToday(Task t) {
@@ -117,12 +106,34 @@ class _QueueSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 20),
-            Text(
-              '🔗 ${root.name}',
-              style: AppTypography.heading2,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    '🔗 ${root.name}',
+                    style: AppTypography.heading2,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Run the whole queue step-by-step (the routine player).
+                IconButton(
+                  icon: const Icon(Icons.play_circle_fill_rounded,
+                      color: AppColors.primary, size: 32),
+                  tooltip: 'Run this queue',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    // Grab the router BEFORE popping — the sheet's context
+                    // is defunct right after pop.
+                    final router = GoRouter.of(context);
+                    Navigator.of(context).pop();
+                    router.push('/run-stack/${root.id}');
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(

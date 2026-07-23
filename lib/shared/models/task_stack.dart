@@ -47,6 +47,24 @@ List<Task> queueBehind(
   return out;
 }
 
+/// The full structural chain containing [task]: walk UP to the root
+/// (cycle-safe), then BFS every member below it. Order: [root, ...members].
+/// Shared by the queue sheet and the stack runner.
+List<Task> chainFor(Task task, List<Task> all) {
+  final byId = {for (final t in all) t.id: t};
+  var root = task;
+  final seen = <String>{root.id};
+  while (root.stackedAfterTaskId != null) {
+    final parent = byId[root.stackedAfterTaskId];
+    if (parent == null || !seen.add(parent.id)) break;
+    root = parent;
+  }
+  return [
+    root,
+    ...queueBehind(root, stackChildrenByAnchor(all), (_) => true),
+  ];
+}
+
 /// Total minutes for [head] plus its queue — what the merged timeline block
 /// and the "~45m" hint show.
 int queueTotalMinutes(Task head, List<Task> queue) =>

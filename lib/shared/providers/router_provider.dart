@@ -6,6 +6,7 @@ import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
 import '../../features/achievements/achievements_screen.dart';
 import '../../features/auth/login_screen.dart';
+import '../../features/focus/stack_runner_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/milestones/milestone_detail_screen.dart';
 import '../../features/milestones/milestones_screen.dart';
@@ -61,6 +62,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/settings',
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+
+      // Stack runner — full-screen routine player, outside the shell
+      GoRoute(
+        path: '/run-stack/:id',
+        name: 'runStack',
+        builder: (context, state) => StackRunnerScreen(
+          taskId: state.pathParameters['id']!,
+        ),
       ),
 
       StatefulShellRoute.indexedStack(
