@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/backup_service.dart';
+import '../../core/services/calendar_service.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/notification_scheduler.dart';
 import '../../core/services/notification_service.dart';
@@ -13,6 +14,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/calendar_provider.dart';
 import '../../shared/providers/database_provider.dart';
 import '../../shared/providers/theme_mode_provider.dart';
 import '../home/widgets/notification_settings_sheet.dart';
@@ -108,6 +110,78 @@ class SettingsScreen extends ConsumerWidget {
                     color: context.appTextSecondary),
                 onTap: () => _showNotificationDiagnostics(context),
               ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _SectionLabel('Google Calendar'),
+          const SizedBox(height: 8),
+          _Card(
+            children: [
+              StatefulBuilder(builder: (context, setTileState) {
+                final connected = AppPrefs.gcalEnabledSync;
+                final count = AppPrefs.gcalCalendarIdsSync.length;
+                return ListTile(
+                  leading: const Icon(Icons.event_outlined),
+                  title: Text(
+                      connected
+                          ? 'Google Calendar connected'
+                          : 'Connect Google Calendar',
+                      style: AppTypography.body),
+                  subtitle: Text(
+                    connected
+                        ? '$count calendar${count == 1 ? '' : 's'} on the timeline · tap to choose'
+                        : 'See your real day behind the timeline; move your solo events',
+                    style: AppTypography.caption.copyWith(
+                      color: context.appTextSecondary,
+                    ),
+                  ),
+                  trailing: connected
+                      ? TextButton(
+                          onPressed: () async {
+                            await AppPrefs.setGcalEnabled(false);
+                            await AppPrefs.setGcalCalendarIds(const []);
+                            CalendarService.invalidate();
+                            ref.invalidate(gcalEventsProvider);
+                            setTileState(() {});
+                          },
+                          child: const Text('DISCONNECT'),
+                        )
+                      : Icon(Icons.chevron_right_rounded,
+                          color: context.appTextSecondary),
+                  onTap: () async {
+                    if (!connected) {
+                      // Incremental consent — THE moment that verifies the
+                      // Cloud Console scope setup.
+                      final ok =
+                          await AuthService.requestCalendarAccess();
+                      if (!ok) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                            content: Text(
+                                "Calendar access wasn't granted — check the "
+                                'scope on the Cloud Console consent screen.'),
+                          ));
+                        }
+                        return;
+                      }
+                      await AppPrefs.setGcalEnabled(true);
+                      // Default to every calendar; the picker trims.
+                      final cals =
+                          await CalendarService.listCalendars();
+                      await AppPrefs.setGcalCalendarIds(
+                          cals.map((c) => c.id).toList());
+                      CalendarService.invalidate();
+                      ref.invalidate(gcalEventsProvider);
+                      setTileState(() {});
+                    }
+                    if (context.mounted) {
+                      await _showCalendarPicker(context, ref);
+                    }
+                    setTileState(() {});
+                  },
+                );
+              }),
             ],
           ),
           const SizedBox(height: 24),
@@ -328,6 +402,96 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Which calendars feed the overlay. Selections save immediately.
+  Future<void> _showCalendarPicker(
+      BuildContext context, WidgetRef ref) async {
+    final selected = AppPrefs.gcalCalendarIdsSync.toSet();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: ctx.appCardSurface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: FutureBuilder<List<GcalCalendarInfo>>(
+          future: CalendarService.listCalendars(),
+          builder: (ctx, snap) {
+            if (!snap.hasData) {
+              return const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final cals = snap.data!;
+            return StatefulBuilder(builder: (ctx, setSheetState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: ctx.appBorder,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Calendars on the timeline',
+                      style: AppTypography.heading2,
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: cals
+                          .map((c) => CheckboxListTile(
+                                value: selected.contains(c.id),
+                                onChanged: (v) async {
+                                  if (v == true) {
+                                    selected.add(c.id);
+                                  } else {
+                                    selected.remove(c.id);
+                                  }
+                                  await AppPrefs.setGcalCalendarIds(
+                                      selected.toList());
+                                  CalendarService.invalidate();
+                                  ref.invalidate(gcalEventsProvider);
+                                  setSheetState(() {});
+                                },
+                                title: Text(c.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.body),
+                                subtitle: c.writable
+                                    ? null
+                                    : Text('View only',
+                                        style: AppTypography.caption
+                                            .copyWith(
+                                                color: ctx
+                                                    .appTextTertiary)),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              );
+            });
+          },
         ),
       ),
     );

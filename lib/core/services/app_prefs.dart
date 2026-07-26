@@ -124,6 +124,45 @@ class AppPrefs {
     _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
     final restIso = p.getString(_restModeUntilKey);
     _restModeUntilCache = restIso == null ? null : DateTime.tryParse(restIso);
+    _gcalEnabledCache = p.getBool(_gcalEnabledKey) ?? false;
+    _gcalShowOnTimelineCache = p.getBool(_gcalShowOnTimelineKey) ?? true;
+    _gcalCalendarIdsCache = p.getStringList(_gcalCalendarIdsKey) ?? const [];
+  }
+
+  // ── Google Calendar overlay ───────────────────────────────────────────────
+
+  static const _gcalEnabledKey = 'gcal_enabled';
+  static const _gcalShowOnTimelineKey = 'gcal_show_on_timeline';
+  static const _gcalCalendarIdsKey = 'gcal_calendar_ids';
+  static bool _gcalEnabledCache = false;
+  static bool _gcalShowOnTimelineCache = true;
+  static List<String> _gcalCalendarIdsCache = const [];
+
+  /// Calendar access granted + connection switched on in Settings.
+  static bool get gcalEnabledSync => _gcalEnabledCache;
+
+  /// The timeline eye-toggle: overlay busy blocks on/off (default on).
+  static bool get gcalShowOnTimelineSync => _gcalShowOnTimelineCache;
+
+  /// Which calendars feed the overlay (calendar ids).
+  static List<String> get gcalCalendarIdsSync => _gcalCalendarIdsCache;
+
+  static Future<void> setGcalEnabled(bool enabled) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_gcalEnabledKey, enabled);
+    _gcalEnabledCache = enabled;
+  }
+
+  static Future<void> setGcalShowOnTimeline(bool show) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_gcalShowOnTimelineKey, show);
+    _gcalShowOnTimelineCache = show;
+  }
+
+  static Future<void> setGcalCalendarIds(List<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList(_gcalCalendarIdsKey, ids);
+    _gcalCalendarIdsCache = List.unmodifiable(ids);
   }
 
   // ── Rest mode (guilt-free multi-day pause) ────────────────────────────────

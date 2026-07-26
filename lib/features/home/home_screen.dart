@@ -558,6 +558,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onChanged: _switchView,
             viewingToday: _viewingToday,
             onPickDate: _pickViewDate,
+            gcalShown: _viewMode == HomeViewMode.timeline &&
+                    AppPrefs.gcalEnabledSync
+                ? AppPrefs.gcalShowOnTimelineSync
+                : null,
+            onToggleGcal: () async {
+              await AppPrefs.setGcalShowOnTimeline(
+                  !AppPrefs.gcalShowOnTimelineSync);
+              if (mounted) setState(() {});
+            },
           ),
           if (!_viewingToday)
             _DateNavStrip(
@@ -1401,11 +1410,18 @@ class _ViewToggle extends StatelessWidget {
   final bool viewingToday;
   final VoidCallback onPickDate;
 
+  /// Google Calendar overlay eye-toggle — only rendered on the timeline
+  /// view when a calendar is connected. Null = hidden.
+  final bool? gcalShown;
+  final VoidCallback? onToggleGcal;
+
   const _ViewToggle({
     required this.value,
     required this.onChanged,
     required this.viewingToday,
     required this.onPickDate,
+    this.gcalShown,
+    this.onToggleGcal,
   });
 
   @override
@@ -1438,6 +1454,21 @@ class _ViewToggle extends StatelessWidget {
               ),
             ),
           ),
+          if (gcalShown != null)
+            IconButton(
+              icon: Icon(
+                gcalShown!
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+                color: gcalShown!
+                    ? AppColors.infoBlue
+                    : context.appTextTertiary,
+              ),
+              tooltip: gcalShown!
+                  ? 'Hide Google Calendar'
+                  : 'Show Google Calendar',
+              onPressed: onToggleGcal,
+            ),
           IconButton(
             icon: Icon(
               Icons.calendar_month_rounded,

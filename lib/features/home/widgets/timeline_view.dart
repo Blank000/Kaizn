@@ -14,8 +14,11 @@ import '../../../shared/widgets/stop_timer_sheet.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
+import '../../../core/services/app_prefs.dart';
+import '../../../core/services/calendar_service.dart';
 import '../../../shared/models/recurrence_rule.dart';
 import '../../../shared/models/task_stack.dart';
+import '../../../shared/providers/calendar_provider.dart';
 import '../../../shared/providers/database_provider.dart';
 import '../../../shared/widgets/achievement_snackbar.dart';
 import '../../../shared/widgets/miss_check_in_sheet.dart';
@@ -99,20 +102,59 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
     return ((rawMin / snap).round() * snap).clamp(0, 24 * 60 - snap);
   }
 
-  void _onDragMove(Task task, Offset globalOffset) {
+  /// Drag payloads are Tasks OR Google Calendar events (solo, writable) —
+  /// both ride the same snap preview and drop pipeline.
+  int _durationOf(Object data) => data is Task
+      ? data.durationMinutes
+      : (data as GcalEvent).durationMinutes;
+
+  void _onDragMove(Object data, Offset globalOffset) {
     final snapped = _minuteAt(globalOffset);
     if (snapped == null) return;
-    final clamped = snapped.clamp(0, 24 * 60 - task.durationMinutes);
+    final duration = _durationOf(data);
+    final clamped = snapped.clamp(0, 24 * 60 - duration);
     final prev = _dragPreview.value;
     if (prev == null ||
         prev.minute != clamped ||
-        prev.durationMinutes != task.durationMinutes) {
+        prev.durationMinutes != duration) {
       _dragPreview.value =
-          _DragPreview(minute: clamped, durationMinutes: task.durationMinutes);
+          _DragPreview(minute: clamped, durationMinutes: duration);
       // Detent tick each time the snap slot changes — mechanical-planner feel.
       HapticFeedback.selectionClick();
     }
     _maybeAutoScrollDuringDrag(globalOffset);
+  }
+
+  Future<void> _handleDrop(Object data, Offset globalDrop) async {
+    if (data is Task) return _scheduleTask(data, globalDrop);
+    if (data is GcalEvent) return _moveGcalEvent(data, globalDrop);
+  }
+
+  /// Move a Google Calendar event (solo + writable only — enforced by the
+  /// block being draggable at all). PATCHes Google, then refetches the day.
+  Future<void> _moveGcalEvent(GcalEvent ev, Offset globalDrop) async {
+    _clearDragPreview();
+    final box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final local = box.globalToLocal(globalDrop);
+    final rawMin = ((local.dy - _gridTopPadding) / _pxPerMinute).round();
+    final snapped = (rawMin / _snapMin).round() * _snapMin;
+    final clamped = snapped.clamp(0, 24 * 60 - ev.durationMinutes);
+    if (clamped == ev.startMinute) return; // released in place
+
+    final day = widget.date ?? DateTime.now();
+    final ok = await CalendarService.moveEvent(ev, day,
+        newStartMinute: clamped);
+    if (!mounted) return;
+    if (ok) {
+      HapticFeedback.lightImpact();
+      ref.invalidate(gcalEventsProvider);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:
+            Text("Couldn't reach Google Calendar — event not moved."),
+      ));
+    }
   }
 
   void _clearDragPreview() {
@@ -360,6 +402,18 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             widget.date!.year, widget.date!.month, widget.date!.day);
     final isToday = day.isAtSameMomentAs(today);
 
+    // Google Calendar overlay: gray untouchable context blocks (solo events
+    // on writable calendars are draggable). All-day events stay off the
+    // grid — they're not time blocks.
+    final showGcal =
+        AppPrefs.gcalEnabledSync && AppPrefs.gcalShowOnTimelineSync;
+    final busy = showGcal
+        ? (ref.watch(gcalEventsProvider(day)).valueOrNull ??
+                const <GcalEvent>[])
+            .where((e) => !e.allDay)
+            .toList()
+        : const <GcalEvent>[];
+
     bool hasCompletionToday(String taskId) => completions.any((c) =>
         c.taskId == taskId &&
         c.completedOn.year == day.year &&
@@ -474,6 +528,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
         Expanded(
           child: _TimeGrid(
             scheduled: scheduled,
+            busy: busy,
             now: _now,
             showNowIndicator: isToday,
             readOnly: !isToday,
@@ -483,7 +538,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             dragPreview: _dragPreview,
             resizeTaskId: _resizeTaskId,
             effectiveDuration: _effectiveDuration,
-            onTaskDrop: _scheduleTask,
+            onDrop: _handleDrop,
             onDragMove: _onDragMove,
             onDragLeave: _clearDragPreview,
             onDragEnded: _clearDragPreview,
@@ -771,6 +826,9 @@ class _AnytimeChipBody extends StatelessWidget {
 
 class _TimeGrid extends StatelessWidget {
   final List<_TimelineEntry> scheduled;
+
+  /// Google Calendar busy blocks — rendered under task cards.
+  final List<GcalEvent> busy;
   final DateTime now;
   final bool showNowIndicator;
   final bool readOnly;
@@ -780,8 +838,11 @@ class _TimeGrid extends StatelessWidget {
   final ValueNotifier<_DragPreview?> dragPreview;
   final String? resizeTaskId;
   final int Function(Task task) effectiveDuration;
-  final Future<void> Function(Task task, Offset globalDrop) onTaskDrop;
-  final void Function(Task task, Offset globalPos) onDragMove;
+
+  /// Accepts Task drops (schedule/move) AND GcalEvent drops (move in
+  /// Google Calendar).
+  final Future<void> Function(Object data, Offset globalDrop) onDrop;
+  final void Function(Object data, Offset globalPos) onDragMove;
   final VoidCallback onDragLeave;
   final VoidCallback onDragEnded;
   final void Function(Offset globalPos) onEmptySlotTap;
@@ -791,6 +852,7 @@ class _TimeGrid extends StatelessWidget {
 
   const _TimeGrid({
     required this.scheduled,
+    required this.busy,
     required this.now,
     required this.showNowIndicator,
     required this.readOnly,
@@ -800,7 +862,7 @@ class _TimeGrid extends StatelessWidget {
     required this.dragPreview,
     required this.resizeTaskId,
     required this.effectiveDuration,
-    required this.onTaskDrop,
+    required this.onDrop,
     required this.onDragMove,
     required this.onDragLeave,
     required this.onDragEnded,
@@ -818,11 +880,13 @@ class _TimeGrid extends StatelessWidget {
       controller: scrollCtrl,
       child: SizedBox(
         height: _totalGridHeight + _gridTopPadding + _gridBottomPadding,
-        child: DragTarget<Task>(
-          onWillAcceptWithDetails: (_) => true,
+        child: DragTarget<Object>(
+          // Tasks and (solo, writable) Google events share one drop pipe.
+          onWillAcceptWithDetails: (d) =>
+              d.data is Task || d.data is GcalEvent,
           onMove: (d) => onDragMove(d.data, d.offset),
           onLeave: (_) => onDragLeave(),
-          onAcceptWithDetails: (d) => onTaskDrop(d.data, d.offset),
+          onAcceptWithDetails: (d) => onDrop(d.data, d.offset),
           builder: (context, candidate, rejected) {
             return GestureDetector(
               // Empty-slot taps only — cards sit on top and claim their own.
@@ -846,6 +910,21 @@ class _TimeGrid extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Google Calendar context — UNDER task cards, so your plan
+                // visually sits on top of your commitments.
+                for (final ev in busy)
+                  Positioned(
+                    left: _hourLabelWidth,
+                    right: 12,
+                    top: _gridTopPadding + ev.startMinute * _pxPerMinute,
+                    height: (ev.durationMinutes * _pxPerMinute)
+                        .clamp(24.0, double.infinity),
+                    child: _BusyBlock(
+                      event: ev,
+                      readOnly: readOnly,
+                      onDragEnded: onDragEnded,
+                    ),
+                  ),
                 for (final e in scheduled)
                   Positioned(
                     left: _hourLabelWidth,
@@ -1026,6 +1105,81 @@ class _NowIndicator extends StatelessWidget {
         ),
         Expanded(child: Container(height: 2, color: Colors.red)),
       ],
+    );
+  }
+}
+
+// ── Google Calendar busy block ──────────────────────────────────────────────
+
+/// A calendar event on the grid: gray, quiet, context-not-task. Solo events
+/// on writable calendars can be long-press-dragged (same grammar as task
+/// cards) — everything else is look-don't-touch, with a lock hint.
+class _BusyBlock extends StatelessWidget {
+  final GcalEvent event;
+  final bool readOnly;
+  final VoidCallback onDragEnded;
+
+  const _BusyBlock({
+    required this.event,
+    required this.readOnly,
+    required this.onDragEnded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final body = _body(context);
+    if (readOnly || !event.editable) return IgnorePointer(child: body);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      return LongPressDraggable<GcalEvent>(
+        data: event,
+        hapticFeedbackOnStart: true,
+        onDragEnd: (_) => onDragEnded(),
+        feedback: Material(
+          color: Colors.transparent,
+          elevation: 8,
+          child: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: Opacity(opacity: 0.9, child: _body(context)),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.25, child: body),
+        child: body,
+      );
+    });
+  }
+
+  Widget _body(BuildContext context) {
+    final muted = context.appTextTertiary;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      decoration: BoxDecoration(
+        color: muted.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: muted, width: 3)),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+      child: ClipRect(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                event.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  color: context.appTextSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (!event.editable)
+              Icon(Icons.lock_outline_rounded, size: 12, color: muted),
+          ],
+        ),
+      ),
     );
   }
 }
