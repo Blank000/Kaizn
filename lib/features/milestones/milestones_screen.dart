@@ -132,27 +132,28 @@ class _MilestoneCard extends StatelessWidget {
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.only(left: 22),
-                child: Row(
+                // Wrap, not Row: three chips + a long date + a 4-digit
+                // bonus overflow a Row on narrow screens — extra chips
+                // flow to a second line instead.
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _InfoChip(
                       icon: Icons.checklist_rounded,
                       label: taskCount == 1 ? '1 task' : '$taskCount tasks',
                     ),
-                    if (dateLine != null) ...[
-                      const SizedBox(width: 8),
+                    if (dateLine != null)
                       _InfoChip(
                         icon: Icons.calendar_today_rounded,
                         label: dateLine,
                       ),
-                    ],
-                    if (milestone.completionPoints > 0) ...[
-                      const SizedBox(width: 8),
+                    if (milestone.completionPoints > 0)
                       _InfoChip(
                         icon: Icons.star_rounded,
                         label: '+${milestone.completionPoints} pts',
                         color: AppColors.rewardsGold,
                       ),
-                    ],
                   ],
                 ),
               ),
