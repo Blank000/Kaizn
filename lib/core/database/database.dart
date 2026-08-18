@@ -1257,6 +1257,23 @@ class AppDatabase extends _$AppDatabase {
     return avg?.round();
   }
 
+  /// Any clutch bonus banked today? Lights the gold flash on the Day
+  /// Complete sequence's points beat. (textEnum stores the Dart name;
+  /// legacy value kept in the IN-list defensively.)
+  Future<bool> hasClutchBonusToday() async {
+    final row = await customSelect(
+      "SELECT COUNT(*) AS c FROM points_history "
+      "WHERE reason IN ('clutchBonus', 'clutch_bonus') "
+      "AND earned_at >= :s AND earned_at < :e",
+      variables: [
+        Variable.withDateTime(_dayStart(DateTime.now())),
+        Variable.withDateTime(_dayEnd(DateTime.now())),
+      ],
+      readsFrom: {pointsHistoryTable},
+    ).getSingle();
+    return row.read<int>('c') > 0;
+  }
+
   /// Lifetime "identity votes" for a milestone: every real completion
   /// (non-skip, non-nd) of any of its tasks, all-time. Powers the ballot-box
   /// line on milestone detail ("🗳 217 votes cast").

@@ -9,6 +9,7 @@ import '../../core/services/app_prefs.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/goldilocks_service.dart';
 import '../../core/services/league_service.dart';
+import '../../core/services/level_service.dart';
 import '../../core/services/notification_scheduler.dart';
 import '../../core/services/quest_service.dart';
 import '../../core/services/streak_service.dart';
@@ -21,6 +22,7 @@ import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/celebration_dialog.dart';
+import '../../shared/widgets/day_complete_sequence.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../../shared/models/task_stack.dart';
@@ -281,7 +283,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Future<void> _maybeAllDoneCelebration(int doneCount, int pointsToday) async {
+  /// The Day Complete choreography (docs/design_day_complete_choreography.md)
+  /// — a short sequenced show instead of one flat popup. Once per day.
+  Future<void> _maybeAllDoneCelebration(
+    int doneCount,
+    int tinyCount,
+    int pointsToday,
+    int streakDay,
+    List<Task> tasks,
+    List<TaskCompletion> completions,
+  ) async {
     if (_allDoneCelebrationFiredThisSession) return;
     _allDoneCelebrationFiredThisSession = true;
 
@@ -291,16 +302,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (last != null && last.isAtSameMomentAs(today)) return;
 
     await AppPrefs.setLastAllDoneCelebrationDate(today);
+
+    // Gather the show's facts (all cheap reads).
+    final db = ref.read(databaseProvider);
+    final clutch = await db.hasClutchBonusToday();
+    final lifetime = await db.getLifetimeEarnedPoints();
+    final quest = await QuestService.today(db, tasks, completions);
+
     if (!mounted) return;
-    await showCelebrationDialog(
+    await showDayCompleteSequence(
       context,
-      emoji: '⭐',
-      title: 'ALL DONE TODAY!',
-      subtitle: 'Beautiful work.',
-      body: pointsToday > 0
-          ? '$doneCount tasks · +$pointsToday pts today'
-          : '$doneCount tasks complete',
-      titleColor: AppColors.rewardsGold,
+      DayCompletePayload(
+        doneCount: doneCount,
+        tinyCount: tinyCount,
+        pointsToday: pointsToday,
+        clutchToday: clutch,
+        streakDay: streakDay,
+        questDoneToday: quest?.done ?? false,
+        questWeekDots: (quest?.weekCount ?? 0).clamp(0, 5),
+        chestReady: quest?.chestReady ?? false,
+        level: LevelService.getLevel(lifetime),
+      ),
     );
     final badge = await AchievementService.checkCompletionist();
     if (badge != null && mounted) {
@@ -483,8 +505,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         allDone &&
         !AppPrefs.isRestingSync &&
         !_allDoneCelebrationFiredThisSession) {
+      final tinyDone = doneToday
+          .where((it) => it.rowState.checkedCompletion?.isTiny == true)
+          .length;
+      final streakDay = streak?.currentStreak ?? 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _maybeAllDoneCelebration(doneToday.length, todayPoints);
+        _maybeAllDoneCelebration(doneToday.length, tinyDone, todayPoints,
+            streakDay, tasks, completions);
       });
     }
 
