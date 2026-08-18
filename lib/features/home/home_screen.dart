@@ -37,6 +37,7 @@ import 'widgets/never_miss_twice_banner.dart';
 import 'widgets/quick_capture_sheet.dart';
 import 'widgets/streak_popup.dart';
 import 'widgets/timeline_view.dart';
+import 'widgets/week_board.dart';
 
 enum HomeViewMode { list, timeline }
 
@@ -712,10 +713,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               currentStreak: streak?.currentStreak ?? 0,
             ),
           ),
+          // "Your week" at a glance — 7 quiet dots, today pulsing.
+          StaggerIn(
+            index: 1,
+            child: WeekBoard(completions: completions),
+          ),
           const SizedBox(height: 20),
           if (totalScheduled > 0 && !resting)
             StaggerIn(
-              index: 1,
+              index: 2,
               child: _TodayProgressCard(
                 done: doneToday.length,
                 total: totalScheduled,
@@ -728,7 +734,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Rest mode stands the quest down entirely.
           if (!resting)
             StaggerIn(
-              index: 2,
+              index: 3,
               child: _QuestRow(tasks: tasks, completions: completions),
             ),
           if (claimableRewards.isNotEmpty) ...[
@@ -1238,8 +1244,15 @@ class _QuestRowState extends ConsumerState<_QuestRow> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         decoration: BoxDecoration(
-          color: context.appPageBackground,
+          // Chest ready = the card glows gold; the week has a finish line.
+          color: s.chestReady
+              ? AppColors.rewardsGold.withValues(alpha: 0.10)
+              : context.appPageBackground,
           borderRadius: BorderRadius.circular(16),
+          border: s.chestReady
+              ? Border.all(
+                  color: AppColors.rewardsGold.withValues(alpha: 0.5))
+              : null,
         ),
         child: Row(
           children: [
@@ -1314,7 +1327,24 @@ class _QuestRowState extends ConsumerState<_QuestRow> {
             if (s.chestReady)
               TextButton(
                 onPressed: _openChest,
-                child: const Text('🎁 OPEN'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The chest won't sit still — it's ready.
+                    TweenAnimationBuilder<double>(
+                      key: const ValueKey('chest-wiggle'),
+                      tween: Tween(begin: -0.09, end: 0.09),
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      builder: (_, v, child) =>
+                          Transform.rotate(angle: v, child: child),
+                      child: const Text('🎁',
+                          style: TextStyle(fontSize: 18)),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text('OPEN'),
+                  ],
+                ),
               )
             else if (s.done)
               const Icon(Icons.check_circle_rounded,
