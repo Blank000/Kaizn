@@ -417,25 +417,38 @@ class _StatBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = color ?? AppColors.primary;
+    // Four boxes share the row on a narrow screen — value and label scale
+    // DOWN to fit their slot instead of wrapping ("+100/0", "STRENGT/H").
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
         decoration: BoxDecoration(
           color: context.appCardSurface,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           children: [
-            Text(value,
-                style: AppTypography.heading1.copyWith(color: c, fontSize: 22)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(value,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTypography.heading1
+                      .copyWith(color: c, fontSize: 22)),
+            ),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                fontSize: 10,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w700,
-                color: context.appTextSecondary,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: AppTypography.caption.copyWith(
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                  color: context.appTextSecondary,
+                ),
               ),
             ),
           ],
