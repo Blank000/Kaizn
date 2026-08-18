@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
 import '../../core/services/app_prefs.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/goldilocks_service.dart';
 import '../../core/services/league_service.dart';
@@ -23,6 +24,8 @@ import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/day_complete_sequence.dart';
+import '../../shared/widgets/living_flame.dart';
+import '../../shared/widgets/stagger_in.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../../shared/models/task_stack.dart';
@@ -330,12 +333,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  /// Personal, playful, and stable for the whole day (variant rotates by
+  /// date, so it never flickers between rebuilds). Falls back to the plain
+  /// time-of-day line when there's no signed-in name.
   String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 12) return 'Good morning';
-    if (hour >= 12 && hour < 17) return 'Good afternoon';
-    if (hour >= 17 && hour < 22) return 'Good evening';
-    return 'Up late';
+    final now = DateTime.now();
+    final hour = now.hour;
+    final display = AuthService.currentUser?.displayName?.trim();
+    final name = (display == null || display.isEmpty)
+        ? null
+        : display.split(' ').first;
+
+    if (name == null) {
+      if (hour >= 5 && hour < 12) return 'Good morning';
+      if (hour >= 12 && hour < 17) return 'Good afternoon';
+      if (hour >= 17 && hour < 22) return 'Good evening';
+      return 'Up late';
+    }
+
+    final List<String> pool;
+    if (hour >= 5 && hour < 12) {
+      pool = ['Morning, $name! ☀️', 'Rise & shine, $name', 'New day, $name 🌱'];
+    } else if (hour >= 12 && hour < 17) {
+      pool = ['Back at it, $name 💪', 'Good afternoon, $name', 'Onward, $name 🚀'];
+    } else if (hour >= 17 && hour < 22) {
+      pool = ['Evening, $name 🌙', 'Home stretch, $name 💪', 'Yey, $name! Keep going'];
+    } else {
+      pool = ['Up late, $name? 🦉', 'Night owl mode, $name 🦉'];
+    }
+    return pool[(now.day + now.month) % pool.length];
   }
 
   Future<void> _maybeStreakPopup() async {
@@ -676,22 +702,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                     children: [
-          _StatsHeader(
-            totalPoints: totalPoints,
-            currentStreak: streak?.currentStreak ?? 0,
+          // Staggered entrances: the page ARRIVES top-to-bottom instead of
+          // appearing. StaggerIn plays once per element, so live stream
+          // rebuilds never re-run the choreography.
+          StaggerIn(
+            index: 0,
+            child: _StatsHeader(
+              totalPoints: totalPoints,
+              currentStreak: streak?.currentStreak ?? 0,
+            ),
           ),
           const SizedBox(height: 20),
           if (totalScheduled > 0 && !resting)
-            _TodayProgressCard(
-              done: doneToday.length,
-              total: totalScheduled,
-              pointsToday: todayPoints,
+            StaggerIn(
+              index: 1,
+              child: _TodayProgressCard(
+                done: doneToday.length,
+                total: totalScheduled,
+                pointsToday: todayPoints,
+              ),
             ),
           // Daily quest — a quiet list row, deliberately NOT a banner (the
           // attention slot stays sacred). No missed state ever: an
           // incomplete quest simply becomes a different quest tomorrow.
           // Rest mode stands the quest down entirely.
-          if (!resting) _QuestRow(tasks: tasks, completions: completions),
+          if (!resting)
+            StaggerIn(
+              index: 2,
+              child: _QuestRow(tasks: tasks, completions: completions),
+            ),
           if (claimableRewards.isNotEmpty) ...[
             const SizedBox(height: 20),
             // One-attention-slot policy: while the never-miss-twice banner
@@ -747,26 +786,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // Queue members waiting on an anchor are hidden — each tile
               // here is actionable NOW. Heads of queues show what's behind
               // them instead ("+2 in queue · ~45m").
-              ...upNext.map((it) {
+              ...upNext.indexed.map((entry) {
+                final (i, it) = entry;
                 final queue =
                     queueBehind(it.task, childrenByAnchor, inTodaysQueue);
-                return TaskTile(
+                return StaggerIn(
                   key: ValueKey(it.task.id),
-                  task: it.task,
-                  rowState: it.rowState,
-                  weeklyChips: weeklyChipsFor(it.task, completions),
-                  showTimerButton: true,
-                  // Queue info lives on the tappable 🔗 chip (opens the
-                  // queue sheet), not in the meta string.
-                  queueCount: queue.length,
-                  queueMinutes: queue.isEmpty
-                      ? null
-                      : queueTotalMinutes(it.task, queue),
-                  meta: _metaForHome(
-                    it.task,
-                    milestoneById[it.task.milestoneId],
-                    it.rowState,
-                    anchorName: taskById[it.task.stackedAfterTaskId]?.name,
+                  index: 3 + i,
+                  child: TaskTile(
+                    task: it.task,
+                    rowState: it.rowState,
+                    weeklyChips: weeklyChipsFor(it.task, completions),
+                    showTimerButton: true,
+                    // Queue info lives on the tappable 🔗 chip (opens the
+                    // queue sheet), not in the meta string.
+                    queueCount: queue.length,
+                    queueMinutes: queue.isEmpty
+                        ? null
+                        : queueTotalMinutes(it.task, queue),
+                    meta: _metaForHome(
+                      it.task,
+                      milestoneById[it.task.milestoneId],
+                      it.rowState,
+                      anchorName:
+                          taskById[it.task.stackedAfterTaskId]?.name,
+                    ),
                   ),
                 );
               }),
@@ -774,17 +818,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (doneToday.isNotEmpty) ...[
               const SizedBox(height: 16),
               _SectionHeader('Done today'),
-              ...doneToday.map((it) => TaskTile(
-                    key: ValueKey(it.task.id),
-                    task: it.task,
-                    rowState: it.rowState,
-                    weeklyChips: weeklyChipsFor(it.task, completions),
-                    meta: _metaForHome(
-                      it.task,
-                      milestoneById[it.task.milestoneId],
-                      it.rowState,
-                      anchorName:
-                          taskById[it.task.stackedAfterTaskId]?.name,
+              ...doneToday.indexed.map((entry) => StaggerIn(
+                    key: ValueKey(entry.$2.task.id),
+                    index: 4 + entry.$1,
+                    child: TaskTile(
+                      task: entry.$2.task,
+                      rowState: entry.$2.rowState,
+                      weeklyChips:
+                          weeklyChipsFor(entry.$2.task, completions),
+                      meta: _metaForHome(
+                        entry.$2.task,
+                        milestoneById[entry.$2.task.milestoneId],
+                        entry.$2.rowState,
+                        anchorName: taskById[
+                                entry.$2.task.stackedAfterTaskId]
+                            ?.name,
+                      ),
                     ),
                   )),
             ],
@@ -950,7 +999,9 @@ class _StatsHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Text('🔥', style: TextStyle(fontSize: 24)),
+              // A fire that's actually on fire — flickers on its own, grows
+              // with the streak, throws sparks at 30+ days.
+              LivingFlame(streak: currentStreak, size: 30),
               const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
