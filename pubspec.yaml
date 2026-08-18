@@ -62,6 +62,9 @@ dependencies:
   # Keep the screen awake during stack-runner sessions
   wakelock_plus: ^1.2.8
 
+  # Share the weekly progress card via the OS share sheet
+  share_plus: ^10.0.0
+
   # Date formatting
   intl: ^0.20.1
 

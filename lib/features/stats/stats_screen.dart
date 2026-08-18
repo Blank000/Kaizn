@@ -15,6 +15,7 @@ import '../../core/theme/context_colors.dart';
 import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
+import 'widgets/share_progress_sheet.dart';
 
 /// Local state provider for the heatmap month/year toggle.
 final _heatmapYearModeProvider = StateProvider<bool>((ref) => false);
@@ -75,6 +76,13 @@ class StatsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('Stats', style: AppTypography.heading1),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.ios_share_rounded),
+            tooltip: 'Share your progress',
+            onPressed: () => showShareProgressSheet(context, ref),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
