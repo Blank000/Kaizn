@@ -124,6 +124,8 @@ class AppPrefs {
     _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
     final restIso = p.getString(_restModeUntilKey);
     _restModeUntilCache = restIso == null ? null : DateTime.tryParse(restIso);
+    _soundEnabledCache = p.getBool(_soundEnabledKey) ?? false;
+    _zenEnabledCache = p.getBool(_zenEnabledKey) ?? true;
     _gcalEnabledCache = p.getBool(_gcalEnabledKey) ?? false;
     _gcalShowOnTimelineCache = p.getBool(_gcalShowOnTimelineKey) ?? true;
     _gcalCalendarIdsCache = p.getStringList(_gcalCalendarIdsKey) ?? const [];
@@ -163,6 +165,28 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setStringList(_gcalCalendarIdsKey, ids);
     _gcalCalendarIdsCache = List.unmodifiable(ids);
+  }
+
+  // ── Sounds (OFF by default) + Zen the mascot (ON by default) ─────────────
+
+  static const _soundEnabledKey = 'sound_enabled';
+  static const _zenEnabledKey = 'zen_enabled';
+  static bool _soundEnabledCache = false;
+  static bool _zenEnabledCache = true;
+
+  static bool get soundEnabledSync => _soundEnabledCache;
+  static bool get zenEnabledSync => _zenEnabledCache;
+
+  static Future<void> setSoundEnabled(bool on) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_soundEnabledKey, on);
+    _soundEnabledCache = on;
+  }
+
+  static Future<void> setZenEnabled(bool on) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_zenEnabledKey, on);
+    _zenEnabledCache = on;
   }
 
   // ── Rest mode (guilt-free multi-day pause) ────────────────────────────────

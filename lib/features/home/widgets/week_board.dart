@@ -11,7 +11,16 @@ import '../../../core/theme/context_colors.dart';
 /// today pulses gently. The Duolingo weekly calendar, kill-list edition.
 class WeekBoard extends StatefulWidget {
   final List<TaskCompletion> completions;
-  const WeekBoard({super.key, required this.completions});
+
+  /// One-attention-cue rule: when the Up-next breathe invite is live, the
+  /// today-dot ring holds still (solid outline) so only ONE thing on Home
+  /// ever pulses.
+  final bool suppressTodayPulse;
+
+  const WeekBoard(
+      {super.key,
+      required this.completions,
+      this.suppressTodayPulse = false});
 
   @override
   State<WeekBoard> createState() => _WeekBoardState();
@@ -26,7 +35,16 @@ class _WeekBoardState extends State<WeekBoard>
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
+  );
+
+  void _syncPulse(bool animate) {
+    if (animate && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!animate && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 1;
+    }
+  }
 
   @override
   void dispose() {
@@ -40,6 +58,9 @@ class _WeekBoardState extends State<WeekBoard>
     final today = DateTime(now.year, now.month, now.day);
     final monday = today.subtract(Duration(days: today.weekday - 1));
     final still = MediaQuery.of(context).disableAnimations;
+    // No zero-listener tickers: the controller only runs when the ring
+    // actually animates.
+    _syncPulse(!still && !widget.suppressTodayPulse);
 
     var doneCount = 0;
     final days = List.generate(7, (i) {
@@ -107,7 +128,9 @@ class _WeekBoardState extends State<WeekBoard>
                 letter: _letters[i],
                 state: days[i],
                 isToday: isToday,
-                pulse: isToday && !still ? _pulse : null,
+                pulse: isToday && !still && !widget.suppressTodayPulse
+                    ? _pulse
+                    : null,
               );
             }),
           ),
@@ -168,24 +191,27 @@ class _DayDot extends StatelessWidget {
       child: glyph,
     );
 
-    // Today: a breathing outline ring around the dot.
+    // Today: a breathing outline ring around the dot. RepaintBoundary so
+    // each pulse tick repaints ~30px of ring, not the whole board.
     final Widget marked;
     if (isToday && pulse != null) {
-      marked = AnimatedBuilder(
-        animation: pulse!,
-        builder: (_, child) => Container(
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.primary
-                  .withValues(alpha: 0.35 + 0.45 * pulse!.value),
-              width: 2,
+      marked = RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: pulse!,
+          builder: (_, child) => Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primary
+                    .withValues(alpha: 0.35 + 0.45 * pulse!.value),
+                width: 2,
+              ),
             ),
+            child: child,
           ),
-          child: child,
+          child: dot,
         ),
-        child: dot,
       );
     } else if (isToday) {
       marked = Container(

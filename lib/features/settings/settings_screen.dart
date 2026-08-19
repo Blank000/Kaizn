@@ -10,6 +10,7 @@ import '../../core/services/calendar_service.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/notification_scheduler.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/services/sound_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
@@ -110,6 +111,51 @@ class SettingsScreen extends ConsumerWidget {
                     color: context.appTextSecondary),
                 onTap: () => _showNotificationDiagnostics(context),
               ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _SectionLabel('Delight'),
+          const SizedBox(height: 8),
+          _Card(
+            children: [
+              StatefulBuilder(builder: (context, setTileState) {
+                return SwitchListTile(
+                  secondary: const Icon(Icons.volume_up_outlined),
+                  title: Text('Sounds', style: AppTypography.body),
+                  subtitle: Text(
+                    'Soft chimes on completions and celebrations',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextSecondary),
+                  ),
+                  value: AppPrefs.soundEnabledSync,
+                  activeColor: AppColors.primary,
+                  onChanged: (v) async {
+                    await AppPrefs.setSoundEnabled(v);
+                    if (v) SoundService.play(AppSound.complete);
+                    setTileState(() {});
+                  },
+                );
+              }),
+              _Divider(),
+              StatefulBuilder(builder: (context, setTileState) {
+                return SwitchListTile(
+                  secondary: const Text('💥',
+                      style: TextStyle(fontSize: 20)),
+                  title: Text('Zen, the Victory Spark',
+                      style: AppTypography.body),
+                  subtitle: Text(
+                    'Your mascot on Home and in celebrations',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextSecondary),
+                  ),
+                  value: AppPrefs.zenEnabledSync,
+                  activeColor: AppColors.primary,
+                  onChanged: (v) async {
+                    await AppPrefs.setZenEnabled(v);
+                    setTileState(() {});
+                  },
+                );
+              }),
             ],
           ),
           const SizedBox(height: 24),

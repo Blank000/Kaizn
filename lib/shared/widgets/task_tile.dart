@@ -197,6 +197,10 @@ class TaskTile extends ConsumerStatefulWidget {
   /// Total minutes for this task + its queue (the chip's "~45m" part).
   final int? queueMinutes;
 
+  /// The Duolingo-START-button invite: the check button of THE next task
+  /// breathes gently (first unchecked tile only — one attention cue, ever).
+  final bool breathe;
+
   const TaskTile({
     super.key,
     required this.task,
@@ -208,6 +212,7 @@ class TaskTile extends ConsumerStatefulWidget {
     this.showTimerButton = false,
     this.queueCount = 0,
     this.queueMinutes,
+    this.breathe = false,
   });
 
   @override
@@ -275,8 +280,11 @@ class _TaskTileState extends ConsumerState<TaskTile>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (!hasChips) ...[
-                    _CheckButton(
-                        rowState: widget.rowState, onTap: _toggle),
+                    _MaybeBreathing(
+                      active: widget.breathe && _isUnchecked,
+                      child: _CheckButton(
+                          rowState: widget.rowState, onTap: _toggle),
+                    ),
                     const SizedBox(width: 8),
                   ],
                   Expanded(
@@ -740,6 +748,74 @@ class _TaskTileState extends ConsumerState<TaskTile>
         questBonus: result.questCompleted?.bonus ?? 0,
       ));
     }
+  }
+}
+
+/// Gentle 1.0→1.06 pulse for the next actionable check button — an invite,
+/// not an alarm. Inert (and controller-free) when inactive; still under
+/// reduced motion.
+class _MaybeBreathing extends StatefulWidget {
+  final bool active;
+  final Widget child;
+  const _MaybeBreathing({required this.active, required this.child});
+
+  @override
+  State<_MaybeBreathing> createState() => _MaybeBreathingState();
+}
+
+// TickerProviderStateMixin (multi), NOT Single: the controller is disposed
+// and re-created as `active` toggles, and the single-ticker mixin throws on
+// the second Ticker it's ever asked to create.
+class _MaybeBreathingState extends State<_MaybeBreathing>
+    with TickerProviderStateMixin {
+  AnimationController? _ctrl;
+
+  void _sync() {
+    final still = MediaQuery.of(context).disableAnimations;
+    if (widget.active && !still) {
+      _ctrl ??= AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1300),
+      )..repeat(reverse: true);
+    } else {
+      _ctrl?.dispose();
+      _ctrl = null;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_MaybeBreathing old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = _ctrl;
+    if (ctrl == null) return widget.child;
+    // RepaintBoundary: the pulse repaints a 44px button, never the tile.
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: ctrl,
+        builder: (_, child) => Transform.scale(
+          scale: 1.0 + 0.06 * Curves.easeInOut.transform(ctrl.value),
+          child: child,
+        ),
+        child: widget.child,
+      ),
+    );
   }
 }
 

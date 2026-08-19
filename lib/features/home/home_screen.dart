@@ -13,6 +13,7 @@ import '../../core/services/league_service.dart';
 import '../../core/services/level_service.dart';
 import '../../core/services/notification_scheduler.dart';
 import '../../core/services/quest_service.dart';
+import '../../core/services/sound_service.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/services/timer_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -26,6 +27,7 @@ import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/day_complete_sequence.dart';
 import '../../shared/widgets/living_flame.dart';
 import '../../shared/widgets/stagger_in.dart';
+import '../../shared/widgets/zen_spark.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../../shared/models/task_stack.dart';
@@ -713,10 +715,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               currentStreak: streak?.currentStreak ?? 0,
             ),
           ),
-          // "Your week" at a glance — 7 quiet dots, today pulsing.
+          // "Your week" at a glance — 7 quiet dots. One-attention-cue
+          // rule: today's ring pulses ONLY when the Up-next breathe
+          // invite isn't live (the invite outranks the calendar).
           StaggerIn(
             index: 1,
-            child: WeekBoard(completions: completions),
+            child: WeekBoard(
+              completions: completions,
+              suppressTodayPulse: !resting &&
+                  upNext.isNotEmpty &&
+                  weeklyChipsFor(upNext.first.task, completions) == null,
+            ),
           ),
           const SizedBox(height: 20),
           if (totalScheduled > 0 && !resting)
@@ -804,6 +813,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     rowState: it.rowState,
                     weeklyChips: weeklyChipsFor(it.task, completions),
                     showTimerButton: true,
+                    // THE next task breathes — one invite, never a
+                    // chorus, and never while resting (rest mode must
+                    // not nudge action).
+                    breathe: i == 0 && !resting,
                     // Queue info lives on the tappable 🔗 chip (opens the
                     // queue sheet), not in the meta string.
                     queueCount: queue.length,
@@ -1220,6 +1233,7 @@ class _QuestRowState extends ConsumerState<_QuestRow> {
     final db = ref.read(databaseProvider);
     final reward = await QuestService.claimChest(db);
     if (reward == null || !mounted) return;
+    SoundService.play(AppSound.chest);
     await showCelebrationDialog(
       context,
       emoji: '🎁',
@@ -1485,7 +1499,17 @@ class _NothingTodayState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Text('🌅', style: TextStyle(fontSize: 48)),
+          // Zen greets the blank page (falls back to the sunrise when the
+          // mascot is toggled off).
+          if (AppPrefs.zenEnabledSync)
+            ZenSpark(
+              mood: ZenMood.idle,
+              streak: 1,
+              size: 72,
+              line: hasMilestones ? "What's today's win?" : "Let's go!",
+            )
+          else
+            const Text('🌅', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 12),
           Text(
             hasMilestones ? 'Nothing scheduled today' : 'Get started',
@@ -1614,7 +1638,11 @@ class _RestBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Text('😴', style: TextStyle(fontSize: 24)),
+          // Zen meditates through rest mode — serene, never moping.
+          if (AppPrefs.zenEnabledSync)
+            const ZenSpark(mood: ZenMood.sleepy, streak: 1, size: 40)
+          else
+            const Text('😴', style: TextStyle(fontSize: 24)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

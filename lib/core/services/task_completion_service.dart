@@ -9,6 +9,7 @@ import 'identity_voice.dart';
 import 'level_service.dart';
 import 'notification_scheduler.dart';
 import 'quest_service.dart';
+import 'sound_service.dart';
 import 'streak_service.dart';
 import 'timer_service.dart';
 
@@ -115,6 +116,9 @@ class TaskCompletionService {
 
     final outcome = await db.completeTaskNow(task,
         durationSeconds: attachSeconds, tiny: tiny);
+    // One hook, every surface: tile, chip, timeline, runner, notification,
+    // stop-timer sheet all chime identically. No-op unless sounds are on.
+    unawaited(SoundService.play(AppSound.complete));
     final streakAdvance = await StreakService.recordDayLogged(db);
 
     // Quest progress rides every completion (bonus banked inside when the

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/cosmetics_service.dart';
+import '../../core/services/sound_service.dart';
 import '../../core/services/task_completion_service.dart';
 import '../../core/theme/app_colors.dart';
 import 'celebration_dialog.dart';
@@ -34,6 +35,7 @@ Future<void> surfaceDialogMoments(
 
   final levelUp = result.levelUp;
   if (levelUp != null && context.mounted) {
+    SoundService.play(AppSound.levelUp);
     await showCelebrationDialog(
       context,
       emoji: '🎖️',

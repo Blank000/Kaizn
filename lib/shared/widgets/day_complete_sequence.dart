@@ -5,12 +5,15 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/services/app_prefs.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/level_service.dart';
+import '../../core/services/sound_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'animated_number.dart';
 import 'spring_progress_bar.dart';
+import 'zen_spark.dart';
 
 /// Everything the Day Complete show needs, computed once by the caller.
 class DayCompletePayload {
@@ -45,7 +48,10 @@ Future<void> showDayCompleteSequence(
     BuildContext context, DayCompletePayload payload) async {
   final style = await CosmeticsService.selectedConfettiStyle();
   if (!context.mounted) return;
-  HapticFeedback.heavyImpact();
+  // Read reduced-motion HERE (live context): the static summary must skip
+  // the whole show — no confetti, no beat timers, no sounds, no haptics.
+  final reduced = MediaQuery.of(context).disableAnimations;
+  if (!reduced) HapticFeedback.heavyImpact();
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -54,8 +60,8 @@ Future<void> showDayCompleteSequence(
     transitionDuration: const Duration(milliseconds: 200),
     transitionBuilder: (ctx, anim, _, child) =>
         FadeTransition(opacity: anim, child: child),
-    pageBuilder: (_, __, ___) =>
-        _DaySequence(payload: payload, style: style),
+    pageBuilder: (_, __, ___) => _DaySequence(
+        payload: payload, style: style, reducedMotion: reduced),
   );
 }
 
@@ -64,7 +70,11 @@ enum _Beat { curtain, points, recap, streak, quest, outro }
 class _DaySequence extends StatefulWidget {
   final DayCompletePayload payload;
   final ConfettiStyle style;
-  const _DaySequence({required this.payload, required this.style});
+  final bool reducedMotion;
+  const _DaySequence(
+      {required this.payload,
+      required this.style,
+      required this.reducedMotion});
 
   @override
   State<_DaySequence> createState() => _DaySequenceState();
@@ -90,8 +100,11 @@ class _DaySequenceState extends State<_DaySequence> {
       if (p.questDoneToday || p.chestReady) _Beat.quest,
       _Beat.outro,
     ];
-    _confetti.play();
-    _armTimer();
+    if (!widget.reducedMotion) {
+      _confetti.play();
+      SoundService.play(AppSound.celebrate);
+      _armTimer();
+    }
   }
 
   @override
@@ -122,13 +135,16 @@ class _DaySequenceState extends State<_DaySequence> {
     if (_index >= _beats.length - 1) return;
     setState(() => _index++);
     HapticFeedback.mediumImpact();
+    SoundService.play(
+        _beats[_index] == _Beat.quest ? AppSound.chest : AppSound.tick);
     _armTimer();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Accessibility: no show, just the facts.
-    if (MediaQuery.of(context).disableAnimations) {
+    // Accessibility: no show, just the facts (and initState never armed
+    // the timers/sounds, so nothing invisible plays behind this card).
+    if (widget.reducedMotion) {
       return _StaticSummary(payload: p);
     }
 
@@ -189,6 +205,7 @@ class _DaySequenceState extends State<_DaySequence> {
             chestReady: p.chestReady),
         _Beat.outro => _OutroBeat(
             level: p.level,
+            streakDay: p.streakDay,
             onContinue: () => Navigator.of(context).pop()),
       };
 }
@@ -452,8 +469,12 @@ class _QuestBeat extends StatelessWidget {
 
 class _OutroBeat extends StatelessWidget {
   final LevelInfo level;
+  final int streakDay;
   final VoidCallback onContinue;
-  const _OutroBeat({required this.level, required this.onContinue});
+  const _OutroBeat(
+      {required this.level,
+      required this.streakDay,
+      required this.onContinue});
 
   @override
   Widget build(BuildContext context) {
@@ -462,6 +483,16 @@ class _OutroBeat extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Zen takes the bow with you (spacer gated with him, so the
+          // toggle leaves no dangling gap).
+          if (AppPrefs.zenEnabledSync) ...[
+            ZenSpark(
+                mood: ZenMood.cheer,
+                streak: streakDay,
+                size: 84,
+                line: 'YATTA!'),
+            const SizedBox(height: 16),
+          ],
           Text('Beautiful work. See you tomorrow 👋',
               textAlign: TextAlign.center,
               style: AppTypography.heading2
