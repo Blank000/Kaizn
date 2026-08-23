@@ -25,8 +25,8 @@ import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/animated_number.dart';
 import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/day_complete_sequence.dart';
-import '../../shared/widgets/living_flame.dart';
 import '../../shared/widgets/stagger_in.dart';
+import '../../shared/widgets/streak_flame.dart';
 import '../../shared/widgets/zen_spark.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
@@ -1018,9 +1018,9 @@ class _StatsHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // A fire that's actually on fire — flickers on its own, grows
-              // with the streak, throws sparks at 30+ days.
-              LivingFlame(streak: currentStreak, size: 30),
+              // Designer Lottie flame when the asset is bundled; falls
+              // back to the code-drawn LivingFlame otherwise.
+              StreakFlame(streak: currentStreak, size: 30),
               const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

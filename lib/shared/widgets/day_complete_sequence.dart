@@ -13,6 +13,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import 'animated_number.dart';
 import 'spring_progress_bar.dart';
+import 'streak_flame.dart';
 import 'zen_spark.dart';
 
 /// Everything the Day Complete show needs, computed once by the caller.
@@ -371,8 +372,11 @@ class _StreakBeat extends StatelessWidget {
           curve: Curves.elasticOut,
           builder: (_, v, child) =>
               Transform.scale(scale: v, child: child),
-          child: Text(day > 0 ? '🔥' : '✨',
-              style: const TextStyle(fontSize: 72)),
+          // The user-picked Lottie fire (falls back to the drawn flame);
+          // a spark for day zero.
+          child: day > 0
+              ? StreakFlame(streak: day, size: 96)
+              : const Text('✨', style: TextStyle(fontSize: 72)),
         ),
         const SizedBox(height: 8),
         if (day > 0)
