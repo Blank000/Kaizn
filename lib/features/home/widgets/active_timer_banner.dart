@@ -68,6 +68,10 @@ class _ActiveTimerBannerState extends ConsumerState<ActiveTimerBanner> {
     }
 
     final capped = TimerService.cappedElapsedSeconds(timer);
+    final paused = timer.isPaused;
+    // Paused must be GLANCEABLE: the whole strip goes quiet-gray, the clock
+    // freezes, and the label says so.
+    final accent = paused ? context.appTextTertiary : AppColors.primary;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       child: InkWell(
@@ -76,26 +80,37 @@ class _ActiveTimerBannerState extends ConsumerState<ActiveTimerBanner> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.12),
+            color: accent.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.35),
+              color: accent.withValues(alpha: 0.35),
             ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.timer_rounded,
-                  size: 20, color: AppColors.primary),
+              Icon(paused ? Icons.pause_circle_rounded : Icons.timer_rounded,
+                  size: 20, color: accent),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  task.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: context.appTextPrimary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: context.appTextPrimary,
+                      ),
+                    ),
+                    if (paused)
+                      Text(
+                        'Paused — tap ▶ to keep going',
+                        style: AppTypography.caption
+                            .copyWith(color: context.appTextSecondary),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
@@ -104,13 +119,33 @@ class _ActiveTimerBannerState extends ConsumerState<ActiveTimerBanner> {
                 style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w800,
                   fontFeatures: const [FontFeature.tabularFigures()],
-                  color: AppColors.primary,
+                  color: accent,
                 ),
               ),
-              const SizedBox(width: 10),
+              // Pause/resume — always manual, never automatic.
+              IconButton(
+                icon: Icon(
+                  paused
+                      ? Icons.play_circle_fill_rounded
+                      : Icons.pause_circle_filled_rounded,
+                  size: 26,
+                  color: paused ? AppColors.primary : accent,
+                ),
+                tooltip: paused ? 'Resume timer' : 'Pause timer',
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  if (paused) {
+                    await TimerService.resume();
+                  } else {
+                    await TimerService.pause();
+                  }
+                  if (mounted) setState(() {});
+                },
+              ),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor:
+                      paused ? context.appTextTertiary : AppColors.primary,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   minimumSize: Size.zero,

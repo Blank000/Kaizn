@@ -102,8 +102,12 @@ class AppPrefs {
 
   static const _activeTimerTaskIdKey = 'active_timer_task_id';
   static const _activeTimerStartedAtKey = 'active_timer_started_at_millis';
+  static const _activeTimerAccumKey = 'active_timer_accum_seconds';
+  static const _activeTimerPausedKey = 'active_timer_paused';
   static String? _activeTimerTaskIdCache;
   static int? _activeTimerStartedAtCache;
+  static int _activeTimerAccumCache = 0;
+  static bool _activeTimerPausedCache = false;
 
   static const _coachDismissedKey = 'coach_dismissed_date';
   static DateTime? _coachDismissedCache;
@@ -120,6 +124,8 @@ class AppPrefs {
     _nmtDismissedCache = nmtIso == null ? null : DateTime.tryParse(nmtIso);
     _activeTimerTaskIdCache = p.getString(_activeTimerTaskIdKey);
     _activeTimerStartedAtCache = p.getInt(_activeTimerStartedAtKey);
+    _activeTimerAccumCache = p.getInt(_activeTimerAccumKey) ?? 0;
+    _activeTimerPausedCache = p.getBool(_activeTimerPausedKey) ?? false;
     final coachIso = p.getString(_coachDismissedKey);
     _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
     final restIso = p.getString(_restModeUntilKey);
@@ -259,28 +265,58 @@ class AppPrefs {
   }
 
   // ── Active stopwatch timer (stopwatch-lite) ──────────────────────────────
-  // Two values ARE the whole persistence story: elapsed time is always
-  // recomputed from wall clock, so the timer survives app kill and OEM
-  // process death with zero background services. Sync caches so the Home
-  // banner can render on the first frame after a cold start.
+  // Four values ARE the whole persistence story: elapsed = accumulated
+  // (banked by pauses) + wall-clock time since the last resume. Everything
+  // is recomputed on read, so the timer survives app kill and OEM process
+  // death with zero background services. Sync caches so the Home banner can
+  // render on the first frame after a cold start. Pause is ALWAYS manual —
+  // the app never auto-pauses on backgrounding (timing off-screen work is
+  // legitimate; owner decision, do not "fix").
 
   static String? get activeTimerTaskIdSync => _activeTimerTaskIdCache;
   static int? get activeTimerStartedAtMillisSync => _activeTimerStartedAtCache;
+  static int get activeTimerAccumSecondsSync => _activeTimerAccumCache;
+  static bool get activeTimerPausedSync => _activeTimerPausedCache;
 
   static Future<void> setActiveTimer(String taskId, int startedAtMillis) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(_activeTimerTaskIdKey, taskId);
     await p.setInt(_activeTimerStartedAtKey, startedAtMillis);
+    await p.setInt(_activeTimerAccumKey, 0);
+    await p.setBool(_activeTimerPausedKey, false);
     _activeTimerTaskIdCache = taskId;
     _activeTimerStartedAtCache = startedAtMillis;
+    _activeTimerAccumCache = 0;
+    _activeTimerPausedCache = false;
+  }
+
+  /// Pause/resume bookkeeping: [accumSeconds] is the banked total of all
+  /// finished run segments; [startedAtMillis] restarts the wall clock on
+  /// resume (ignored while paused).
+  static Future<void> setActiveTimerRunState({
+    required int startedAtMillis,
+    required int accumSeconds,
+    required bool paused,
+  }) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_activeTimerStartedAtKey, startedAtMillis);
+    await p.setInt(_activeTimerAccumKey, accumSeconds);
+    await p.setBool(_activeTimerPausedKey, paused);
+    _activeTimerStartedAtCache = startedAtMillis;
+    _activeTimerAccumCache = accumSeconds;
+    _activeTimerPausedCache = paused;
   }
 
   static Future<void> clearActiveTimer() async {
     final p = await SharedPreferences.getInstance();
     await p.remove(_activeTimerTaskIdKey);
     await p.remove(_activeTimerStartedAtKey);
+    await p.remove(_activeTimerAccumKey);
+    await p.remove(_activeTimerPausedKey);
     _activeTimerTaskIdCache = null;
     _activeTimerStartedAtCache = null;
+    _activeTimerAccumCache = 0;
+    _activeTimerPausedCache = false;
   }
 
   /// Date the Goldilocks coach banner was dismissed — max one suggestion
