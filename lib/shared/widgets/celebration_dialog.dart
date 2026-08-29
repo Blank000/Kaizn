@@ -125,6 +125,8 @@ class _CelebrationDialogState extends State<_CelebrationDialog>
       case ConfettiStyle.goldStars:
         return ConfettiWidget(
           confettiController: _confetti,
+          minimumSize: const Size(4, 8),
+          maximumSize: const Size(8, 14),
           blastDirectionality: BlastDirectionality.explosive,
           numberOfParticles: 24,
           gravity: 0.15,
@@ -139,6 +141,8 @@ class _CelebrationDialogState extends State<_CelebrationDialog>
       case ConfettiStyle.emberRain:
         return ConfettiWidget(
           confettiController: _confetti,
+          minimumSize: const Size(4, 8),
+          maximumSize: const Size(8, 14),
           blastDirection: math.pi / 2, // straight down
           blastDirectionality: BlastDirectionality.directional,
           numberOfParticles: 40,
@@ -156,6 +160,8 @@ class _CelebrationDialogState extends State<_CelebrationDialog>
       case ConfettiStyle.classic:
         return ConfettiWidget(
           confettiController: _confetti,
+          minimumSize: const Size(4, 8),
+          maximumSize: const Size(8, 14),
           blastDirectionality: BlastDirectionality.explosive,
           numberOfParticles: 30,
           colors: const [

@@ -38,7 +38,21 @@ Future<void> showFirstWinIgnition(
     transitionDuration: const Duration(milliseconds: 200),
     transitionBuilder: (ctx, anim, _, child) =>
         FadeTransition(opacity: anim, child: child),
-    pageBuilder: (_, __, ___) => _IgnitionOverlay(streakDay: streakDay),
+    // Material ancestor (kills the yellow debug underline) + the show's
+    // own dark stage, so it looks identical over light and dark themes.
+    pageBuilder: (_, __, ___) => Material(
+      type: MaterialType.transparency,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xF50B141D), Color(0xF516222E)],
+          ),
+        ),
+        child: _IgnitionOverlay(streakDay: streakDay),
+      ),
+    ),
   );
 }
 

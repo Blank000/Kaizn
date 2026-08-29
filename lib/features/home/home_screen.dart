@@ -309,11 +309,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     await AppPrefs.setLastAllDoneCelebrationDate(today);
 
-    // Gather the show's facts (all cheap reads).
+    // Gather the show's facts (all cheap reads). The streak is re-read
+    // from the DB here: the provider value passed in can be STALE when the
+    // completions stream out-races the streak stream (seen live: the show
+    // said "Day 1 starts now" while the streak was already Day 1).
     final db = ref.read(databaseProvider);
     final clutch = await db.hasClutchBonusToday();
     final lifetime = await db.getLifetimeEarnedPoints();
     final quest = await QuestService.today(db, tasks, completions);
+    final freshStreak = (await db.getStreak())?.currentStreak ?? streakDay;
 
     if (!mounted) return;
     await showDayCompleteSequence(
@@ -323,7 +327,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tinyCount: tinyCount,
         pointsToday: pointsToday,
         clutchToday: clutch,
-        streakDay: streakDay,
+        streakDay: freshStreak,
         questDoneToday: quest?.done ?? false,
         questWeekDots: (quest?.weekCount ?? 0).clamp(0, 5),
         chestReady: quest?.chestReady ?? false,

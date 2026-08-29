@@ -61,8 +61,24 @@ Future<void> showDayCompleteSequence(
     transitionDuration: const Duration(milliseconds: 200),
     transitionBuilder: (ctx, anim, _, child) =>
         FadeTransition(opacity: anim, child: child),
-    pageBuilder: (_, __, ___) => _DaySequence(
-        payload: payload, style: style, reducedMotion: reduced),
+    // Material ancestor is MANDATORY: raw widgets from showGeneralDialog
+    // render every Text with the yellow debug underline. The gradient box
+    // is the show's own dark stage — the cinematic look must not depend on
+    // the app theme (a scrim over a LIGHT theme is a muddy gray wash).
+    pageBuilder: (_, __, ___) => Material(
+      type: MaterialType.transparency,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xF50B141D), Color(0xF516222E)],
+          ),
+        ),
+        child: _DaySequence(
+            payload: payload, style: style, reducedMotion: reduced),
+      ),
+    ),
   );
 }
 
@@ -347,8 +363,10 @@ class _RecapBeatState extends State<_RecapBeat>
         ),
         const SizedBox(height: 14),
         Text(
-          '${widget.doneCount} task${widget.doneCount == 1 ? '' : 's'}'
-          '${extra > 0 ? ' (+$extra more)' : ''} — all of them ✅',
+          widget.doneCount == 1
+              ? 'Your task for today — done ✅'
+              : '${widget.doneCount} tasks'
+                  '${extra > 0 ? ' (+$extra more)' : ''} — all of them ✅',
           style:
               AppTypography.body.copyWith(color: Colors.white70),
         ),
@@ -497,7 +515,8 @@ class _OutroBeat extends StatelessWidget {
                 line: 'YATTA!'),
             const SizedBox(height: 16),
           ],
-          Text('Beautiful work. See you tomorrow 👋',
+          // Non-breaking space: the wave must never wrap onto its own line.
+          Text('Beautiful work. See you tomorrow 👋',
               textAlign: TextAlign.center,
               style: AppTypography.heading2
                   .copyWith(color: Colors.white)),
@@ -601,6 +620,8 @@ Widget _confettiFor(ConfettiStyle style, ConfettiController ctrl) {
     case ConfettiStyle.goldStars:
       return ConfettiWidget(
         confettiController: ctrl,
+          minimumSize: const Size(4, 8),
+          maximumSize: const Size(8, 14),
         blastDirectionality: BlastDirectionality.explosive,
         numberOfParticles: 24,
         gravity: 0.15,
@@ -615,6 +636,8 @@ Widget _confettiFor(ConfettiStyle style, ConfettiController ctrl) {
     case ConfettiStyle.emberRain:
       return ConfettiWidget(
         confettiController: ctrl,
+          minimumSize: const Size(4, 8),
+          maximumSize: const Size(8, 14),
         blastDirection: math.pi / 2,
         blastDirectionality: BlastDirectionality.directional,
         numberOfParticles: 40,
@@ -632,6 +655,8 @@ Widget _confettiFor(ConfettiStyle style, ConfettiController ctrl) {
     case ConfettiStyle.classic:
       return ConfettiWidget(
         confettiController: ctrl,
+          minimumSize: const Size(4, 8),
+          maximumSize: const Size(8, 14),
         blastDirectionality: BlastDirectionality.explosive,
         numberOfParticles: 30,
         colors: const [
