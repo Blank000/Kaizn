@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/app_prefs.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/sound_service.dart';
 import '../../core/services/task_completion_service.dart';
 import '../../core/theme/app_colors.dart';
 import 'celebration_dialog.dart';
+import 'first_win_ignition.dart';
 
 /// Dialog-tier moments a completion can produce (same-day streak milestone,
 /// new personal best, level-up) — surfaced identically from every completion
@@ -12,6 +14,18 @@ import 'celebration_dialog.dart';
 /// milestone first: it's the rarer, more meaningful moment.
 Future<void> surfaceDialogMoments(
     BuildContext context, CompletionResult result) async {
+  // First-Win Ignition (the approved Option B motion): plays when the
+  // streak ADVANCES — the day's first real completion — unless a bigger
+  // dialog owns the moment, the user is resting, or motion is reduced.
+  if (result.streakDay != null &&
+      result.streakMilestone == null &&
+      !result.isNewBestStreak &&
+      result.levelUp == null &&
+      !AppPrefs.isRestingSync &&
+      !MediaQuery.of(context).disableAnimations) {
+    await showFirstWinIgnition(context, streakDay: result.streakDay!);
+  }
+
   if (result.streakMilestone != null) {
     await showCelebrationDialog(
       context,
