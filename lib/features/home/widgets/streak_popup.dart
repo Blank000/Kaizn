@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
 import '../../../shared/widgets/celebration_dialog.dart';
+import '../../../shared/widgets/streak_flame.dart';
 
 /// Shows a milestone celebration dialog or a normal streak bottom sheet.
 /// [onShieldUsed] is called when the user confirms using a Streak Shield.
@@ -95,10 +96,12 @@ class _NormalStreakSheetState extends State<_NormalStreakSheet> {
             ),
           ),
           const SizedBox(height: 28),
-          Text(
-            _shieldUsed ? '🛡️' : '🔥',
-            style: const TextStyle(fontSize: 64),
-          ),
+          // The real fire (the shield save keeps its shield glyph — a
+          // different story deserves a different symbol).
+          if (_shieldUsed)
+            const Text('🛡️', style: TextStyle(fontSize: 64))
+          else
+            StreakFlame(streak: result.currentStreak, size: 76),
           const SizedBox(height: 8),
           Text(
             _shieldUsed
@@ -255,7 +258,8 @@ class _MilestoneCelebrationDialogState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('🔥', style: TextStyle(fontSize: 64)),
+                StreakFlame(
+                    streak: widget.result.milestoneHit ?? 7, size: 80),
                 const SizedBox(height: 16),
                 Text(
                   'YOU HIT\n${widget.result.milestoneHit} DAYS!',

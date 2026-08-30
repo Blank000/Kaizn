@@ -5,7 +5,6 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/services/app_prefs.dart';
 import '../../core/services/cosmetics_service.dart';
 import '../../core/services/level_service.dart';
 import '../../core/services/sound_service.dart';
@@ -14,7 +13,6 @@ import '../../core/theme/app_typography.dart';
 import 'animated_number.dart';
 import 'spring_progress_bar.dart';
 import 'streak_flame.dart';
-import 'zen_spark.dart';
 
 /// Everything the Day Complete show needs, computed once by the caller.
 class DayCompletePayload {
@@ -505,53 +503,60 @@ class _OutroBeat extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Zen takes the bow with you (spacer gated with him, so the
-          // toggle leaves no dangling gap).
-          if (AppPrefs.zenEnabledSync) ...[
-            ZenSpark(
-                mood: ZenMood.cheer,
-                streak: streakDay,
-                size: 84,
-                line: 'YATTA!'),
-            const SizedBox(height: 16),
-          ],
-          // Non-breaking space: the wave must never wrap onto its own line.
-          Text('Beautiful work. See you tomorrow 👋',
-              textAlign: TextAlign.center,
-              style: AppTypography.heading2
-                  .copyWith(color: Colors.white)),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('🎖️ Lv ${level.level} · ${level.title}',
-                  style: AppTypography.body.copyWith(
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: 220,
-            child: SpringProgressBar(
-              value: level.progress,
-              height: 10,
-              color: AppColors.primary,
-              backgroundColor: Colors.white24,
+          // The hero is the REAL fire — same flame as the streak header
+          // and Ignition. (Zen returns when he has commissioned art; the
+          // code-drawn face read as a cheap emoji on testers' phones.)
+          StreakFlame(streak: streakDay > 0 ? streakDay : 1, size: 104),
+          const SizedBox(height: 6),
+          // The brand yell as TYPE, not a floating bubble.
+          Text(
+            'YATTA!',
+            style: AppTypography.display.copyWith(
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 3,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
+
+          Text('Beautiful work. See you tomorrow.',
+              textAlign: TextAlign.center,
+              style: AppTypography.body
+                  .copyWith(color: Colors.white70, fontSize: 16)),
+          const SizedBox(height: 32),
+          // Level: quiet small-caps data row — no medal emoji.
           Text(
-            '${level.nextPoints - level.minPoints - ((level.progress) * (level.nextPoints - level.minPoints)).round()} pts to Lv ${level.level + 1}',
-            style: AppTypography.caption
-                .copyWith(color: Colors.white54),
+            'LEVEL ${level.level} · ${level.title.toUpperCase()}',
+            style: AppTypography.caption.copyWith(
+              color: Colors.white54,
+              letterSpacing: 1.6,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: 240,
+            child: SpringProgressBar(
+              value: level.progress,
+              height: 12,
+              color: AppColors.primary,
+              backgroundColor: Colors.white12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${level.nextPoints - level.minPoints - ((level.progress) * (level.nextPoints - level.minPoints)).round()} pts to Level ${level.level + 1}',
+            style: AppTypography.caption
+                .copyWith(color: Colors.white38),
+          ),
+          const SizedBox(height: 32),
           ElevatedButton(
             onPressed: onContinue,
             style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 48, vertical: 14)),
+                    horizontal: 56, vertical: 15)),
             child: const Text('CONTINUE'),
           ),
         ],

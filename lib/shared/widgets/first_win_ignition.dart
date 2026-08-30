@@ -240,7 +240,8 @@ class _IgnitionOverlayState extends ConsumerState<_IgnitionOverlay>
                         builder: (_, v, child) =>
                             Transform.scale(scale: v, child: child),
                         child: Text(
-                          _impacted ? 'Day $day 🔥' : 'Day ${day - 1}',
+                          // No 🔥 emoji — the real fire burns right above.
+                          _impacted ? 'Day $day' : 'Day ${day - 1}',
                           style: AppTypography.display.copyWith(
                             fontSize: 30,
                             fontWeight: FontWeight.w900,
