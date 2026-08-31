@@ -741,6 +741,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 pointsToday: todayPoints,
               ),
             ),
+          // One claw (Ren's weekly review): the stamped intention rides
+          // under the progress card all week; Sundays invite the review.
+          if (AppPrefs.renEnabledSync && !resting)
+            if (AppPrefs.weeklyClawSync != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '🦊 One claw: ${AppPrefs.weeklyClawSync}',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else if (DateTime.now().weekday == DateTime.sunday)
+              Center(
+                child: TextButton(
+                  onPressed: () => context.push('/review'),
+                  child: const Text('🦊 Sunday review with Ren →'),
+                ),
+              ),
           // Daily quest — a quiet list row, deliberately NOT a banner (the
           // attention slot stays sacred). No missed state ever: an
           // incomplete quest simply becomes a different quest tomorrow.

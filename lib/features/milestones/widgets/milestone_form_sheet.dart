@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/services/app_prefs.dart';
 import '../../../core/services/cosmetics_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -136,6 +137,14 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
         completionPoints: Value(bonus),
         colorIndex: Value(_colorIndex),
       ));
+      // The Mountain Naming — Ren reframes the feature, post-save only,
+      // never mid-typing, never on edits.
+      if (mounted && AppPrefs.renEnabledSync) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              '🦊 “Name the mountain. Then forget the peak — watch the steps.”'),
+        ));
+      }
     }
     if (mounted) Navigator.of(context).pop();
   }

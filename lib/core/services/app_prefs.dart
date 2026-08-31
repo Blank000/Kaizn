@@ -133,6 +133,8 @@ class AppPrefs {
     _soundEnabledCache = p.getBool(_soundEnabledKey) ?? false;
     _zenEnabledCache = p.getBool(_zenEnabledKey) ?? true;
     _renEnabledCache = p.getBool(_renEnabledKey) ?? true;
+    _weeklyClawCache = p.getString(_weeklyClawKey);
+    _weeklyClawWeekCache = p.getString(_weeklyClawWeekKey);
     _gcalEnabledCache = p.getBool(_gcalEnabledKey) ?? false;
     _gcalShowOnTimelineCache = p.getBool(_gcalShowOnTimelineKey) ?? true;
     _gcalCalendarIdsCache = p.getStringList(_gcalCalendarIdsKey) ?? const [];
@@ -206,6 +208,40 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_renEnabledKey, on);
     _renEnabledCache = on;
+  }
+
+  // ── Weekly review: "one claw" intention ──────────────────────────────────
+  // Set in Ren's Sunday review; shown on the Home progress card during its
+  // week. weekKey anchors weeks to the most recent Sunday.
+  static const _weeklyClawKey = 'weekly_claw';
+  static const _weeklyClawWeekKey = 'weekly_claw_week';
+  static String? _weeklyClawCache;
+  static String? _weeklyClawWeekCache;
+
+  /// Sunday-anchored key for the week containing [d] (yyyy-mm-dd of Sunday).
+  static String weekKeyFor(DateTime d) {
+    final sunday = DateTime(d.year, d.month, d.day)
+        .subtract(Duration(days: d.weekday % 7));
+    return '${sunday.year}-${sunday.month.toString().padLeft(2, '0')}-${sunday.day.toString().padLeft(2, '0')}';
+  }
+
+  /// The intention, if one was stamped for the CURRENT week; else null.
+  static String? get weeklyClawSync =>
+      _weeklyClawWeekCache == weekKeyFor(DateTime.now())
+          ? _weeklyClawCache
+          : null;
+
+  /// True if this week's review was already completed.
+  static bool get weeklyReviewDoneSync =>
+      _weeklyClawWeekCache == weekKeyFor(DateTime.now());
+
+  static Future<void> setWeeklyClaw(String claw) async {
+    final p = await SharedPreferences.getInstance();
+    final week = weekKeyFor(DateTime.now());
+    await p.setString(_weeklyClawKey, claw);
+    await p.setString(_weeklyClawWeekKey, week);
+    _weeklyClawCache = claw;
+    _weeklyClawWeekCache = week;
   }
 
   // ── Rest mode (guilt-free multi-day pause) ────────────────────────────────

@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/achievement_service.dart';
+import '../../core/services/app_prefs.dart';
 import '../../core/services/level_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -99,6 +100,30 @@ class StatsScreen extends ConsumerWidget {
             completions: weekCompletions,
           ),
           const _LastWeekRecapLine(),
+          if (AppPrefs.renEnabledSync) ...[
+            const SizedBox(height: 8),
+            // The Review — Ren's Sunday room, reachable any day from here.
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Text('🦊', style: TextStyle(fontSize: 22)),
+                title: Text(
+                    AppPrefs.weeklyReviewDoneSync
+                        ? 'Weekly review — stamped'
+                        : 'Weekly review with Ren',
+                    style: AppTypography.body
+                        .copyWith(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                    AppPrefs.weeklyClawSync != null
+                        ? 'One claw: ${AppPrefs.weeklyClawSync}'
+                        : 'What burned, what slipped, one claw to sharpen',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextSecondary)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.push('/review'),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           const _AchievementsEntry(),
           const SizedBox(height: 20),
@@ -1476,7 +1501,10 @@ class _TimeOfDayCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 0, 8),
               child: Text(
-                'Most active around ${_formatHour(peakHour)}',
+                // The Observatory: the data speaks in Ren's voice.
+                AppPrefs.renEnabledSync
+                    ? '🦊 “You hunt best when the forest is quiet — ${_formatHour(peakHour)}.”'
+                    : 'Most active around ${_formatHour(peakHour)}',
                 style: AppTypography.body
                     .copyWith(fontWeight: FontWeight.w700),
               ),

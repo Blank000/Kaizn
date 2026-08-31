@@ -7,6 +7,7 @@ import '../../core/services/auth_service.dart';
 import '../../features/achievements/achievements_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/comeback/comeback_screen.dart';
+import '../../features/review/weekly_review_screen.dart';
 import '../../features/focus/stack_runner_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/milestones/milestone_detail_screen.dart';
@@ -79,6 +80,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/comeback',
         name: 'comeback',
         builder: (context, state) => const ComebackScreen(),
+      ),
+
+      // Weekly review — Ren's Sunday room, outside the shell
+      GoRoute(
+        path: '/review',
+        name: 'review',
+        builder: (context, state) => const WeeklyReviewScreen(),
       ),
 
       StatefulShellRoute.indexedStack(

@@ -2,6 +2,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/services/app_prefs.dart';
 import '../../../core/services/cosmetics_service.dart';
 import '../../../core/services/shield_service.dart';
 import '../../../core/services/streak_service.dart';
@@ -173,7 +174,12 @@ class _NormalStreakSheetState extends State<_NormalStreakSheet> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Restore your ${result.streakBeforeReset}-day streak\nfor ${ShieldService.shieldCost} pts',
+                    // The Shield: Ren's counsel, voice only — the fire keeps
+                    // the stage, and neither button carries shame.
+                    AppPrefs.renEnabledSync
+                        ? '“Protect the flame, or relight it. Both are training.”\n'
+                            '${result.streakBeforeReset}-day streak · ${ShieldService.shieldCost} pts'
+                        : 'Restore your ${result.streakBeforeReset}-day streak\nfor ${ShieldService.shieldCost} pts',
                     style: AppTypography.caption
                         .copyWith(color: context.appTextSecondary),
                     textAlign: TextAlign.center,
