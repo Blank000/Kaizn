@@ -139,19 +139,19 @@ class SettingsScreen extends ConsumerWidget {
               _Divider(),
               StatefulBuilder(builder: (context, setTileState) {
                 return SwitchListTile(
-                  secondary: const Text('💥',
+                  secondary: const Text('🦊',
                       style: TextStyle(fontSize: 20)),
-                  title: Text('Zen, the Victory Spark',
+                  title: Text('Master Ren, the fox sensei',
                       style: AppTypography.body),
                   subtitle: Text(
-                    'Your mascot on Home and in celebrations',
+                    'Your guide on rest days, comebacks and quiet moments',
                     style: AppTypography.caption
                         .copyWith(color: context.appTextSecondary),
                   ),
-                  value: AppPrefs.zenEnabledSync,
+                  value: AppPrefs.renEnabledSync,
                   activeColor: AppColors.primary,
                   onChanged: (v) async {
-                    await AppPrefs.setZenEnabled(v);
+                    await AppPrefs.setRenEnabled(v);
                     setTileState(() {});
                   },
                 );

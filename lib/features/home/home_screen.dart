@@ -27,7 +27,7 @@ import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/day_complete_sequence.dart';
 import '../../shared/widgets/stagger_in.dart';
 import '../../shared/widgets/streak_flame.dart';
-import '../../shared/widgets/zen_spark.dart';
+import '../../shared/widgets/ren_figure.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../../shared/models/task_stack.dart';
@@ -1503,14 +1503,12 @@ class _NothingTodayState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Zen greets the blank page (falls back to the sunrise when the
-          // mascot is toggled off).
-          if (AppPrefs.zenEnabledSync)
-            ZenSpark(
-              mood: ZenMood.idle,
-              streak: 1,
-              size: 72,
-              line: hasMilestones ? "What's today's win?" : "Let's go!",
+          // Ren greets the blank scroll (falls back to the sunrise when the
+          // sensei is toggled off).
+          if (AppPrefs.renEnabledSync)
+            RenFigure(
+              size: 88,
+              line: hasMilestones ? RenLines.empty() : 'One task. Choose it well.',
             )
           else
             const Text('🌅', style: TextStyle(fontSize: 48)),
@@ -1642,9 +1640,9 @@ class _RestBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Zen meditates through rest mode — serene, never moping.
-          if (AppPrefs.zenEnabledSync)
-            const ZenSpark(mood: ZenMood.sleepy, streak: 1, size: 40)
+          // Ren tends the rest day — the moment his casting exists for.
+          if (AppPrefs.renEnabledSync)
+            const RenFigure(size: 56)
           else
             const Text('😴', style: TextStyle(fontSize: 24)),
           const SizedBox(width: 12),
@@ -1658,7 +1656,9 @@ class _RestBanner extends StatelessWidget {
                       .copyWith(fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  'Streak safe · no pings · no quests. Recovery is training.',
+                  AppPrefs.renEnabledSync
+                      ? '“${RenLines.rest()}” — streak safe, no pings.'
+                      : 'Streak safe · no pings · no quests. Recovery is training.',
                   style: AppTypography.caption
                       .copyWith(color: context.appTextSecondary),
                 ),

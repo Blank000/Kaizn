@@ -132,6 +132,7 @@ class AppPrefs {
     _restModeUntilCache = restIso == null ? null : DateTime.tryParse(restIso);
     _soundEnabledCache = p.getBool(_soundEnabledKey) ?? false;
     _zenEnabledCache = p.getBool(_zenEnabledKey) ?? true;
+    _renEnabledCache = p.getBool(_renEnabledKey) ?? true;
     _gcalEnabledCache = p.getBool(_gcalEnabledKey) ?? false;
     _gcalShowOnTimelineCache = p.getBool(_gcalShowOnTimelineKey) ?? true;
     _gcalCalendarIdsCache = p.getStringList(_gcalCalendarIdsKey) ?? const [];
@@ -193,6 +194,18 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_zenEnabledKey, on);
     _zenEnabledCache = on;
+  }
+
+  // Master Ren, the fox sensei (ON by default). Gates every RenFigure.
+  static const _renEnabledKey = 'ren_enabled';
+  static bool _renEnabledCache = true;
+
+  static bool get renEnabledSync => _renEnabledCache;
+
+  static Future<void> setRenEnabled(bool on) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_renEnabledKey, on);
+    _renEnabledCache = on;
   }
 
   // ── Rest mode (guilt-free multi-day pause) ────────────────────────────────

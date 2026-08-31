@@ -10,7 +10,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/models/recurrence_rule.dart';
 import '../../shared/providers/database_provider.dart';
-import '../../shared/widgets/zen_spark.dart';
+import '../../shared/widgets/ren_figure.dart';
 
 /// Gentle re-entry after 7+ days away (fresh-start effect + Finch's
 /// no-guilt return). NO missed-task wall, NO broken-streak framing — the
@@ -76,15 +76,13 @@ class _ComebackScreenState extends ConsumerState<ComebackScreen> {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(24, 32, 24, 12),
                       children: [
-                        // The one-off ZENKAI BOOST: returning is the
-                        // dramatic moment, never leaving.
-                        if (AppPrefs.zenEnabledSync)
-                          const Center(
-                            child: ZenSpark(
-                              mood: ZenMood.cheer,
-                              streak: 30,
-                              size: 88,
-                              line: 'ZENKAI BOOST!',
+                        // Ren waits at the gate, tea already poured —
+                        // returning is honored, never audited.
+                        if (AppPrefs.renEnabledSync)
+                          Center(
+                            child: RenFigure(
+                              size: 132,
+                              line: RenLines.comeback(),
                             ),
                           )
                         else
