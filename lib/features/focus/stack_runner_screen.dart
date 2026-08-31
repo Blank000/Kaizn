@@ -7,6 +7,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/app_event_bus.dart';
+import '../../core/services/app_prefs.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/services/task_completion_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -18,6 +19,7 @@ import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/achievement_snackbar.dart';
 import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/moment_celebrations.dart';
+import '../../shared/widgets/ren_figure.dart';
 import '../../shared/widgets/reward_unlock_snackbar.dart';
 
 /// The routine player (Routinery-style "guided stack execution"): runs a
@@ -314,6 +316,12 @@ class _StackRunnerScreenState extends ConsumerState<StackRunnerScreen> {
                       .copyWith(color: context.appTextTertiary),
                 ),
               const Spacer(),
+              // Ren sits the session with you; pausing opens one eye. He
+              // never joins the finish fanfare — that stage is Kai's.
+              if (AppPrefs.renEnabledSync)
+                RenFigure(
+                    pose: RenPose.meditating, peek: _paused, size: 84),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(

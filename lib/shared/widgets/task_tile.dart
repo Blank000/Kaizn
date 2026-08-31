@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/app_event_bus.dart';
+import '../../core/services/app_prefs.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/services/task_completion_service.dart';
 import '../../core/services/timer_service.dart';
@@ -618,6 +619,14 @@ class _TaskTileState extends ConsumerState<TaskTile>
     await db.skipTaskNow(widget.task);
     await StreakService.recordSkipDay(db);
     HapticFeedback.lightImpact();
+    // Ren blesses the intentional rest (Chapter Four, skip branch).
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppPrefs.renEnabledSync
+            ? '🦊 “Rest chosen is rest earned.” Skip logged, streak safe.'
+            : 'Skip logged — intentional rest, streak safe.'),
+      ));
+    }
   }
 
   Future<void> _markMissed() async {

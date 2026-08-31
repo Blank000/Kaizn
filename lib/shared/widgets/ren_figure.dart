@@ -13,6 +13,12 @@ import '../../core/theme/context_colors.dart';
 /// (AppPrefs.renEnabled) makes the whole widget render nothing, so call
 /// sites can include Ren unconditionally; he has no sad/disappointed state
 /// and never appears in celebration frames (Kai/the fire own those).
+/// Ren's poses. [standing]: staff planted, the default. [meditating]: staff
+/// set down, seated, hands in his lap, tail curled low — the focus-timer
+/// companion. While meditating, [RenFigure.peek] opens one eye (he checks on
+/// you when the timer pauses).
+enum RenPose { standing, meditating }
+
 class RenFigure extends StatefulWidget {
   /// Rendered height. The figure keeps the 210:250 art aspect (width ≈ .84h).
   final double size;
@@ -20,7 +26,18 @@ class RenFigure extends StatefulWidget {
   /// Optional proverb, shown in a bubble above (use [RenLines] pools).
   final String? line;
 
-  const RenFigure({super.key, this.size = 96, this.line});
+  final RenPose pose;
+
+  /// Meditating only: one eye open (timer paused → he notices).
+  final bool peek;
+
+  const RenFigure({
+    super.key,
+    this.size = 96,
+    this.line,
+    this.pose = RenPose.standing,
+    this.peek = false,
+  });
 
   @override
   State<RenFigure> createState() => _RenFigureState();
@@ -60,7 +77,11 @@ class _RenFigureState extends State<RenFigure>
     final figure = RepaintBoundary(
       child: CustomPaint(
         size: Size(widget.size * 210 / 250, widget.size),
-        painter: _RenPainter(repaint: _idle),
+        painter: _RenPainter(
+          repaint: _idle,
+          pose: widget.pose,
+          peek: widget.peek,
+        ),
       ),
     );
 
@@ -128,8 +149,11 @@ class RenLines {
 /// robe, chest, arms, feet, head (the head carries the bob).
 class _RenPainter extends CustomPainter {
   final Animation<double> repaint;
+  final RenPose pose;
+  final bool peek;
 
-  _RenPainter({required this.repaint}) : super(repaint: repaint);
+  _RenPainter({required this.repaint, required this.pose, required this.peek})
+      : super(repaint: repaint);
 
   // Palette (identical hexes to the approved art).
   static const _fox = Color(0xFFE8823C);
@@ -146,30 +170,39 @@ class _RenPainter extends CustomPainter {
   static const _knuckle = Color(0xFFD06F2E);
 
   // ── tapered tail, same math that generated the approved artwork ─────────
-  static final Path _tailOrange = _tailSegment(0.0, 0.80);
-  static final Path _tailTip = _tailSegment(0.76, 1.0);
+  // Standing: the big upward sickle. Meditating: a low curl hugging the
+  // ground around his seat.
+  static const _standTail = [
+    Offset(130, 214), Offset(180, 218), Offset(202, 176), Offset(188, 132),
+  ];
+  static const _sitTail = [
+    Offset(126, 230), Offset(178, 238), Offset(196, 216), Offset(180, 196),
+  ];
+  static final Path _tailOrangeStand = _tailSegment(_standTail, 0.0, 0.80, 17);
+  static final Path _tailTipStand = _tailSegment(_standTail, 0.76, 1.0, 17);
+  static final Path _tailOrangeSit = _tailSegment(_sitTail, 0.0, 0.80, 14);
+  static final Path _tailTipSit = _tailSegment(_sitTail, 0.76, 1.0, 14);
 
-  static Offset _tailCenter(double t) {
-    const p0 = Offset(130, 214), p1 = Offset(180, 218);
-    const p2 = Offset(202, 176), p3 = Offset(188, 132);
+  static Offset _tailCenter(List<Offset> cp, double t) {
     final mt = 1 - t;
-    return p0 * (mt * mt * mt) +
-        p1 * (3 * mt * mt * t) +
-        p2 * (3 * mt * t * t) +
-        p3 * (t * t * t);
+    return cp[0] * (mt * mt * mt) +
+        cp[1] * (3 * mt * mt * t) +
+        cp[2] * (3 * mt * t * t) +
+        cp[3] * (t * t * t);
   }
 
-  static Path _tailSegment(double t0, double t1) {
+  static Path _tailSegment(
+      List<Offset> cp, double t0, double t1, double baseHalf) {
     const n = 26;
     final left = <Offset>[], right = <Offset>[];
     for (var i = 0; i <= n; i++) {
       final t = t0 + (t1 - t0) * i / n;
-      final c = _tailCenter(t);
-      final d = _tailCenter(math.min(t + 0.01, 1.0)) -
-          _tailCenter(math.max(t - 0.01, 0.0));
+      final c = _tailCenter(cp, t);
+      final d = _tailCenter(cp, math.min(t + 0.01, 1.0)) -
+          _tailCenter(cp, math.max(t - 0.01, 0.0));
       final len = d.distance == 0 ? 1.0 : d.distance;
       final nrm = Offset(-d.dy / len, d.dx / len);
-      final h = 17 * (1 - math.pow(t, 2.2)) + 1.2;
+      final h = baseHalf * (1 - math.pow(t, 2.2)) + 1.2;
       left.add(c - nrm * h);
       right.add(c + nrm * h);
     }
@@ -186,10 +219,13 @@ class _RenPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final v = repaint.value;
-    // Head bob: 2 cycles per loop (3.8s), ±3 units. Tail: 2.5 cycles
-    // (3.04s), −4°..+5° about the root — mirrors the approved pitch page.
-    final bob = math.sin(v * 2 * math.pi * 2) * 3.0;
-    final tailDeg = 0.5 + math.sin(v * 2 * math.pi * 2.5) * 4.5;
+    final sitting = pose == RenPose.meditating;
+    // Head bob: 2 cycles per loop (3.8s). Tail: 2.5 cycles (3.04s) —
+    // mirrors the approved pitch page; both soften while meditating.
+    final bob = math.sin(v * 2 * math.pi * 2) * (sitting ? 1.8 : 3.0);
+    final tailDeg = sitting
+        ? math.sin(v * 2 * math.pi * 2.5) * 1.5
+        : 0.5 + math.sin(v * 2 * math.pi * 2.5) * 4.5;
 
     canvas.scale(size.height / 250);
 
@@ -201,103 +237,170 @@ class _RenPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     // Ground shadow.
-    canvas.drawOval(Rect.fromCenter(center: const Offset(100, 244), width: 116, height: 12),
+    canvas.drawOval(
+        Rect.fromCenter(
+            center: const Offset(100, 244),
+            width: sitting ? 130 : 116,
+            height: 12),
         fill..color = Colors.black.withValues(alpha: 0.18));
 
     // Tail (rotates about its root).
+    final tailRoot = sitting ? const Offset(128, 230) : const Offset(132, 214);
     canvas.save();
-    canvas.translate(132, 214);
+    canvas.translate(tailRoot.dx, tailRoot.dy);
     canvas.rotate(tailDeg * math.pi / 180);
-    canvas.translate(-132, -214);
-    canvas.drawPath(_tailOrange, fill..color = _fox);
-    canvas.drawPath(_tailTip, fill..color = _cream);
+    canvas.translate(-tailRoot.dx, -tailRoot.dy);
+    canvas.drawPath(sitting ? _tailOrangeSit : _tailOrangeStand,
+        fill..color = _fox);
+    canvas.drawPath(sitting ? _tailTipSit : _tailTipStand,
+        fill..color = _cream);
     canvas.restore();
 
-    // Staff — planted to the ground, crook + knob + two pegs.
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            const Rect.fromLTWH(160, 30, 7, 216), const Radius.circular(3.5)),
-        fill..color = _staffWood);
-    canvas.drawPath(
-        Path()
-          ..moveTo(163, 34)
-          ..cubicTo(163, 24, 168, 18, 175, 18),
-        stroke(_staffWood, 6));
-    canvas.drawCircle(const Offset(176, 17), 7.5, fill..color = _staffWood);
-    canvas.drawLine(const Offset(167, 78), const Offset(177, 76), stroke(_staffDark, 3));
-    canvas.drawLine(const Offset(167, 108), const Offset(177, 106), stroke(_staffDark, 3));
-
-    // Robe (floor length) + hem band.
-    canvas.drawPath(
-        Path()
-          ..moveTo(56, 240)
-          ..cubicTo(56, 184, 72, 134, 100, 134)
-          ..cubicTo(128, 134, 144, 184, 144, 240)
-          ..close(),
-        fill..color = _robe);
-    canvas.drawPath(
-        Path()
-          ..moveTo(56, 234)
-          ..lineTo(144, 234)
-          ..lineTo(144, 240)
-          ..lineTo(56, 240)
-          ..close(),
-        fill..color = _robeDark);
-
-    // Kimono chest: cream V under crossed straps.
-    canvas.drawPath(
-        Path()
-          ..moveTo(88, 138)
-          ..lineTo(112, 138)
-          ..lineTo(100, 162)
-          ..close(),
-        fill..color = _cream);
-    canvas.drawLine(const Offset(82, 140), const Offset(120, 172), stroke(_robeDark, 6));
-    canvas.drawLine(const Offset(118, 140), const Offset(80, 172), stroke(_robeDark, 6));
-
-    // Left arm: hanging sleeve, cuff line, paw peeking.
-    canvas.drawPath(
-        Path()
-          ..moveTo(68, 164)
-          ..cubicTo(55, 174, 49, 190, 51, 212),
-        stroke(_robe, 20));
-    canvas.drawPath(
-        Path()
-          ..moveTo(43, 208)
-          ..quadraticBezierTo(51, 217, 61, 211),
-        stroke(_robeDark, 3.5));
-    canvas.drawCircle(const Offset(51, 220), 6.5, fill..color = _fox);
-
-    // Right arm: raised sleeve, cuff, round paw on the staff, knuckle line.
-    canvas.drawPath(
-        Path()
-          ..moveTo(128, 158)
-          ..cubicTo(140, 152, 150, 142, 156, 128),
-        stroke(_robe, 19));
-    canvas.drawPath(
-        Path()
-          ..moveTo(149, 133)
-          ..quadraticBezierTo(158, 138, 163, 130),
-        stroke(_robeDark, 3.5));
-    canvas.drawCircle(const Offset(162, 117), 10, fill..color = _fox);
-    canvas.drawPath(
-        Path()
-          ..moveTo(155, 113)
-          ..quadraticBezierTo(162, 106, 169, 112),
-        stroke(_knuckle, 2.5));
-
-    // Feet with toe lines.
-    canvas.drawOval(Rect.fromCenter(center: const Offset(80, 242), width: 24, height: 14),
-        fill..color = _fox);
-    canvas.drawOval(Rect.fromCenter(center: const Offset(120, 242), width: 24, height: 14),
-        fill..color = _fox);
-    for (final x in const [76.0, 84.0, 116.0, 124.0]) {
-      canvas.drawLine(Offset(x, 237), Offset(x, 245), stroke(_toe, 2));
+    if (!sitting) {
+      // Staff — planted to the ground, crook + knob + two pegs. (Set down
+      // while meditating: a teacher doesn't lean on anything to sit.)
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(const Rect.fromLTWH(160, 30, 7, 216),
+              const Radius.circular(3.5)),
+          fill..color = _staffWood);
+      canvas.drawPath(
+          Path()
+            ..moveTo(163, 34)
+            ..cubicTo(163, 24, 168, 18, 175, 18),
+          stroke(_staffWood, 6));
+      canvas.drawCircle(const Offset(176, 17), 7.5, fill..color = _staffWood);
+      canvas.drawLine(
+          const Offset(167, 78), const Offset(177, 76), stroke(_staffDark, 3));
+      canvas.drawLine(const Offset(167, 108), const Offset(177, 106),
+          stroke(_staffDark, 3));
     }
 
-    // ── Head group (carries the bob) ────────────────────────────────────
+    if (sitting) {
+      // Seated dome robe + hem.
+      canvas.drawPath(
+          Path()
+            ..moveTo(46, 240)
+            ..cubicTo(46, 200, 66, 162, 100, 162)
+            ..cubicTo(134, 162, 154, 200, 154, 240)
+            ..close(),
+          fill..color = _robe);
+      canvas.drawPath(
+          Path()
+            ..moveTo(46, 234)
+            ..lineTo(154, 234)
+            ..lineTo(154, 240)
+            ..lineTo(46, 240)
+            ..close(),
+          fill..color = _robeDark);
+      // Chest V + straps, seated.
+      canvas.drawPath(
+          Path()
+            ..moveTo(89, 166)
+            ..lineTo(111, 166)
+            ..lineTo(100, 188)
+            ..close(),
+          fill..color = _cream);
+      canvas.drawLine(
+          const Offset(84, 168), const Offset(118, 196), stroke(_robeDark, 6));
+      canvas.drawLine(
+          const Offset(116, 168), const Offset(82, 196), stroke(_robeDark, 6));
+      // Sleeves meeting in the lap, paws resting together.
+      canvas.drawPath(
+          Path()
+            ..moveTo(70, 190)
+            ..cubicTo(74, 204, 84, 212, 96, 214),
+          stroke(_robe, 18));
+      canvas.drawPath(
+          Path()
+            ..moveTo(130, 190)
+            ..cubicTo(126, 204, 116, 212, 104, 214),
+          stroke(_robe, 18));
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: const Offset(100, 215), width: 28, height: 13),
+              const Radius.circular(6.5)),
+          fill..color = _fox);
+      canvas.drawLine(
+          const Offset(100, 210), const Offset(100, 220), stroke(_toe, 2));
+    } else {
+      // Robe (floor length) + hem band.
+      canvas.drawPath(
+          Path()
+            ..moveTo(56, 240)
+            ..cubicTo(56, 184, 72, 134, 100, 134)
+            ..cubicTo(128, 134, 144, 184, 144, 240)
+            ..close(),
+          fill..color = _robe);
+      canvas.drawPath(
+          Path()
+            ..moveTo(56, 234)
+            ..lineTo(144, 234)
+            ..lineTo(144, 240)
+            ..lineTo(56, 240)
+            ..close(),
+          fill..color = _robeDark);
+
+      // Kimono chest: cream V under crossed straps.
+      canvas.drawPath(
+          Path()
+            ..moveTo(88, 138)
+            ..lineTo(112, 138)
+            ..lineTo(100, 162)
+            ..close(),
+          fill..color = _cream);
+      canvas.drawLine(
+          const Offset(82, 140), const Offset(120, 172), stroke(_robeDark, 6));
+      canvas.drawLine(
+          const Offset(118, 140), const Offset(80, 172), stroke(_robeDark, 6));
+
+      // Left arm: hanging sleeve, cuff line, paw peeking.
+      canvas.drawPath(
+          Path()
+            ..moveTo(68, 164)
+            ..cubicTo(55, 174, 49, 190, 51, 212),
+          stroke(_robe, 20));
+      canvas.drawPath(
+          Path()
+            ..moveTo(43, 208)
+            ..quadraticBezierTo(51, 217, 61, 211),
+          stroke(_robeDark, 3.5));
+      canvas.drawCircle(const Offset(51, 220), 6.5, fill..color = _fox);
+
+      // Right arm: raised sleeve, cuff, round paw on the staff, knuckle line.
+      canvas.drawPath(
+          Path()
+            ..moveTo(128, 158)
+            ..cubicTo(140, 152, 150, 142, 156, 128),
+          stroke(_robe, 19));
+      canvas.drawPath(
+          Path()
+            ..moveTo(149, 133)
+            ..quadraticBezierTo(158, 138, 163, 130),
+          stroke(_robeDark, 3.5));
+      canvas.drawCircle(const Offset(162, 117), 10, fill..color = _fox);
+      canvas.drawPath(
+          Path()
+            ..moveTo(155, 113)
+            ..quadraticBezierTo(162, 106, 169, 112),
+          stroke(_knuckle, 2.5));
+
+      // Feet with toe lines.
+      canvas.drawOval(
+          Rect.fromCenter(center: const Offset(80, 242), width: 24, height: 14),
+          fill..color = _fox);
+      canvas.drawOval(
+          Rect.fromCenter(
+              center: const Offset(120, 242), width: 24, height: 14),
+          fill..color = _fox);
+      for (final x in const [76.0, 84.0, 116.0, 124.0]) {
+        canvas.drawLine(Offset(x, 237), Offset(x, 245), stroke(_toe, 2));
+      }
+    }
+
+    // ── Head group (carries the bob; sits lower in meditation) ──────────
     canvas.save();
-    canvas.translate(0, bob);
+    canvas.translate(0, bob + (sitting ? 22 : 0));
 
     // Ears: curved petals with concentric inner panels.
     canvas.drawPath(
@@ -366,16 +469,31 @@ class _RenPainter extends CustomPainter {
           ..moveTo(110, 82)
           ..quadraticBezierTo(123, 76, 136, 84),
         stroke(_browCream, 7.5));
-    canvas.drawPath(
-        Path()
-          ..moveTo(70, 96)
-          ..quadraticBezierTo(80, 104, 90, 96),
-        stroke(_ink, 6));
-    canvas.drawPath(
-        Path()
-          ..moveTo(110, 96)
-          ..quadraticBezierTo(120, 104, 130, 96),
-        stroke(_ink, 6));
+    if (peek && sitting) {
+      // Timer paused: one eye opens to check on you. The other stays shut.
+      canvas.drawOval(
+          Rect.fromCenter(center: const Offset(80, 98), width: 16, height: 13),
+          fill..color = Colors.white);
+      canvas.drawCircle(const Offset(80, 99), 4, fill..color = _ink);
+      canvas.drawCircle(const Offset(81.5, 97.5), 1.4,
+          fill..color = Colors.white);
+      canvas.drawPath(
+          Path()
+            ..moveTo(110, 96)
+            ..quadraticBezierTo(120, 104, 130, 96),
+          stroke(_ink, 6));
+    } else {
+      canvas.drawPath(
+          Path()
+            ..moveTo(70, 96)
+            ..quadraticBezierTo(80, 104, 90, 96),
+          stroke(_ink, 6));
+      canvas.drawPath(
+          Path()
+            ..moveTo(110, 96)
+            ..quadraticBezierTo(120, 104, 130, 96),
+          stroke(_ink, 6));
+    }
 
     // Muzzle, nose, philtrum, mouth.
     canvas.drawOval(Rect.fromCenter(center: const Offset(100, 121), width: 58, height: 40),
@@ -404,5 +522,6 @@ class _RenPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_RenPainter old) => false; // repaint driven by Listenable
+  bool shouldRepaint(_RenPainter old) =>
+      old.pose != pose || old.peek != peek; // idle motion via Listenable
 }

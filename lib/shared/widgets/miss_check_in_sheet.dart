@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database.dart';
+import '../../core/services/app_prefs.dart';
 import '../../core/services/task_completion_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -11,6 +12,7 @@ import '../../features/milestones/widgets/task_form_sheet.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
 import 'moment_celebrations.dart';
+import 'ren_figure.dart';
 import 'reward_unlock_snackbar.dart';
 
 /// Miss check-in (self-compassion + B=MAP triage). Shown right after a task
@@ -164,7 +166,16 @@ class _MissCheckInSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              Text('Logged. One miss is data, not a verdict.',
+              // Ren receives the miss — he cannot frown, and the reason you
+              // pick here is what he reflects back on Sundays.
+              if (AppPrefs.renEnabledSync) ...[
+                const Center(child: RenFigure(size: 64)),
+                const SizedBox(height: 10),
+              ],
+              Text(
+                  AppPrefs.renEnabledSync
+                      ? 'The fall is not the story.'
+                      : 'Logged. One miss is data, not a verdict.',
                   style: AppTypography.heading2,
                   textAlign: TextAlign.center),
               const SizedBox(height: 6),

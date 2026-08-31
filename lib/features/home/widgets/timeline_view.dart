@@ -266,6 +266,14 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             await db.skipTaskNow(task);
             await StreakService.recordSkipDay(db);
             HapticFeedback.lightImpact();
+            // Ren blesses the intentional rest (Chapter Four, skip branch).
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(AppPrefs.renEnabledSync
+                    ? '🦊 “Rest chosen is rest earned.” Skip logged, streak safe.'
+                    : 'Skip logged — intentional rest, streak safe.'),
+              ));
+            }
           },
           onMissed: () async {
             final db = ref.read(databaseProvider);

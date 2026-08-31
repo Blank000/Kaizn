@@ -21,4 +21,25 @@ void main() {
       matchesGoldenFile('goldens/ren_figure.png'),
     );
   });
+
+  testWidgets('RenFigure meditates (and peeks when paused)', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          backgroundColor: Color(0xFF16222E),
+          body: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              RenFigure(size: 220, pose: RenPose.meditating),
+              RenFigure(size: 220, pose: RenPose.meditating, peek: true),
+            ],
+          ),
+        ),
+      ),
+    );
+    await expectLater(
+      find.byType(Row),
+      matchesGoldenFile('goldens/ren_meditating.png'),
+    );
+  });
 }
