@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/database/database.dart';
 import '../../core/services/habit_strength.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/app_prefs.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/models/recurrence_rule.dart';
@@ -136,10 +137,32 @@ class MilestoneDetailScreen extends ConsumerWidget {
             // Shelved tasks (parked by the comeback flow) — quiet rows with
             // a one-tap way back. History intact, zero daily presence.
             _ShelvedGroup(milestoneId: milestoneId),
+            // The stalled-mountain nudge: 3+ quiet weeks earn Ren's gentlest
+            // line in the whole app — an observation, never a scold.
+            if (AppPrefs.renEnabledSync && _isStalled(completions))
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: Text(
+                  '🦊 “The mountain has not moved. Take one step.”',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                  textAlign: TextAlign.center,
+                ),
+              ),
           ],
         ],
       ),
     );
+  }
+
+  /// Stalled = the milestone HAS history but nothing real in 21+ days.
+  static bool _isStalled(List<TaskCompletion> completions) {
+    final real = completions.where((c) => !c.isSkip && !c.isNd);
+    if (real.isEmpty) return false;
+    final latest = real
+        .map((c) => c.completedOn)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+    return DateTime.now().difference(latest).inDays >= 21;
   }
 
   Future<void> _markComplete(
