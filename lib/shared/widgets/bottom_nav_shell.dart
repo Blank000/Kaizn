@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/ai/ask_ren_bubble.dart';
+
 /// Bottom navigation shell that wraps all main tabs
 class BottomNavShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -13,7 +15,13 @@ class BottomNavShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
+      // The Ask-Ren medallion floats over every tab.
+      body: Stack(
+        children: [
+          navigationShell,
+          const AskRenBubble(),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: navigationShell.currentIndex,
         onTap: (index) {

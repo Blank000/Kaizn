@@ -31,12 +31,18 @@ class RenFigure extends StatefulWidget {
   /// Meditating only: one eye open (timer paused → he notices).
   final bool peek;
 
+  /// Delight surfaces respect the Settings toggle (default). Functional
+  /// surfaces where Ren IS the feature (Ask Ren chat, its bubble) set this
+  /// false so the UI never loses its face.
+  final bool respectToggle;
+
   const RenFigure({
     super.key,
     this.size = 96,
     this.line,
     this.pose = RenPose.standing,
     this.peek = false,
+    this.respectToggle = true,
   });
 
   @override
@@ -69,7 +75,7 @@ class _RenFigureState extends State<RenFigure>
 
   @override
   Widget build(BuildContext context) {
-    final enabled = AppPrefs.renEnabledSync;
+    final enabled = !widget.respectToggle || AppPrefs.renEnabledSync;
     final still = MediaQuery.of(context).disableAnimations;
     _syncIdle(enabled && !still);
     if (!enabled) return const SizedBox.shrink();

@@ -297,6 +297,24 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           _Card(
             children: [
+              StatefulBuilder(builder: (context, setTileState) {
+                final hasKey = (AppPrefs.aiApiKeySync ?? '').isNotEmpty;
+                return ListTile(
+                  leading: const Text('🦊', style: TextStyle(fontSize: 20)),
+                  title: Text('Ask Ren (in-app chat)',
+                      style: AppTypography.body),
+                  subtitle: Text(
+                    hasKey
+                        ? 'Connected · ${AppPrefs.aiModelSync} · tap to manage'
+                        : 'Tap the floating Ren to set up, or manage here',
+                    style: AppTypography.caption
+                        .copyWith(color: context.appTextSecondary),
+                  ),
+                  onTap: () =>
+                      _manageAiKey(context, () => setTileState(() {})),
+                );
+              }),
+              _Divider(),
               ListTile(
                 leading: const Text('📤', style: TextStyle(fontSize: 20)),
                 title: Text('Export for AI', style: AppTypography.body),
@@ -349,6 +367,55 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _manageAiKey(
+      BuildContext context, VoidCallback onChanged) async {
+    final keyCtrl = TextEditingController(text: AppPrefs.aiApiKeySync ?? '');
+    final modelCtrl = TextEditingController(text: AppPrefs.aiModelSync);
+    await showDialog<void>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Ask Ren · API access'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: keyCtrl,
+              obscureText: true,
+              decoration:
+                  const InputDecoration(labelText: 'OpenAI API key (sk-…)'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: modelCtrl,
+              decoration: const InputDecoration(labelText: 'Model'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await AppPrefs.setAiApiKey(null);
+              onChanged();
+              if (dctx.mounted) Navigator.of(dctx).pop();
+            },
+            child: const Text('CLEAR KEY'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final k = keyCtrl.text.trim();
+              await AppPrefs.setAiApiKey(k.isEmpty ? null : k);
+              final m = modelCtrl.text.trim();
+              if (m.isNotEmpty) await AppPrefs.setAiModel(m);
+              onChanged();
+              if (dctx.mounted) Navigator.of(dctx).pop();
+            },
+            child: const Text('SAVE'),
+          ),
         ],
       ),
     );

@@ -135,6 +135,8 @@ class AppPrefs {
     _renEnabledCache = p.getBool(_renEnabledKey) ?? true;
     _weeklyClawCache = p.getString(_weeklyClawKey);
     _weeklyClawWeekCache = p.getString(_weeklyClawWeekKey);
+    _aiApiKeyCache = p.getString(_aiApiKeyKey);
+    _aiModelCache = p.getString(_aiModelKey) ?? 'gpt-4o-mini';
     _gcalEnabledCache = p.getBool(_gcalEnabledKey) ?? false;
     _gcalShowOnTimelineCache = p.getBool(_gcalShowOnTimelineKey) ?? true;
     _gcalCalendarIdsCache = p.getStringList(_gcalCalendarIdsKey) ?? const [];
@@ -208,6 +210,35 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_renEnabledKey, on);
     _renEnabledCache = on;
+  }
+
+  // ── Ask Ren: OpenAI-compatible API access ────────────────────────────────
+  // Key + model for the in-app assistant. SharedPreferences is acceptable
+  // for a personal device; revisit with flutter_secure_storage before any
+  // public release.
+  static const _aiApiKeyKey = 'ai_api_key';
+  static const _aiModelKey = 'ai_model';
+  static String? _aiApiKeyCache;
+  static String _aiModelCache = 'gpt-4o-mini';
+
+  static String? get aiApiKeySync => _aiApiKeyCache;
+  static String get aiModelSync => _aiModelCache;
+
+  static Future<void> setAiApiKey(String? key) async {
+    final p = await SharedPreferences.getInstance();
+    if (key == null || key.isEmpty) {
+      await p.remove(_aiApiKeyKey);
+      _aiApiKeyCache = null;
+    } else {
+      await p.setString(_aiApiKeyKey, key);
+      _aiApiKeyCache = key;
+    }
+  }
+
+  static Future<void> setAiModel(String model) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_aiModelKey, model);
+    _aiModelCache = model;
   }
 
   // ── Weekly review: "one claw" intention ──────────────────────────────────

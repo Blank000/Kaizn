@@ -202,8 +202,21 @@ int? _parseHhmm(dynamic v) {
 
 /// Parses the AI's reply. Tolerant of the usual model habits: markdown
 /// fences, leading prose before the block, single-milestone objects.
-/// Throws [FormatException] with a human message on anything unusable.
+/// Throws [FormatException] with a human message on anything unusable —
+/// including wrong-typed fields (models sometimes emit "2" for 2), which
+/// would otherwise surface as TypeErrors.
 List<AiPlanMilestone> parseAiPlan(String raw) {
+  try {
+    return _parseAiPlanInner(raw);
+  } on FormatException {
+    rethrow;
+  } catch (_) {
+    throw const FormatException(
+        'The plan JSON had unexpected field types — copy the whole block and try again.');
+  }
+}
+
+List<AiPlanMilestone> _parseAiPlanInner(String raw) {
   var text = raw.trim();
   // Prefer the fenced block if one exists anywhere in the paste.
   final fence =
@@ -359,19 +372,23 @@ Future<void> exportContextPack(BuildContext context, WidgetRef ref) async {
   ));
 }
 
-/// Paste → parse → preview → apply.
-Future<void> showAiPlanImportSheet(BuildContext context, WidgetRef ref) {
+/// Paste → parse → preview → apply. [initialText] (e.g. an Ask Ren reply)
+/// skips the paste step and lands straight on the preview.
+Future<void> showAiPlanImportSheet(BuildContext context, WidgetRef ref,
+    {String? initialText}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _AiPlanImportSheet(hostRef: ref),
+    builder: (_) =>
+        _AiPlanImportSheet(hostRef: ref, initialText: initialText),
   );
 }
 
 class _AiPlanImportSheet extends StatefulWidget {
   final WidgetRef hostRef;
-  const _AiPlanImportSheet({required this.hostRef});
+  final String? initialText;
+  const _AiPlanImportSheet({required this.hostRef, this.initialText});
 
   @override
   State<_AiPlanImportSheet> createState() => _AiPlanImportSheetState();
@@ -382,6 +399,20 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
   List<AiPlanMilestone>? _plan;
   String? _error;
   bool _applying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.initialText;
+    if (t != null) {
+      _ctrl.text = t;
+      try {
+        _plan = parseAiPlan(t);
+      } on FormatException catch (e) {
+        _error = e.message;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -407,15 +438,23 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
     final plan = _plan;
     if (plan == null || _applying) return;
     setState(() => _applying = true);
-    final db = widget.hostRef.read(databaseProvider);
-    final n = await applyAiPlan(db, plan);
-    HapticFeedback.mediumImpact();
-    if (!mounted) return;
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          '🦊 “Name the mountain — watch the steps.” ${n.milestones} milestone${n.milestones == 1 ? '' : 's'}, ${n.tasks} task${n.tasks == 1 ? '' : 's'} created.'),
-    ));
+    try {
+      final db = widget.hostRef.read(databaseProvider);
+      final n = await applyAiPlan(db, plan);
+      HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '🦊 “Name the mountain — watch the steps.” ${n.milestones} milestone${n.milestones == 1 ? '' : 's'}, ${n.tasks} task${n.tasks == 1 ? '' : 's'} created.'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _applying = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('Could not create the plan: ${e.runtimeType}. Try again.')));
+    }
   }
 
   @override
