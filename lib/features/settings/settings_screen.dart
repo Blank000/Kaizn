@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
+import '../ai/ai_bridge.dart';
 import '../../core/services/backup_service.dart';
 import '../../core/services/calendar_service.dart';
 import '../../core/services/cosmetics_service.dart';
@@ -287,6 +288,36 @@ class SettingsScreen extends ConsumerWidget {
                         },
                 );
               }),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // The AI bridge (V1): no keys, no servers — works with whatever
+          // chat AI the user already has (ChatGPT / Claude / Gemini).
+          _SectionLabel('AI assistant'),
+          const SizedBox(height: 8),
+          _Card(
+            children: [
+              ListTile(
+                leading: const Text('📤', style: TextStyle(fontSize: 20)),
+                title: Text('Export for AI', style: AppTypography.body),
+                subtitle: Text(
+                  'Copy your data + instructions, paste into any chat AI',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                ),
+                onTap: () => exportContextPack(context, ref),
+              ),
+              _Divider(),
+              ListTile(
+                leading: const Text('📥', style: TextStyle(fontSize: 20)),
+                title: Text('Import AI plan', style: AppTypography.body),
+                subtitle: Text(
+                  'Paste the plan JSON back — preview, then create it all',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                ),
+                onTap: () => showAiPlanImportSheet(context, ref),
+              ),
             ],
           ),
           const SizedBox(height: 24),
