@@ -5,11 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/context_colors.dart';
-import '../../shared/widgets/ren_figure.dart';
+import '../../shared/widgets/pico_figure.dart';
 
-/// The floating Ask-Ren control: a small Ren medallion pinned to the right
-/// edge above the bottom nav, draggable vertically (position remembered for
-/// the session), tap → the chat. Lives in the nav shell so it floats over
+/// The floating AI-companion control: Pico, pinned to the right edge above
+/// the bottom nav, draggable vertically (position remembered for the
+/// session), tap → the chat. Lives in the nav shell so it floats over
 /// every tab.
 class AskRenBubble extends StatefulWidget {
   const AskRenBubble({super.key});
@@ -78,9 +78,7 @@ class _AskRenBubbleState extends State<AskRenBubble> {
                     ),
                     child: Stack(
                       children: [
-                        const Center(
-                            child:
-                                RenFigure(size: 40, respectToggle: false)),
+                        const Center(child: PicoFigure(size: 40)),
                         // "Needs your key" hint until Ask Ren is set up.
                         if ((AppPrefs.aiApiKeySync ?? '').isEmpty)
                           Positioned(

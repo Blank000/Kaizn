@@ -10,7 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/providers/database_provider.dart';
-import '../../shared/widgets/ren_figure.dart';
+import '../../shared/widgets/pico_figure.dart';
 import 'ai_bridge.dart';
 
 /// Ask Ren — the in-app AI assistant (V2 of the AI bridge). The floating
@@ -54,10 +54,10 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
     if (_systemPrompt != null) return _systemPrompt!;
     final pack = await buildContextPack(ref.read(databaseProvider));
     _systemPrompt = '''
-You are Master Ren, the wise fox sensei who lives inside the user's habit
-app "Yatta!". Voice: calm, warm, specific, lightly proverbial — one short
-proverb at most per reply, never guilt, never lectures. Prefer numbers,
-task names and times over generalities. Keep replies tight.
+You are Pico, the tiny gadget companion who lives inside the user's habit
+app "Yatta!". Voice: upbeat, precise, data-first, friendly-robotic — you
+may open with a single "Beep." now and then, never guilt, never lectures.
+Prefer numbers, task names and times over generalities. Keep replies tight.
 
 Everything below is the user's live data plus the plan-JSON contract. When
 the user asks you to plan, add, or change milestones/tasks/reminders,
@@ -171,9 +171,9 @@ $pack''';
       appBar: AppBar(
         title: Row(
           children: [
-            const RenFigure(size: 34, respectToggle: false),
+            const PicoFigure(size: 34),
             const SizedBox(width: 10),
-            Text('Ask Ren', style: AppTypography.heading2),
+            Text('Pico', style: AppTypography.heading2),
           ],
         ),
       ),
@@ -237,10 +237,10 @@ $pack''';
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
-          const RenFigure(size: 96, respectToggle: false),
+          const PicoFigure(size: 96),
           const SizedBox(height: 10),
           Text(
-            '“Ask, and the path answers.”',
+            '“Beep. Scanners warm — ask away.”',
             style: AppTypography.body.copyWith(
                 fontStyle: FontStyle.italic, fontWeight: FontWeight.w700),
           ),
@@ -284,7 +284,7 @@ $pack''';
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!isUser) ...[
-                const RenFigure(size: 26, respectToggle: false),
+                const PicoFigure(size: 26),
                 const SizedBox(width: 6),
               ],
               Flexible(
@@ -335,7 +335,7 @@ $pack''';
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          const RenFigure(size: 26, respectToggle: false),
+          const PicoFigure(size: 26),
           const SizedBox(width: 6),
           Container(
             padding:
@@ -385,9 +385,9 @@ class _KeySetupState extends State<_KeySetup> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Center(child: RenFigure(size: 96, respectToggle: false)),
+        const Center(child: PicoFigure(size: 96)),
         const SizedBox(height: 12),
-        Text('Ren needs your AI key',
+        Text('Pico needs your AI key',
             style: AppTypography.heading2, textAlign: TextAlign.center),
         const SizedBox(height: 8),
         Text(

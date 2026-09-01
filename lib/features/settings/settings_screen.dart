@@ -300,13 +300,13 @@ class SettingsScreen extends ConsumerWidget {
               StatefulBuilder(builder: (context, setTileState) {
                 final hasKey = (AppPrefs.aiApiKeySync ?? '').isNotEmpty;
                 return ListTile(
-                  leading: const Text('🦊', style: TextStyle(fontSize: 20)),
-                  title: Text('Ask Ren (in-app chat)',
+                  leading: const Text('🤖', style: TextStyle(fontSize: 20)),
+                  title: Text('Pico · AI companion',
                       style: AppTypography.body),
                   subtitle: Text(
                     hasKey
                         ? 'Connected · ${AppPrefs.aiModelSync} · tap to manage'
-                        : 'Tap the floating Ren to set up, or manage here',
+                        : 'Tap the floating Pico to set up, or manage here',
                     style: AppTypography.caption
                         .copyWith(color: context.appTextSecondary),
                   ),
@@ -379,7 +379,7 @@ class SettingsScreen extends ConsumerWidget {
     await showDialog<void>(
       context: context,
       builder: (dctx) => AlertDialog(
-        title: const Text('Ask Ren · API access'),
+        title: const Text('Pico · API access'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

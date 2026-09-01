@@ -15,7 +15,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/models/recurrence_rule.dart';
 import '../../shared/providers/database_provider.dart';
-import '../../shared/widgets/ren_figure.dart';
+import '../../shared/widgets/pico_figure.dart';
 
 /// The AI bridge (V1 of "connect my own AI"): no servers, no API keys —
 /// works with any chat AI the user already pays for (ChatGPT, Claude,
@@ -372,7 +372,7 @@ Future<void> exportContextPack(BuildContext context, WidgetRef ref) async {
   ));
 }
 
-/// Paste → parse → preview → apply. [initialText] (e.g. an Ask Ren reply)
+/// Paste → parse → preview → apply. [initialText] (e.g. a Pico chat reply)
 /// skips the paste step and lands straight on the preview.
 Future<void> showAiPlanImportSheet(BuildContext context, WidgetRef ref,
     {String? initialText}) {
@@ -446,7 +446,7 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-            '🦊 “Name the mountain — watch the steps.” ${n.milestones} milestone${n.milestones == 1 ? '' : 's'}, ${n.tasks} task${n.tasks == 1 ? '' : 's'} created.'),
+            '🤖 Plan loaded — ${n.milestones} milestone${n.milestones == 1 ? '' : 's'}, ${n.tasks} task${n.tasks == 1 ? '' : 's'} created. Beep.'),
       ));
     } catch (e) {
       if (!mounted) return;
@@ -488,7 +488,7 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Center(child: RenFigure(size: 64)),
+                const Center(child: PicoFigure(size: 64)),
                 const SizedBox(height: 8),
                 Text('Import AI plan',
                     style: AppTypography.heading2,
