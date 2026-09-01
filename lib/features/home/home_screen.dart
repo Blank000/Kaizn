@@ -28,6 +28,7 @@ import '../../shared/widgets/day_complete_sequence.dart';
 import '../../shared/widgets/stagger_in.dart';
 import '../../shared/widgets/streak_flame.dart';
 import '../../shared/widgets/ren_figure.dart';
+import 'widgets/sensei_post.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
 import '../../shared/models/task_stack.dart';
@@ -719,6 +720,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               currentStreak: streak?.currentStreak ?? 0,
             ),
           ),
+          // The Sensei Post — Ren's daily accountability station: he names
+          // what stands, what remains, and what fell yesterday. Present on
+          // every real day (rest days and empty days have their own Ren).
+          if (AppPrefs.renEnabledSync && !resting && totalScheduled > 0)
+            StaggerIn(
+              index: 1,
+              child: Builder(builder: (context) {
+                final y = DateTime.now().subtract(const Duration(days: 1));
+                final missedYesterday = completions
+                    .where((c) =>
+                        c.isNd &&
+                        c.completedOn.year == y.year &&
+                        c.completedOn.month == y.month &&
+                        c.completedOn.day == y.day)
+                    .length;
+                return SenseiPost(
+                  line: RenLines.accountability(
+                    hour: DateTime.now().hour,
+                    done: doneToday.length,
+                    remaining: upNext.length,
+                    missedToday: missedToday.length,
+                    missedYesterday: missedYesterday,
+                    nextNames: [for (final it in upNext) it.task.name],
+                  ),
+                  onTap: () => showSenseiLedgerSheet(
+                    context,
+                    done: doneToday.length,
+                    remaining: [
+                      for (final it in upNext)
+                        (
+                          name: it.task.name,
+                          minutes: it.task.durationMinutes
+                        ),
+                    ],
+                    missedToday: missedToday.length,
+                    currentStreak: streak?.currentStreak ?? 0,
+                  ),
+                );
+              }),
+            ),
           // "Your week" at a glance — 7 quiet dots. One-attention-cue
           // rule: today's ring pulses ONLY when the Up-next breathe
           // invite isn't live (the invite outranks the calendar).
