@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/services/app_prefs.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/widgets/ren_figure.dart';
@@ -75,8 +76,30 @@ class _AskRenBubbleState extends State<AskRenBubble> {
                         ),
                       ],
                     ),
-                    child: const Center(
-                        child: RenFigure(size: 40, respectToggle: false)),
+                    child: Stack(
+                      children: [
+                        const Center(
+                            child:
+                                RenFigure(size: 40, respectToggle: false)),
+                        // "Needs your key" hint until Ask Ren is set up.
+                        if ((AppPrefs.aiApiKeySync ?? '').isEmpty)
+                          Positioned(
+                            right: 2,
+                            top: 2,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.streakOrange,
+                                border: Border.all(
+                                    color: context.appCardSurface,
+                                    width: 2),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),

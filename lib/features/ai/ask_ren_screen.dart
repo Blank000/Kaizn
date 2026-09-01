@@ -385,22 +385,29 @@ class _KeySetupState extends State<_KeySetup> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Center(child: RenFigure(size: 96)),
+        const Center(child: RenFigure(size: 96, respectToggle: false)),
         const SizedBox(height: 12),
-        Text('Give Ren a voice',
+        Text('Ren needs your AI key',
             style: AppTypography.heading2, textAlign: TextAlign.center),
         const SizedBox(height: 8),
         Text(
-          'The chat uses the OpenAI API — the same models as ChatGPT, but '
-          'apps need an API key (a ChatGPT Plus login cannot be used by '
-          'apps). Create one at platform.openai.com → API keys; personal '
-          'use costs a few rupees a day. The key is stored only on this '
-          'device.',
+          'The chat runs on the OpenAI API with a key that belongs to YOU. '
+          'Every person using this app brings their own — keys are never '
+          'shared or shipped with the app.',
           style:
               AppTypography.caption.copyWith(color: context.appTextSecondary),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 14),
+        _fact(context, '🔑',
+            'Get one in ~2 min: platform.openai.com → sign in (your ChatGPT login works) → Billing: add \$5 prepaid → API keys → Create → copy the sk-… key.'),
+        _fact(context, '📱',
+            'It is stored only on this device. It is not in backups, exports, or anywhere else.'),
+        _fact(context, '📤',
+            'When you chat, your question plus a snapshot of your milestones, tasks and stats goes to OpenAI — and nothing is sent until you press send.'),
+        _fact(context, '💸',
+            'You pay OpenAI directly from your prepaid credit — typical use is a few rupees a month, and it can never exceed what you loaded.'),
+        const SizedBox(height: 16),
         TextField(
           controller: _key,
           obscureText: true,
@@ -439,6 +446,24 @@ class _KeySetupState extends State<_KeySetup> {
           child: const Text('SAVE & START'),
         ),
       ],
+    );
+  }
+
+  Widget _fact(BuildContext context, String icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text,
+                style: AppTypography.caption
+                    .copyWith(color: context.appTextSecondary)),
+          ),
+        ],
+      ),
     );
   }
 }
