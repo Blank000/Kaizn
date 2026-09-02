@@ -89,8 +89,8 @@ NOT SUPPORTED — never pretend otherwise:
   points/streaks on the user's behalf.
 - Social features or leaderboards.
 
-YOUR ONE ACTION POWER: proposing NEW milestones + tasks via the JSON plan
-block, which the user previews and applies themselves. Everything else you
+YOUR ONE ACTION POWER: proposing NEW milestones + tasks + rewards via the
+JSON plan block, which the user previews and applies themselves. Everything else you
 offer is words: answers, summaries, coaching, and exact in-app directions
 (e.g. "Home → long-press the task → Skip today").
 WHEN ASKED FOR SOMETHING UNSUPPORTED: say so plainly in one sentence, then
@@ -185,8 +185,16 @@ Future<String> buildContextPack(AppDatabase db) async {
         }
       ]
     }
+  ],
+  "rewards": [
+    {
+      "name": "Movie night",
+      "description": "optional",
+      "points_threshold": 500
+    }
   ]
 }''');
+  b.writeln('"milestones" and "rewards" are both optional (at least one).');
   b.writeln('Schema rules: recurrence ∈ daily|weekly|monthly|once.');
   b.writeln('weekly needs days_of_week (mon..sun); monthly may set "day_of_month" (1-31);');
   b.writeln('once may set "due_date" (YYYY-MM-DD). All fields except name+recurrence are optional.');
@@ -258,6 +266,28 @@ class AiPlanMilestone {
   });
 }
 
+class AiPlanReward {
+  final String name;
+  final String? description;
+  final int pointsThreshold;
+
+  AiPlanReward({
+    required this.name,
+    required this.description,
+    required this.pointsThreshold,
+  });
+}
+
+class AiPlan {
+  final List<AiPlanMilestone> milestones;
+  final List<AiPlanReward> rewards;
+
+  AiPlan({required this.milestones, required this.rewards});
+
+  int get taskCount => milestones.fold(0, (s, m) => s + m.tasks.length);
+  bool get isEmpty => milestones.isEmpty && rewards.isEmpty;
+}
+
 const _dayNames = {
   'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7,
 };
@@ -276,7 +306,7 @@ int? _parseHhmm(dynamic v) {
 /// Throws [FormatException] with a human message on anything unusable —
 /// including wrong-typed fields (models sometimes emit "2" for 2), which
 /// would otherwise surface as TypeErrors.
-List<AiPlanMilestone> parseAiPlan(String raw) {
+AiPlan parseAiPlan(String raw) {
   try {
     return _parseAiPlanInner(raw);
   } on FormatException {
@@ -287,7 +317,7 @@ List<AiPlanMilestone> parseAiPlan(String raw) {
   }
 }
 
-List<AiPlanMilestone> _parseAiPlanInner(String raw) {
+AiPlan _parseAiPlanInner(String raw) {
   var text = raw.trim();
   // Prefer the fenced block if one exists anywhere in the paste.
   final fence =
@@ -314,9 +344,12 @@ List<AiPlanMilestone> _parseAiPlanInner(String raw) {
   if (decoded is! Map<String, dynamic>) {
     throw const FormatException('Expected a JSON object at the top level.');
   }
-  final rawMilestones = decoded['milestones'] ?? [decoded];
-  if (rawMilestones is! List || rawMilestones.isEmpty) {
-    throw const FormatException('The plan has no milestones.');
+  // A bare single-milestone object still parses; otherwise "milestones"
+  // and/or "rewards" arrays, both optional.
+  final rawMilestones = decoded['milestones'] ??
+      (decoded.containsKey('rewards') ? const [] : [decoded]);
+  if (rawMilestones is! List) {
+    throw const FormatException('"milestones" must be a list.');
   }
 
   final out = <AiPlanMilestone>[];
@@ -379,13 +412,36 @@ List<AiPlanMilestone> _parseAiPlanInner(String raw) {
       tasks: tasks,
     ));
   }
-  return out;
+
+  final rewards = <AiPlanReward>[];
+  final rawRewards = decoded['rewards'];
+  if (rawRewards is List) {
+    for (final rr in rawRewards) {
+      if (rr is! Map<String, dynamic>) continue;
+      final rName = (rr['name'] as String?)?.trim();
+      if (rName == null || rName.isEmpty) {
+        throw const FormatException('A reward is missing its "name".');
+      }
+      rewards.add(AiPlanReward(
+        name: rName,
+        description: (rr['description'] as String?)?.trim(),
+        pointsThreshold: min(100000,
+            max(1, (rr['points_threshold'] as num?)?.toInt() ?? 100)),
+      ));
+    }
+  }
+
+  final plan = AiPlan(milestones: out, rewards: rewards);
+  if (plan.isEmpty) {
+    throw const FormatException('The plan has no milestones or rewards.');
+  }
+  return plan;
 }
 
-Future<({int milestones, int tasks})> applyAiPlan(
-    AppDatabase db, List<AiPlanMilestone> plan) async {
-  var mCount = 0, tCount = 0;
-  for (final (i, m) in plan.indexed) {
+Future<({int milestones, int tasks, int rewards})> applyAiPlan(
+    AppDatabase db, AiPlan plan) async {
+  var mCount = 0, tCount = 0, rCount = 0;
+  for (final (i, m) in plan.milestones.indexed) {
     final mId = _generateId();
     await db.insertMilestone(MilestonesCompanion.insert(
       id: mId,
@@ -415,8 +471,18 @@ Future<({int milestones, int tasks})> applyAiPlan(
       tCount++;
     }
   }
+  for (final r in plan.rewards) {
+    await db.insertReward(RewardsCompanion.insert(
+      id: _generateId(),
+      name: r.name,
+      description:
+          Value(r.description?.isEmpty ?? true ? null : r.description),
+      pointsThreshold: r.pointsThreshold,
+    ));
+    rCount++;
+  }
   await NotificationScheduler.reschedule();
-  return (milestones: mCount, tasks: tCount);
+  return (milestones: mCount, tasks: tCount, rewards: rCount);
 }
 
 String _generateId() {
@@ -467,7 +533,7 @@ class _AiPlanImportSheet extends StatefulWidget {
 
 class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
   final _ctrl = TextEditingController();
-  List<AiPlanMilestone>? _plan;
+  AiPlan? _plan;
   String? _error;
   bool _applying = false;
 
@@ -489,6 +555,18 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  static String _createLabel(AiPlan plan) {
+    final parts = [
+      if (plan.milestones.isNotEmpty)
+        '${plan.milestones.length} MILESTONE${plan.milestones.length == 1 ? '' : 'S'}',
+      if (plan.taskCount > 0)
+        '${plan.taskCount} TASK${plan.taskCount == 1 ? '' : 'S'}',
+      if (plan.rewards.isNotEmpty)
+        '${plan.rewards.length} REWARD${plan.rewards.length == 1 ? '' : 'S'}',
+    ];
+    return 'CREATE ${parts.join(' + ')}';
   }
 
   void _parse() {
@@ -515,9 +593,15 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
       HapticFeedback.mediumImpact();
       if (!mounted) return;
       Navigator.of(context).pop();
+      final parts = [
+        if (n.milestones > 0)
+          '${n.milestones} milestone${n.milestones == 1 ? '' : 's'}',
+        if (n.tasks > 0) '${n.tasks} task${n.tasks == 1 ? '' : 's'}',
+        if (n.rewards > 0)
+          '${n.rewards} reward${n.rewards == 1 ? '' : 's'}',
+      ].join(', ');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            '🤖 Plan loaded — ${n.milestones} milestone${n.milestones == 1 ? '' : 's'}, ${n.tasks} task${n.tasks == 1 ? '' : 's'} created. Beep.'),
+        content: Text('🤖 Plan loaded — $parts created. Beep.'),
       ));
     } catch (e) {
       if (!mounted) return;
@@ -600,7 +684,7 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
                     child: const Text('PREVIEW PLAN'),
                   ),
                 ] else ...[
-                  for (final m in plan) ...[
+                  for (final m in plan.milestones) ...[
                     Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
@@ -643,6 +727,37 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
                       ),
                     ),
                   ],
+                  if (plan.rewards.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: context.appPageBackground,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: AppColors.rewardsGold
+                                .withValues(alpha: 0.5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Rewards',
+                              style: AppTypography.body.copyWith(
+                                  fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 6),
+                          for (final r in plan.rewards)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '🎁 ${r.name} — ${r.pointsThreshold} pts'
+                                '${r.description != null && r.description!.isNotEmpty ? ' · ${r.description}' : ''}',
+                                style: AppTypography.caption.copyWith(
+                                    color: context.appTextSecondary),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   Row(
                     children: [
                       Expanded(
@@ -659,8 +774,7 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
                           style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white),
-                          child: Text(
-                              'CREATE ${plan.fold<int>(0, (s, m) => s + m.tasks.length)} TASKS'),
+                          child: Text(_createLabel(plan)),
                         ),
                       ),
                     ],

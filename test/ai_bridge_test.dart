@@ -33,6 +33,9 @@ Great! Here's a plan for your 10K goal:
         }
       ]
     }
+  ],
+  "rewards": [
+    {"name": "New running shoes", "points_threshold": 800}
   ]
 }
 ```
@@ -40,8 +43,8 @@ Great! Here's a plan for your 10K goal:
 Good luck with the training!
 ''';
     final plan = parseAiPlan(reply);
-    expect(plan, hasLength(1));
-    final m = plan.first;
+    expect(plan.milestones, hasLength(1));
+    final m = plan.milestones.first;
     expect(m.name, 'Run a 10K');
     expect(m.completionBonus, 300);
     expect(m.targetDate, DateTime(2026, 12, 1));
@@ -59,29 +62,52 @@ Good luck with the training!
     final race = m.tasks[1];
     expect(race.recurrence, TaskRecurrence.none);
     expect(race.dueDate, DateTime(2026, 9, 15));
+
+    expect(plan.rewards, hasLength(1));
+    expect(plan.rewards.single.name, 'New running shoes');
+    expect(plan.rewards.single.pointsThreshold, 800);
   });
 
   test('accepts a bare single-milestone object without fences', () {
     const reply =
         '{"name": "Read more", "tasks": [{"name": "Read 10 pages", "recurrence": "daily"}]}';
     final plan = parseAiPlan(reply);
-    expect(plan.single.name, 'Read more');
-    expect(plan.single.tasks.single.recurrence, TaskRecurrence.daily);
-    expect(plan.single.tasks.single.points, 10); // default
+    expect(plan.milestones.single.name, 'Read more');
+    expect(plan.milestones.single.tasks.single.recurrence,
+        TaskRecurrence.daily);
+    expect(plan.milestones.single.tasks.single.points, 10); // default
+    expect(plan.rewards, isEmpty);
+  });
+
+  test('accepts a rewards-only plan', () {
+    const reply =
+        '{"rewards": [{"name": "Spa day", "description": "earned", "points_threshold": 1500}]}';
+    final plan = parseAiPlan(reply);
+    expect(plan.milestones, isEmpty);
+    expect(plan.rewards.single.name, 'Spa day');
+    expect(plan.rewards.single.description, 'earned');
+    expect(plan.rewards.single.pointsThreshold, 1500);
   });
 
   test('clamps hostile values and rejects garbage kindly', () {
     final plan = parseAiPlan(
-        '{"milestones": [{"name": "X", "tasks": [{"name": "Y", "recurrence": "daily", "points": 9999, "duration_minutes": -5}]}]}');
-    expect(plan.single.tasks.single.points, 100);
-    expect(plan.single.tasks.single.durationMinutes, 1);
+        '{"milestones": [{"name": "X", "tasks": [{"name": "Y", "recurrence": "daily", "points": 9999, "duration_minutes": -5}]}], "rewards": [{"name": "R", "points_threshold": -3}]}');
+    expect(plan.milestones.single.tasks.single.points, 100);
+    expect(plan.milestones.single.tasks.single.durationMinutes, 1);
+    expect(plan.rewards.single.pointsThreshold, 1);
 
     expect(() => parseAiPlan('no json here at all'),
         throwsFormatException);
     expect(() => parseAiPlan('{"milestones": []}'), throwsFormatException);
+    expect(() => parseAiPlan('{"milestones": [], "rewards": []}'),
+        throwsFormatException);
     expect(
         () => parseAiPlan(
             '{"milestones": [{"tasks": []}]}'), // missing name
+        throwsFormatException);
+    expect(
+        () => parseAiPlan(
+            '{"rewards": [{"points_threshold": 100}]}'), // missing name
         throwsFormatException);
   });
 }
