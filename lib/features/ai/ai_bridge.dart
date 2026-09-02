@@ -84,15 +84,19 @@ NOT SUPPORTED — never pretend otherwise:
 - Editing or deleting past completions/history of any kind.
 - Back-dating a completion (sole exception: current-week chips on
   multi-day weekly tasks).
-- YOU editing, renaming, or deleting EXISTING milestones or tasks.
+- YOU deleting anything (milestone/task/reward) — deleting is manual-only:
+  give the user the in-app path instead.
 - YOU marking anything done/skipped/missed, claiming rewards, or changing
   points/streaks on the user's behalf.
 - Social features or leaderboards.
 
-YOUR ONE ACTION POWER: proposing NEW milestones + tasks + rewards via the
-JSON plan block, which the user previews and applies themselves. Everything else you
-offer is words: answers, summaries, coaching, and exact in-app directions
-(e.g. "Home → long-press the task → Skip today").
+YOUR ACTION POWERS via the JSON plan block (user previews, then applies):
+(1) propose NEW milestones/tasks/rewards; (2) propose UPDATES to existing
+ones, targeted by the exact [m:/t:/r:] ids shown in MY DATA — rename,
+re-point, re-schedule, change reminders/thresholds/targets. There is NO
+delete operation. Everything else you offer is words: answers, summaries,
+coaching, and exact in-app directions (e.g. "Home → long-press the task →
+Skip today").
 WHEN ASKED FOR SOMETHING UNSUPPORTED: say so plainly in one sentence, then
 offer the closest supported path. Never invent buttons or flows.
 ''';
@@ -102,6 +106,7 @@ offer the closest supported path. Never invent buttons or flows.
 Future<String> buildContextPack(AppDatabase db) async {
   final milestones = await db.getActiveMilestones();
   final tasks = await db.getAllActiveTasks();
+  final rewards = await db.getAllRewards();
   final completions = await db.getRecentCompletions(const Duration(days: 7));
   final streak = await db.getStreak();
 
@@ -137,12 +142,12 @@ Future<String> buildContextPack(AppDatabase db) async {
     byMilestone.putIfAbsent(t.milestoneId, () => []).add(t);
   }
   for (final m in milestones) {
-    b.writeln('MILESTONE: ${m.name}'
+    b.writeln('MILESTONE [m:${m.id}]: ${m.name}'
         '${m.targetDate != null ? ' · target ${m.targetDate.toString().substring(0, 10)}' : ''}'
         '${m.completionPoints > 0 ? ' · bonus ${m.completionPoints} pts' : ''}');
     for (final t in byMilestone[m.id] ?? const <Task>[]) {
       final rule = RecurrenceRule.fromTask(t);
-      b.writeln('  - ${t.name} · ${t.recurrence == TaskRecurrence.none ? 'once${t.dueDate != null ? ' (due ${t.dueDate.toString().substring(0, 10)})' : ''}' : rule.summary()}'
+      b.writeln('  - [t:${t.id}] ${t.name} · ${t.recurrence == TaskRecurrence.none ? 'once${t.dueDate != null ? ' (due ${t.dueDate.toString().substring(0, 10)})' : ''}' : rule.summary()}'
           '${t.startMinute != null ? ' · starts ${hhmm(t.startMinute)}' : ''}'
           ' · ~${t.durationMinutes}m · ${t.pointsPerCompletion} pts'
           '${t.reminderEnabled ? ' · reminder ${hhmm(t.reminderMinute) == '' ? 'at start time' : hhmm(t.reminderMinute)}' : ''}'
@@ -153,7 +158,14 @@ Future<String> buildContextPack(AppDatabase db) async {
   if (adhoc.isNotEmpty) {
     b.writeln('ADHOC TASKS (no milestone):');
     for (final t in adhoc) {
-      b.writeln('  - ${t.name}');
+      b.writeln('  - [t:${t.id}] ${t.name}');
+    }
+  }
+  if (rewards.isNotEmpty) {
+    b.writeln('REWARDS:');
+    for (final r in rewards) {
+      b.writeln('  - [r:${r.id}] ${r.name} · ${r.pointsThreshold} pts'
+          '${r.isClaimed ? ' · claimed' : ''}');
     }
   }
   b.writeln();
@@ -192,14 +204,23 @@ Future<String> buildContextPack(AppDatabase db) async {
       "description": "optional",
       "points_threshold": 500
     }
+  ],
+  "updates": [
+    {"type": "task", "id": "<the id from [t:...]>", "set": {"name": "New name", "points": 15, "start_time": "07:00", "reminder": "06:45", "duration_minutes": 30, "tiny_version": "...", "recurrence": "weekly", "days_of_week": ["mon", "thu"]}},
+    {"type": "milestone", "id": "<from [m:...]>", "set": {"name": "...", "description": "...", "target_date": "2026-12-01", "completion_bonus": 200}},
+    {"type": "reward", "id": "<from [r:...]>", "set": {"name": "...", "description": "...", "points_threshold": 600}}
   ]
 }''');
-  b.writeln('"milestones" and "rewards" are both optional (at least one).');
+  b.writeln('"milestones", "rewards" and "updates" are each optional (at least one).');
   b.writeln('Schema rules: recurrence ∈ daily|weekly|monthly|once.');
   b.writeln('weekly needs days_of_week (mon..sun); monthly may set "day_of_month" (1-31);');
   b.writeln('once may set "due_date" (YYYY-MM-DD). All fields except name+recurrence are optional.');
   b.writeln('Points 5-25 by effort. Keep plans humane: 1-4 tasks per milestone,');
   b.writeln('start small (the app has a 2-minute-version culture).');
+  b.writeln('UPDATE rules: copy the id EXACTLY from the brackets above; put ONLY the');
+  b.writeln('fields being changed in "set"; "reminder": null clears a reminder; to');
+  b.writeln('change scheduling include "recurrence" plus its fields. There is NO');
+  b.writeln('delete operation — deleting is done manually in the app.');
   b.writeln('I will paste your JSON into Yatta\'s "Import AI plan" screen.');
   return b.toString();
 }
@@ -278,14 +299,39 @@ class AiPlanReward {
   });
 }
 
+/// An update to one existing item, targeted by exact id. [set] holds only
+/// the fields being changed, pre-filtered to the keys we support per type.
+class AiPlanUpdate {
+  final String type; // 'milestone' | 'task' | 'reward'
+  final String id;
+  final Map<String, dynamic> set;
+
+  AiPlanUpdate({required this.type, required this.id, required this.set});
+
+  static const allowedKeys = {
+    'milestone': {'name', 'description', 'target_date', 'completion_bonus'},
+    'task': {
+      'name', 'points', 'start_time', 'reminder', 'duration_minutes',
+      'tiny_version', 'recurrence', 'days_of_week', 'day_of_month',
+      'interval', 'due_date',
+    },
+    'reward': {'name', 'description', 'points_threshold'},
+  };
+}
+
 class AiPlan {
   final List<AiPlanMilestone> milestones;
   final List<AiPlanReward> rewards;
+  final List<AiPlanUpdate> updates;
 
-  AiPlan({required this.milestones, required this.rewards});
+  AiPlan(
+      {required this.milestones,
+      required this.rewards,
+      required this.updates});
 
   int get taskCount => milestones.fold(0, (s, m) => s + m.tasks.length);
-  bool get isEmpty => milestones.isEmpty && rewards.isEmpty;
+  bool get isEmpty =>
+      milestones.isEmpty && rewards.isEmpty && updates.isEmpty;
 }
 
 const _dayNames = {
@@ -344,10 +390,12 @@ AiPlan _parseAiPlanInner(String raw) {
   if (decoded is! Map<String, dynamic>) {
     throw const FormatException('Expected a JSON object at the top level.');
   }
-  // A bare single-milestone object still parses; otherwise "milestones"
-  // and/or "rewards" arrays, both optional.
+  // A bare single-milestone object still parses; otherwise "milestones",
+  // "rewards" and/or "updates" arrays, each optional.
   final rawMilestones = decoded['milestones'] ??
-      (decoded.containsKey('rewards') ? const [] : [decoded]);
+      (decoded.containsKey('rewards') || decoded.containsKey('updates')
+          ? const []
+          : [decoded]);
   if (rawMilestones is! List) {
     throw const FormatException('"milestones" must be a list.');
   }
@@ -431,16 +479,48 @@ AiPlan _parseAiPlanInner(String raw) {
     }
   }
 
-  final plan = AiPlan(milestones: out, rewards: rewards);
+  final updates = <AiPlanUpdate>[];
+  final rawUpdates = decoded['updates'];
+  if (rawUpdates is List) {
+    for (final ru in rawUpdates) {
+      if (ru is! Map<String, dynamic>) continue;
+      final type = (ru['type'] as String?)?.trim() ?? '';
+      final allowed = AiPlanUpdate.allowedKeys[type];
+      if (allowed == null) {
+        throw FormatException(
+            'Update type "$type" is not supported (milestone|task|reward).');
+      }
+      final id = (ru['id'] as String?)?.trim() ?? '';
+      if (id.isEmpty) {
+        throw FormatException('An update of type "$type" is missing "id".');
+      }
+      final rawSet = ru['set'];
+      if (rawSet is! Map<String, dynamic>) {
+        throw FormatException('Update $type/$id is missing its "set" map.');
+      }
+      final filtered = {
+        for (final e in rawSet.entries)
+          if (allowed.contains(e.key)) e.key: e.value,
+      };
+      if (filtered.isEmpty) {
+        throw FormatException(
+            'Update $type/$id has no supported fields in "set".');
+      }
+      updates.add(AiPlanUpdate(type: type, id: id, set: filtered));
+    }
+  }
+
+  final plan = AiPlan(milestones: out, rewards: rewards, updates: updates);
   if (plan.isEmpty) {
-    throw const FormatException('The plan has no milestones or rewards.');
+    throw const FormatException(
+        'The plan has no milestones, rewards, or updates.');
   }
   return plan;
 }
 
-Future<({int milestones, int tasks, int rewards})> applyAiPlan(
-    AppDatabase db, AiPlan plan) async {
-  var mCount = 0, tCount = 0, rCount = 0;
+Future<({int milestones, int tasks, int rewards, int updates, int skipped})>
+    applyAiPlan(AppDatabase db, AiPlan plan) async {
+  var mCount = 0, tCount = 0, rCount = 0, uCount = 0, skipped = 0;
   for (final (i, m) in plan.milestones.indexed) {
     final mId = _generateId();
     await db.insertMilestone(MilestonesCompanion.insert(
@@ -481,8 +561,142 @@ Future<({int milestones, int tasks, int rewards})> applyAiPlan(
     ));
     rCount++;
   }
+
+  // Updates: exact-id targeting against fresh reads; unknown ids are
+  // skipped and reported, never guessed. Deletes have no path here at all.
+  if (plan.updates.isNotEmpty) {
+    final milestonesById = {
+      for (final m in await db.getActiveMilestones()) m.id: m
+    };
+    final tasksById = {for (final t in await db.getAllActiveTasks()) t.id: t};
+    final rewardsById = {for (final r in await db.getAllRewards()) r.id: r};
+
+    for (final u in plan.updates) {
+      final applied = switch (u.type) {
+        'milestone' => await _applyMilestoneUpdate(
+            db, milestonesById[u.id], u.set),
+        'task' => await _applyTaskUpdate(db, tasksById[u.id], u.set),
+        'reward' => await _applyRewardUpdate(db, rewardsById[u.id], u.set),
+        _ => false,
+      };
+      applied ? uCount++ : skipped++;
+    }
+  }
+
   await NotificationScheduler.reschedule();
-  return (milestones: mCount, tasks: tCount, rewards: rCount);
+  return (
+    milestones: mCount,
+    tasks: tCount,
+    rewards: rCount,
+    updates: uCount,
+    skipped: skipped,
+  );
+}
+
+String? _cleanStr(dynamic v) => v is String && v.trim().isNotEmpty
+    ? v.trim()
+    : null;
+
+Future<bool> _applyMilestoneUpdate(
+    AppDatabase db, Milestone? m, Map<String, dynamic> set) async {
+  if (m == null) return false;
+  await db.updateMilestone(m.copyWith(
+    name: _cleanStr(set['name']) ?? m.name,
+    description: set.containsKey('description')
+        ? Value(_cleanStr(set['description']))
+        : Value(m.description),
+    targetDate: set['target_date'] is String
+        ? Value(DateTime.tryParse(set['target_date'] as String))
+        : Value(m.targetDate),
+    completionPoints: set['completion_bonus'] is num
+        ? min(10000, max(0, (set['completion_bonus'] as num).toInt()))
+        : m.completionPoints,
+  ));
+  return true;
+}
+
+Future<bool> _applyTaskUpdate(
+    AppDatabase db, Task? t, Map<String, dynamic> set) async {
+  if (t == null) return false;
+  var updated = t.copyWith(
+    name: _cleanStr(set['name']) ?? t.name,
+    pointsPerCompletion: set['points'] is num
+        ? min(100, max(1, (set['points'] as num).toInt()))
+        : t.pointsPerCompletion,
+    durationMinutes: set['duration_minutes'] is num
+        ? min(480, max(1, (set['duration_minutes'] as num).toInt()))
+        : t.durationMinutes,
+    startMinute: set.containsKey('start_time')
+        ? Value(_parseHhmm(set['start_time']))
+        : Value(t.startMinute),
+    tinyName: set.containsKey('tiny_version')
+        ? Value(_cleanStr(set['tiny_version']))
+        : Value(t.tinyName),
+  );
+  if (set.containsKey('reminder')) {
+    final min_ = _parseHhmm(set['reminder']);
+    updated = updated.copyWith(
+      reminderEnabled: min_ != null,
+      reminderMinute: Value(min_),
+    );
+  }
+  if (set['recurrence'] is String) {
+    // Scheduling change: rebuild the rule from the update's own fields
+    // (fresh anchor = today), mirroring what the create path does.
+    final recRaw = (set['recurrence'] as String).trim();
+    final rec = switch (recRaw) {
+      'daily' => TaskRecurrence.daily,
+      'weekly' => TaskRecurrence.weekly,
+      'monthly' => TaskRecurrence.monthly,
+      'once' || 'none' => TaskRecurrence.none,
+      _ => null,
+    };
+    if (rec != null) {
+      final days = <int>[
+        for (final d in (set['days_of_week'] as List? ?? const []))
+          if (d is String && _dayNames.containsKey(d.toLowerCase()))
+            _dayNames[d.toLowerCase()]!,
+      ];
+      final interval =
+          min(12, max(1, (set['interval'] as num?)?.toInt() ?? 1));
+      final rule = switch (rec) {
+        TaskRecurrence.daily => RecurrenceRule.daily(interval: interval),
+        TaskRecurrence.weekly => RecurrenceRule.weekly(
+            interval: interval,
+            daysOfWeek:
+                days.isEmpty ? [DateTime.now().weekday] : days),
+        TaskRecurrence.monthly => RecurrenceRule.monthlyByDay(
+            interval: interval,
+            dayOfMonth: (set['day_of_month'] as num?)?.toInt() ??
+                DateTime.now().day),
+        TaskRecurrence.none => RecurrenceRule.once(),
+      };
+      updated = updated.copyWith(
+        recurrence: rec,
+        recurrenceConfig: Value(rule.toJsonString()),
+        dueDate: Value(rec == TaskRecurrence.none && set['due_date'] is String
+            ? DateTime.tryParse(set['due_date'] as String)
+            : null),
+      );
+    }
+  }
+  await db.updateTask(updated);
+  return true;
+}
+
+Future<bool> _applyRewardUpdate(
+    AppDatabase db, Reward? r, Map<String, dynamic> set) async {
+  if (r == null) return false;
+  await db.updateReward(r.copyWith(
+    name: _cleanStr(set['name']) ?? r.name,
+    description: set.containsKey('description')
+        ? Value(_cleanStr(set['description']))
+        : Value(r.description),
+    pointsThreshold: set['points_threshold'] is num
+        ? min(100000, max(1, (set['points_threshold'] as num).toInt()))
+        : r.pointsThreshold,
+  ));
+  return true;
 }
 
 String _generateId() {
@@ -537,6 +751,9 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
   String? _error;
   bool _applying = false;
 
+  /// id → current name, for rendering update targets in the preview.
+  Map<String, String> _names = const {};
+
   @override
   void initState() {
     super.initState();
@@ -549,6 +766,22 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
         _error = e.message;
       }
     }
+    _loadNames();
+  }
+
+  Future<void> _loadNames() async {
+    final db = widget.hostRef.read(databaseProvider);
+    final names = <String, String>{};
+    for (final m in await db.getActiveMilestones()) {
+      names[m.id] = m.name;
+    }
+    for (final t in await db.getAllActiveTasks()) {
+      names[t.id] = t.name;
+    }
+    for (final r in await db.getAllRewards()) {
+      names[r.id] = r.name;
+    }
+    if (mounted) setState(() => _names = names);
   }
 
   @override
@@ -565,8 +798,10 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
         '${plan.taskCount} TASK${plan.taskCount == 1 ? '' : 'S'}',
       if (plan.rewards.isNotEmpty)
         '${plan.rewards.length} REWARD${plan.rewards.length == 1 ? '' : 'S'}',
+      if (plan.updates.isNotEmpty)
+        '${plan.updates.length} UPDATE${plan.updates.length == 1 ? '' : 'S'}',
     ];
-    return 'CREATE ${parts.join(' + ')}';
+    return '${plan.updates.isEmpty ? 'CREATE' : 'APPLY'} ${parts.join(' + ')}';
   }
 
   void _parse() {
@@ -599,9 +834,14 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
         if (n.tasks > 0) '${n.tasks} task${n.tasks == 1 ? '' : 's'}',
         if (n.rewards > 0)
           '${n.rewards} reward${n.rewards == 1 ? '' : 's'}',
+        if (n.updates > 0)
+          '${n.updates} update${n.updates == 1 ? '' : 's'}',
       ].join(', ');
+      final skippedNote = n.skipped > 0
+          ? ' (${n.skipped} skipped — item not found)'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('🤖 Plan loaded — $parts created. Beep.'),
+        content: Text('🤖 Plan applied — $parts$skippedNote. Beep.'),
       ));
     } catch (e) {
       if (!mounted) return;
@@ -753,6 +993,40 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
                                 '${r.description != null && r.description!.isNotEmpty ? ' · ${r.description}' : ''}',
                                 style: AppTypography.caption.copyWith(
                                     color: context.appTextSecondary),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  if (plan.updates.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: context.appPageBackground,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color:
+                                AppColors.infoBlue.withValues(alpha: 0.5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Updates to existing items',
+                              style: AppTypography.body.copyWith(
+                                  fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 6),
+                          for (final u in plan.updates)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                _names.containsKey(u.id)
+                                    ? '✏️ ${u.type} “${_names[u.id]}”: ${u.set.entries.map((e) => '${e.key} → ${e.value ?? 'cleared'}').join(' · ')}'
+                                    : '⚠️ ${u.type} not found — this update will be skipped',
+                                style: AppTypography.caption.copyWith(
+                                    color: _names.containsKey(u.id)
+                                        ? context.appTextSecondary
+                                        : AppColors.missedRed),
                               ),
                             ),
                         ],

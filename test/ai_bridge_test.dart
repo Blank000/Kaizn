@@ -89,6 +89,43 @@ Good luck with the training!
     expect(plan.rewards.single.pointsThreshold, 1500);
   });
 
+  test('parses updates and enforces their shape', () {
+    const reply = '''
+```json
+{
+  "updates": [
+    {"type": "milestone", "id": "abc123", "set": {"name": "Run a half marathon", "target_date": "2027-03-01"}},
+    {"type": "task", "id": "t456", "set": {"points": 20, "reminder": null, "bogus_field": 1}},
+    {"type": "reward", "id": "r789", "set": {"points_threshold": 900}}
+  ]
+}
+```''';
+    final plan = parseAiPlan(reply);
+    expect(plan.milestones, isEmpty);
+    expect(plan.updates, hasLength(3));
+    expect(plan.updates[0].type, 'milestone');
+    expect(plan.updates[0].set['name'], 'Run a half marathon');
+    // reminder:null must survive (it means "clear the reminder"); unknown
+    // fields are dropped.
+    expect(plan.updates[1].set.containsKey('reminder'), isTrue);
+    expect(plan.updates[1].set['reminder'], isNull);
+    expect(plan.updates[1].set.containsKey('bogus_field'), isFalse);
+    expect(plan.updates[2].set['points_threshold'], 900);
+
+    expect(
+        () => parseAiPlan(
+            '{"updates": [{"type": "streak", "id": "x", "set": {"days": 99}}]}'),
+        throwsFormatException);
+    expect(
+        () => parseAiPlan(
+            '{"updates": [{"type": "task", "set": {"name": "x"}}]}'),
+        throwsFormatException);
+    expect(
+        () => parseAiPlan(
+            '{"updates": [{"type": "task", "id": "t1", "set": {"bogus": 1}}]}'),
+        throwsFormatException);
+  });
+
   test('clamps hostile values and rejects garbage kindly', () {
     final plan = parseAiPlan(
         '{"milestones": [{"name": "X", "tasks": [{"name": "Y", "recurrence": "daily", "points": 9999, "duration_minutes": -5}]}], "rewards": [{"name": "R", "points_threshold": -3}]}');
