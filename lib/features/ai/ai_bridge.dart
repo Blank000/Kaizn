@@ -27,6 +27,76 @@ import '../../shared/widgets/pico_figure.dart';
 /// applied through the same insert APIs the forms use. The AI proposes; the
 /// user approves; the app executes.
 
+// ─── The app manual ───────────────────────────────────────────────────────
+// Ships inside every prompt (chat + export) so the model knows exactly what
+// Yatta! can do, HOW the user does it, and — just as important — what it
+// cannot do. The NOT SUPPORTED list is belt; the real suspenders is that
+// the plan pipeline can only CREATE new milestones/tasks.
+
+const String kAppManual = '''
+── APP MANUAL: what Yatta! can and cannot do ──
+NAVIGATION: 4 tabs — Home, Milestones, Rewards, Stats — plus Settings (gear
+icon on Home).
+
+MILESTONES (goals/projects/habit groups): create via Milestones tab → +.
+Fields: name, description, target date, completion-bonus points, color.
+Marking a milestone complete (from its detail page) awards the bonus.
+Deleting one deletes its tasks. Quick-added tasks land in a built-in
+"Inbox" milestone.
+
+TASKS: create from Home's ADD TASK or a milestone's detail. Recurrence:
+once / daily / weekly (pick weekdays — each chosen day counts separately) /
+monthly (day-of-month or Nth-weekday), with intervals (e.g. every 2 weeks)
+and an optional end date. Optional per task: start time + duration (places
+it on the timeline), a reminder, a 2-minute tiny version (half points, full
+streak credit), points per completion (default 10), and stacking ("after X
+do Y" — chains run in the Stack Runner with a countdown, pause, and +5min).
+
+LOGGING: tap the circle on a task tile = done now (+points). Tap again =
+undo (today). Multi-day weekly tasks show M/T/W/T/F/S/S chips and past
+chips of the CURRENT week can be retro-logged. Long-press a tile: "Skip
+today" (intentional rest — streak safe, no points) or "Mark as missed"
+(asks what got in the way; those reasons feed the Sunday review).
+
+STREAK: any real completion keeps the day alive; one empty day is forgiven,
+two breaks it. A Streak Shield (costs points) can restore a just-broken
+streak. Rest mode = a guilt-free multi-day pause, streak safe, no pings.
+
+POINTS & REWARDS: completions + milestone bonuses earn points. The user
+defines their own rewards with point thresholds (Rewards tab) and claims
+them when the balance covers it.
+
+HOME: Ren's Sensei Post (daily accountability line; tap it for the day's
+ledger), week board, progress card with this week's "one claw" intention,
+Up next / Done / Missed / Skipped sections, and a timeline view with a
+Google Calendar overlay (tasks can be dragged to times; Google events show
+as busy blocks and can be edited if the user owns them).
+
+STATS & REVIEW: activity heatmap, daily points chart, time-of-day pattern,
+top tasks, achievements/badges. The Sunday weekly review (from Stats or
+the Sunday Home invite): what burned, what slipped (with miss reasons),
+then pick exactly ONE adjustment ("one claw") for next week.
+
+SETTINGS: theme, notification times, sounds, Master Ren toggle, Google
+sign-in + Drive backup/restore, AI export/import, the AI key.
+
+NOT SUPPORTED — never pretend otherwise:
+- Editing or deleting past completions/history of any kind.
+- Back-dating a completion (sole exception: current-week chips on
+  multi-day weekly tasks).
+- YOU editing, renaming, or deleting EXISTING milestones or tasks.
+- YOU marking anything done/skipped/missed, claiming rewards, or changing
+  points/streaks on the user's behalf.
+- Social features or leaderboards.
+
+YOUR ONE ACTION POWER: proposing NEW milestones + tasks via the JSON plan
+block, which the user previews and applies themselves. Everything else you
+offer is words: answers, summaries, coaching, and exact in-app directions
+(e.g. "Home → long-press the task → Skip today").
+WHEN ASKED FOR SOMETHING UNSUPPORTED: say so plainly in one sentence, then
+offer the closest supported path. Never invent buttons or flows.
+''';
+
 // ─── Export: the context pack ─────────────────────────────────────────────
 
 Future<String> buildContextPack(AppDatabase db) async {
@@ -87,6 +157,7 @@ Future<String> buildContextPack(AppDatabase db) async {
     }
   }
   b.writeln();
+  b.writeln(kAppManual);
   b.writeln('── WHAT YOU CAN DO ──');
   b.writeln('1) Answer any question about the data (schedules use 24h times).');
   b.writeln('2) Design plans. When I ask you to plan or add milestones/tasks,');
