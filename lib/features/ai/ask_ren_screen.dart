@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
+import '../../core/database/database.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -43,11 +47,162 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
   String? _systemPrompt;
   bool _sending = false;
 
+  /// Threads persist locally (ai_chat_messages) — the OpenAI API stores
+  /// nothing. Opening the screen resumes the most recent thread.
+  late String _threadId;
+
+  @override
+  void initState() {
+    super.initState();
+    _threadId = _newId();
+    _restoreLastThread();
+  }
+
   @override
   void dispose() {
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  static String _newId() =>
+      'c${DateTime.now().microsecondsSinceEpoch}';
+
+  Future<void> _restoreLastThread() async {
+    final all =
+        await ref.read(databaseProvider).getAllAiChatMessages();
+    // If the user already started typing into a fresh thread, keep it.
+    if (!mounted || all.isEmpty || _messages.isNotEmpty) return;
+    final last = all.last.threadId;
+    setState(() {
+      _threadId = last;
+      _messages.addAll([
+        for (final m in all)
+          if (m.threadId == last)
+            _ChatMsg(m.role, m.content, isError: m.isError),
+      ]);
+    });
+    _autoscroll();
+  }
+
+  Future<void> _persist(_ChatMsg m) {
+    return ref.read(databaseProvider).insertAiChatMessage(
+          AiChatMessagesCompanion.insert(
+            id: _newId(),
+            threadId: _threadId,
+            role: m.role,
+            content: m.content,
+            isError: Value(m.isError),
+          ),
+        );
+  }
+
+  void _newChat() {
+    setState(() {
+      _threadId = _newId();
+      _messages.clear();
+    });
+  }
+
+  Future<void> _showThreads() async {
+    final all =
+        await ref.read(databaseProvider).getAllAiChatMessages();
+    if (!mounted) return;
+    // Group into thread summaries, newest activity first.
+    final byThread = <String, List<AiChatMessage>>{};
+    for (final m in all) {
+      byThread.putIfAbsent(m.threadId, () => []).add(m);
+    }
+    final threads = byThread.entries.map((e) {
+      final firstUser =
+          e.value.where((m) => m.role == 'user').firstOrNull;
+      var title = (firstUser ?? e.value.first).content.trim();
+      if (title.length > 46) title = '${title.substring(0, 46)}…';
+      return (
+        id: e.key,
+        title: title,
+        last: e.value.last.createdAt,
+        count: e.value.length,
+      );
+    }).toList()
+      ..sort((a, b) => b.last.compareTo(a.last));
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) => Container(
+          decoration: BoxDecoration(
+            color: sheetCtx.appCardSurface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+          child: threads.isEmpty
+              ? Text('No saved chats yet.',
+                  style: AppTypography.body
+                      .copyWith(color: sheetCtx.appTextSecondary),
+                  textAlign: TextAlign.center)
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    Text('CHAT HISTORY',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.caption.copyWith(
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.w800,
+                          color: sheetCtx.appTextSecondary,
+                        )),
+                    const SizedBox(height: 8),
+                    for (final t in threads)
+                      ListTile(
+                        title: Text(t.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.body),
+                        subtitle: Text(
+                            '${DateFormat.MMMd().add_jm().format(t.last)} · ${t.count} messages'
+                            '${t.id == _threadId ? ' · open' : ''}',
+                            style: AppTypography.caption.copyWith(
+                                color: sheetCtx.appTextSecondary)),
+                        onTap: () async {
+                          final msgs = await ref
+                              .read(databaseProvider)
+                              .getAiChatMessages(t.id);
+                          if (!mounted) return;
+                          setState(() {
+                            _threadId = t.id;
+                            _messages
+                              ..clear()
+                              ..addAll([
+                                for (final m in msgs)
+                                  _ChatMsg(m.role, m.content,
+                                      isError: m.isError),
+                              ]);
+                          });
+                          if (sheetCtx.mounted) {
+                            Navigator.of(sheetCtx).pop();
+                          }
+                          _autoscroll();
+                        },
+                        onLongPress: () async {
+                          await ref
+                              .read(databaseProvider)
+                              .deleteAiChatThread(t.id);
+                          setSheetState(() => threads.remove(t));
+                          if (t.id == _threadId && mounted) _newChat();
+                        },
+                      ),
+                    const SizedBox(height: 4),
+                    Text('Tap to open · long-press to delete',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.caption.copyWith(
+                            color: sheetCtx.appTextTertiary)),
+                  ],
+                ),
+        ),
+      ),
+    );
   }
 
   Future<String> _system() async {
@@ -81,26 +236,38 @@ $pack''';
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
     _input.clear();
+    final userMsg = _ChatMsg('user', text);
     setState(() {
-      _messages.add(_ChatMsg('user', text));
+      _messages.add(userMsg);
       _sending = true;
     });
     _autoscroll();
+    unawaited(_persist(userMsg));
     try {
       final sys = await _system();
+      // Replay at most the last 30 real messages — long threads stay
+      // affordable and under the context limit.
+      final replay =
+          _messages.where((m) => !m.isError).toList();
+      final window = replay.length > 30
+          ? replay.sublist(replay.length - 30)
+          : replay;
       final reply = await _chatCompletion([
         {'role': 'system', 'content': sys},
-        for (final m in _messages)
-          if (!m.isError) {'role': m.role, 'content': m.content},
+        for (final m in window) {'role': m.role, 'content': m.content},
       ]);
       if (!mounted) return;
-      setState(() => _messages.add(_ChatMsg('assistant', reply)));
+      final replyMsg = _ChatMsg('assistant', reply);
+      setState(() => _messages.add(replyMsg));
+      unawaited(_persist(replyMsg));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _messages.add(_ChatMsg(
+      final errMsg = _ChatMsg(
           'assistant',
           '⚠️ ${e is _AiError ? e.message : 'Could not reach the AI — check your connection and try again.'}',
-          isError: true)));
+          isError: true);
+      setState(() => _messages.add(errMsg));
+      unawaited(_persist(errMsg));
     } finally {
       if (mounted) setState(() => _sending = false);
       _autoscroll();
@@ -185,6 +352,18 @@ $pack''';
             Text('Pico', style: AppTypography.heading2),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: 'Chat history',
+            onPressed: _showThreads,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_comment_outlined),
+            tooltip: 'New chat',
+            onPressed: _newChat,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(

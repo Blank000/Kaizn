@@ -4929,6 +4929,418 @@ class LeagueWeeksCompanion extends UpdateCompanion<LeagueWeek> {
   }
 }
 
+class $AiChatMessagesTable extends AiChatMessages
+    with TableInfo<$AiChatMessagesTable, AiChatMessage> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AiChatMessagesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _threadIdMeta = const VerificationMeta(
+    'threadId',
+  );
+  @override
+  late final GeneratedColumn<String> threadId = GeneratedColumn<String>(
+    'thread_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isErrorMeta = const VerificationMeta(
+    'isError',
+  );
+  @override
+  late final GeneratedColumn<bool> isError = GeneratedColumn<bool>(
+    'is_error',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_error" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    threadId,
+    role,
+    content,
+    isError,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ai_chat_messages';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AiChatMessage> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('thread_id')) {
+      context.handle(
+        _threadIdMeta,
+        threadId.isAcceptableOrUnknown(data['thread_id']!, _threadIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_threadIdMeta);
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roleMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('is_error')) {
+      context.handle(
+        _isErrorMeta,
+        isError.isAcceptableOrUnknown(data['is_error']!, _isErrorMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AiChatMessage map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AiChatMessage(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      threadId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thread_id'],
+      )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      isError: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_error'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AiChatMessagesTable createAlias(String alias) {
+    return $AiChatMessagesTable(attachedDatabase, alias);
+  }
+}
+
+class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
+  final String id;
+
+  /// Groups messages into conversations; a new id starts a new thread.
+  final String threadId;
+  final String role;
+  final String content;
+
+  /// Local error notices (transport failures) — rendered, never replayed
+  /// to the API.
+  final bool isError;
+  final DateTime createdAt;
+  const AiChatMessage({
+    required this.id,
+    required this.threadId,
+    required this.role,
+    required this.content,
+    required this.isError,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['thread_id'] = Variable<String>(threadId);
+    map['role'] = Variable<String>(role);
+    map['content'] = Variable<String>(content);
+    map['is_error'] = Variable<bool>(isError);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  AiChatMessagesCompanion toCompanion(bool nullToAbsent) {
+    return AiChatMessagesCompanion(
+      id: Value(id),
+      threadId: Value(threadId),
+      role: Value(role),
+      content: Value(content),
+      isError: Value(isError),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory AiChatMessage.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AiChatMessage(
+      id: serializer.fromJson<String>(json['id']),
+      threadId: serializer.fromJson<String>(json['threadId']),
+      role: serializer.fromJson<String>(json['role']),
+      content: serializer.fromJson<String>(json['content']),
+      isError: serializer.fromJson<bool>(json['isError']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'threadId': serializer.toJson<String>(threadId),
+      'role': serializer.toJson<String>(role),
+      'content': serializer.toJson<String>(content),
+      'isError': serializer.toJson<bool>(isError),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  AiChatMessage copyWith({
+    String? id,
+    String? threadId,
+    String? role,
+    String? content,
+    bool? isError,
+    DateTime? createdAt,
+  }) => AiChatMessage(
+    id: id ?? this.id,
+    threadId: threadId ?? this.threadId,
+    role: role ?? this.role,
+    content: content ?? this.content,
+    isError: isError ?? this.isError,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  AiChatMessage copyWithCompanion(AiChatMessagesCompanion data) {
+    return AiChatMessage(
+      id: data.id.present ? data.id.value : this.id,
+      threadId: data.threadId.present ? data.threadId.value : this.threadId,
+      role: data.role.present ? data.role.value : this.role,
+      content: data.content.present ? data.content.value : this.content,
+      isError: data.isError.present ? data.isError.value : this.isError,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AiChatMessage(')
+          ..write('id: $id, ')
+          ..write('threadId: $threadId, ')
+          ..write('role: $role, ')
+          ..write('content: $content, ')
+          ..write('isError: $isError, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, threadId, role, content, isError, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AiChatMessage &&
+          other.id == this.id &&
+          other.threadId == this.threadId &&
+          other.role == this.role &&
+          other.content == this.content &&
+          other.isError == this.isError &&
+          other.createdAt == this.createdAt);
+}
+
+class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
+  final Value<String> id;
+  final Value<String> threadId;
+  final Value<String> role;
+  final Value<String> content;
+  final Value<bool> isError;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const AiChatMessagesCompanion({
+    this.id = const Value.absent(),
+    this.threadId = const Value.absent(),
+    this.role = const Value.absent(),
+    this.content = const Value.absent(),
+    this.isError = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AiChatMessagesCompanion.insert({
+    required String id,
+    required String threadId,
+    required String role,
+    required String content,
+    this.isError = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       threadId = Value(threadId),
+       role = Value(role),
+       content = Value(content);
+  static Insertable<AiChatMessage> custom({
+    Expression<String>? id,
+    Expression<String>? threadId,
+    Expression<String>? role,
+    Expression<String>? content,
+    Expression<bool>? isError,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (threadId != null) 'thread_id': threadId,
+      if (role != null) 'role': role,
+      if (content != null) 'content': content,
+      if (isError != null) 'is_error': isError,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AiChatMessagesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? threadId,
+    Value<String>? role,
+    Value<String>? content,
+    Value<bool>? isError,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return AiChatMessagesCompanion(
+      id: id ?? this.id,
+      threadId: threadId ?? this.threadId,
+      role: role ?? this.role,
+      content: content ?? this.content,
+      isError: isError ?? this.isError,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (threadId.present) {
+      map['thread_id'] = Variable<String>(threadId.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (isError.present) {
+      map['is_error'] = Variable<bool>(isError.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AiChatMessagesCompanion(')
+          ..write('id: $id, ')
+          ..write('threadId: $threadId, ')
+          ..write('role: $role, ')
+          ..write('content: $content, ')
+          ..write('isError: $isError, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4943,6 +5355,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $StreakTableTable streakTable = $StreakTableTable(this);
   late final $ChangeLogTable changeLog = $ChangeLogTable(this);
   late final $LeagueWeeksTable leagueWeeks = $LeagueWeeksTable(this);
+  late final $AiChatMessagesTable aiChatMessages = $AiChatMessagesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4956,6 +5369,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     streakTable,
     changeLog,
     leagueWeeks,
+    aiChatMessages,
   ];
 }
 
@@ -8203,6 +8617,227 @@ typedef $$LeagueWeeksTableProcessedTableManager =
       LeagueWeek,
       PrefetchHooks Function()
     >;
+typedef $$AiChatMessagesTableCreateCompanionBuilder =
+    AiChatMessagesCompanion Function({
+      required String id,
+      required String threadId,
+      required String role,
+      required String content,
+      Value<bool> isError,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+typedef $$AiChatMessagesTableUpdateCompanionBuilder =
+    AiChatMessagesCompanion Function({
+      Value<String> id,
+      Value<String> threadId,
+      Value<String> role,
+      Value<String> content,
+      Value<bool> isError,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$AiChatMessagesTableFilterComposer
+    extends Composer<_$AppDatabase, $AiChatMessagesTable> {
+  $$AiChatMessagesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get threadId => $composableBuilder(
+    column: $table.threadId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isError => $composableBuilder(
+    column: $table.isError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AiChatMessagesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AiChatMessagesTable> {
+  $$AiChatMessagesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get threadId => $composableBuilder(
+    column: $table.threadId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isError => $composableBuilder(
+    column: $table.isError,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AiChatMessagesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AiChatMessagesTable> {
+  $$AiChatMessagesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get threadId =>
+      $composableBuilder(column: $table.threadId, builder: (column) => column);
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<bool> get isError =>
+      $composableBuilder(column: $table.isError, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$AiChatMessagesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AiChatMessagesTable,
+          AiChatMessage,
+          $$AiChatMessagesTableFilterComposer,
+          $$AiChatMessagesTableOrderingComposer,
+          $$AiChatMessagesTableAnnotationComposer,
+          $$AiChatMessagesTableCreateCompanionBuilder,
+          $$AiChatMessagesTableUpdateCompanionBuilder,
+          (
+            AiChatMessage,
+            BaseReferences<_$AppDatabase, $AiChatMessagesTable, AiChatMessage>,
+          ),
+          AiChatMessage,
+          PrefetchHooks Function()
+        > {
+  $$AiChatMessagesTableTableManager(
+    _$AppDatabase db,
+    $AiChatMessagesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AiChatMessagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AiChatMessagesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AiChatMessagesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> threadId = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<bool> isError = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AiChatMessagesCompanion(
+                id: id,
+                threadId: threadId,
+                role: role,
+                content: content,
+                isError: isError,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String threadId,
+                required String role,
+                required String content,
+                Value<bool> isError = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AiChatMessagesCompanion.insert(
+                id: id,
+                threadId: threadId,
+                role: role,
+                content: content,
+                isError: isError,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AiChatMessagesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AiChatMessagesTable,
+      AiChatMessage,
+      $$AiChatMessagesTableFilterComposer,
+      $$AiChatMessagesTableOrderingComposer,
+      $$AiChatMessagesTableAnnotationComposer,
+      $$AiChatMessagesTableCreateCompanionBuilder,
+      $$AiChatMessagesTableUpdateCompanionBuilder,
+      (
+        AiChatMessage,
+        BaseReferences<_$AppDatabase, $AiChatMessagesTable, AiChatMessage>,
+      ),
+      AiChatMessage,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8223,4 +8858,6 @@ class $AppDatabaseManager {
       $$ChangeLogTableTableManager(_db, _db.changeLog);
   $$LeagueWeeksTableTableManager get leagueWeeks =>
       $$LeagueWeeksTableTableManager(_db, _db.leagueWeeks);
+  $$AiChatMessagesTableTableManager get aiChatMessages =>
+      $$AiChatMessagesTableTableManager(_db, _db.aiChatMessages);
 }

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'tables/ai_chats.dart';
 import 'tables/change_log.dart';
 import 'tables/league_weeks.dart';
 import 'tables/milestones.dart';
@@ -40,6 +41,7 @@ typedef DbCompletionOutcome = ({
   StreakTable,
   ChangeLog,
   LeagueWeeks,
+  AiChatMessages,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -62,8 +64,10 @@ class AppDatabase extends _$AppDatabase {
   //        values (textEnum, no column change).
   // 9 → 10 miss check-in: `miss_reason` on task_completions (self-compassion
   //        triage tag; powers Goldilocks "3× same reason" suggestions later).
+  // 10 → 11 Pico chat history: `ai_chat_messages` table (threads of the
+  //        in-app AI assistant, stored locally).
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration {
@@ -120,9 +124,34 @@ class AppDatabase extends _$AppDatabase {
           // v9 → v10: miss check-in reason tag.
           await m.addColumn(taskCompletions, taskCompletions.missReason);
         }
+        if (from < 11) {
+          // v10 → v11: Pico chat history.
+          await m.createTable(aiChatMessages);
+        }
       },
     );
   }
+
+  // ============ Pico chat history ============
+
+  Future<void> insertAiChatMessage(AiChatMessagesCompanion row) =>
+      into(aiChatMessages).insert(row);
+
+  Future<List<AiChatMessage>> getAiChatMessages(String threadId) =>
+      (select(aiChatMessages)
+            ..where((m) => m.threadId.equals(threadId))
+            ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
+          .get();
+
+  /// All messages, oldest first — the UI groups them into threads.
+  Future<List<AiChatMessage>> getAllAiChatMessages() =>
+      (select(aiChatMessages)
+            ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
+          .get();
+
+  Future<void> deleteAiChatThread(String threadId) =>
+      (delete(aiChatMessages)..where((m) => m.threadId.equals(threadId)))
+          .go();
 
   // ============ Change log (append-only mutation journal) ============
 
