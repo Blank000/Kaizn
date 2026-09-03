@@ -217,7 +217,8 @@ Future<String> buildContextPack(AppDatabase db) async {
   b.writeln('once may set "due_date" (YYYY-MM-DD). All fields except name+recurrence are optional.');
   b.writeln('Points 5-25 by effort. Keep plans humane: 1-4 tasks per milestone,');
   b.writeln('start small (the app has a 2-minute-version culture).');
-  b.writeln('UPDATE rules: copy the id EXACTLY from the brackets above; put ONLY the');
+  b.writeln('UPDATE rules: "id" is the characters inside the brackets WITHOUT the');
+  b.writeln('m:/t:/r: prefix — for "[m:k3x9…]" send "id": "k3x9…". Put ONLY the');
   b.writeln('fields being changed in "set"; "reminder": null clears a reminder; to');
   b.writeln('change scheduling include "recurrence" plus its fields. There is NO');
   b.writeln('delete operation — deleting is done manually in the app.');
@@ -490,7 +491,7 @@ AiPlan _parseAiPlanInner(String raw) {
         throw FormatException(
             'Update type "$type" is not supported (milestone|task|reward).');
       }
-      final id = (ru['id'] as String?)?.trim() ?? '';
+      final id = normalizeUpdateId((ru['id'] as String?) ?? '');
       if (id.isEmpty) {
         throw FormatException('An update of type "$type" is missing "id".');
       }
@@ -570,15 +571,26 @@ Future<({int milestones, int tasks, int rewards, int updates, int skipped})>
     };
     final tasksById = {for (final t in await db.getAllActiveTasks()) t.id: t};
     final rewardsById = {for (final r in await db.getAllRewards()) r.id: r};
+    final namesByType = {
+      'milestone': {
+        for (final e in milestonesById.entries) e.key: e.value.name
+      },
+      'task': {for (final e in tasksById.entries) e.key: e.value.name},
+      'reward': {for (final e in rewardsById.entries) e.key: e.value.name},
+    };
 
     for (final u in plan.updates) {
-      final applied = switch (u.type) {
-        'milestone' => await _applyMilestoneUpdate(
-            db, milestonesById[u.id], u.set),
-        'task' => await _applyTaskUpdate(db, tasksById[u.id], u.set),
-        'reward' => await _applyRewardUpdate(db, rewardsById[u.id], u.set),
-        _ => false,
-      };
+      final id = resolveUpdateId(u, namesByType[u.type] ?? const {});
+      final applied = id == null
+          ? false
+          : switch (u.type) {
+              'milestone' =>
+                await _applyMilestoneUpdate(db, milestonesById[id], u.set),
+              'task' => await _applyTaskUpdate(db, tasksById[id], u.set),
+              'reward' =>
+                await _applyRewardUpdate(db, rewardsById[id], u.set),
+              _ => false,
+            };
       applied ? uCount++ : skipped++;
     }
   }
@@ -596,6 +608,29 @@ Future<({int milestones, int tasks, int rewards, int updates, int skipped})>
 String? _cleanStr(dynamic v) => v is String && v.trim().isNotEmpty
     ? v.trim()
     : null;
+
+/// Models copy ids imperfectly: "[m:abc]", "m:abc", or even the item's
+/// name. Strip decoration here; name-fallback happens in [resolveUpdateId].
+String normalizeUpdateId(String raw) {
+  var s = raw.trim();
+  if (s.startsWith('[') && s.endsWith(']') && s.length > 2) {
+    s = s.substring(1, s.length - 1).trim();
+  }
+  return s.replaceFirst(RegExp(r'^[mtr]:\s*'), '').trim();
+}
+
+/// Resolves an update target against known items of its type: exact id
+/// first, then a UNIQUE case-insensitive name match (safe because the
+/// preview shows the resolved item before anything applies). Null = skip.
+String? resolveUpdateId(AiPlanUpdate u, Map<String, String> idToName) {
+  final id = normalizeUpdateId(u.id);
+  if (idToName.containsKey(id)) return id;
+  final needle = id.toLowerCase();
+  final matches = idToName.entries
+      .where((e) => e.value.toLowerCase() == needle)
+      .toList();
+  return matches.length == 1 ? matches.first.key : null;
+}
 
 Future<bool> _applyMilestoneUpdate(
     AppDatabase db, Milestone? m, Map<String, dynamic> set) async {
@@ -751,8 +786,9 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
   String? _error;
   bool _applying = false;
 
-  /// id → current name, for rendering update targets in the preview.
-  Map<String, String> _names = const {};
+  /// type → (id → current name), for resolving update targets in the
+  /// preview exactly the way apply will.
+  Map<String, Map<String, String>> _namesByType = const {};
 
   @override
   void initState() {
@@ -771,17 +807,14 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
 
   Future<void> _loadNames() async {
     final db = widget.hostRef.read(databaseProvider);
-    final names = <String, String>{};
-    for (final m in await db.getActiveMilestones()) {
-      names[m.id] = m.name;
-    }
-    for (final t in await db.getAllActiveTasks()) {
-      names[t.id] = t.name;
-    }
-    for (final r in await db.getAllRewards()) {
-      names[r.id] = r.name;
-    }
-    if (mounted) setState(() => _names = names);
+    final names = {
+      'milestone': {
+        for (final m in await db.getActiveMilestones()) m.id: m.name
+      },
+      'task': {for (final t in await db.getAllActiveTasks()) t.id: t.name},
+      'reward': {for (final r in await db.getAllRewards()) r.id: r.name},
+    };
+    if (mounted) setState(() => _namesByType = names);
   }
 
   @override
@@ -1017,18 +1050,23 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
                                   fontWeight: FontWeight.w800)),
                           const SizedBox(height: 6),
                           for (final u in plan.updates)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                _names.containsKey(u.id)
-                                    ? '✏️ ${u.type} “${_names[u.id]}”: ${u.set.entries.map((e) => '${e.key} → ${e.value ?? 'cleared'}').join(' · ')}'
-                                    : '⚠️ ${u.type} not found — this update will be skipped',
-                                style: AppTypography.caption.copyWith(
-                                    color: _names.containsKey(u.id)
-                                        ? context.appTextSecondary
-                                        : AppColors.missedRed),
-                              ),
-                            ),
+                            Builder(builder: (context) {
+                              final names =
+                                  _namesByType[u.type] ?? const {};
+                              final id = resolveUpdateId(u, names);
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  id != null
+                                      ? '✏️ ${u.type} “${names[id]}”: ${u.set.entries.map((e) => '${e.key} → ${e.value ?? 'cleared'}').join(' · ')}'
+                                      : '⚠️ ${u.type} “${u.id}” not found — this update will be skipped',
+                                  style: AppTypography.caption.copyWith(
+                                      color: id != null
+                                          ? context.appTextSecondary
+                                          : AppColors.missedRed),
+                                ),
+                              );
+                            }),
                         ],
                       ),
                     ),

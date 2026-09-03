@@ -126,6 +126,29 @@ Good luck with the training!
         throwsFormatException);
   });
 
+  test('update targeting survives model id-mangling', () {
+    // Prefixed, bracketed, and name-as-id forms must all resolve.
+    expect(normalizeUpdateId('m:abc123'), 'abc123');
+    expect(normalizeUpdateId('[t:xyz]'), 'xyz');
+    expect(normalizeUpdateId('  r: q1w2 '), 'q1w2');
+    expect(normalizeUpdateId('plainid'), 'plainid');
+
+    final names = {'id1': 'Run a 10K', 'id2': 'Read More', 'id3': 'read more'};
+    AiPlanUpdate u(String id) =>
+        AiPlanUpdate(type: 'milestone', id: id, set: const {'name': 'x'});
+    expect(resolveUpdateId(u('id2'), names), 'id2'); // exact id
+    expect(resolveUpdateId(u('m:id1'), names), 'id1'); // prefixed id
+    expect(resolveUpdateId(u('Run a 10K'), names), 'id1'); // unique name
+    expect(resolveUpdateId(u('Read More'), names),
+        isNull); // ambiguous name (case-insensitive dup) → skip
+    expect(resolveUpdateId(u('nope'), names), isNull);
+
+    // Parser normalizes ids up front.
+    final plan = parseAiPlan(
+        '{"updates": [{"type": "milestone", "id": "[m:abc]", "set": {"name": "N"}}]}');
+    expect(plan.updates.single.id, 'abc');
+  });
+
   test('clamps hostile values and rejects garbage kindly', () {
     final plan = parseAiPlan(
         '{"milestones": [{"name": "X", "tasks": [{"name": "Y", "recurrence": "daily", "points": 9999, "duration_minutes": -5}]}], "rewards": [{"name": "R", "points_threshold": -3}]}');
