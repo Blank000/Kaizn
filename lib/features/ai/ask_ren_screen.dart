@@ -385,10 +385,16 @@ $pack''';
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                 child: Row(
+                  // Field grows to 4 lines; keep the send button pinned to
+                  // its bottom edge instead of stretching with it.
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _input,
+                        minLines: 1,
+                        maxLines: 4,
+                        keyboardType: TextInputType.multiline,
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _send(),
                         style: AppTypography.body,
