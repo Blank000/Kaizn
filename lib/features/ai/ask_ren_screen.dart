@@ -8,6 +8,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/app_prefs.dart';
@@ -60,6 +61,11 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
   /// nothing. Opening the screen resumes the most recent thread.
   late String _threadId;
 
+  // Voice input: on-device speech recognition streaming into the field.
+  final SpeechToText _stt = SpeechToText();
+  bool _sttReady = false;
+  bool _listening = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,9 +75,52 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
 
   @override
   void dispose() {
+    _stt.stop();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleMic() async {
+    if (_listening) {
+      await _stt.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    if (!_sttReady) {
+      _sttReady = await _stt.initialize(
+        onStatus: (s) {
+          if ((s == 'done' || s == 'notListening') && mounted) {
+            setState(() => _listening = false);
+          }
+        },
+        onError: (_) {
+          if (mounted) setState(() => _listening = false);
+        },
+      );
+      if (!_sttReady) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Microphone unavailable — allow the permission and try again.')));
+        }
+        return;
+      }
+    }
+    setState(() => _listening = true);
+    HapticFeedback.selectionClick();
+    await _stt.listen(
+      onResult: (r) {
+        _input.text = r.recognizedWords;
+        _input.selection =
+            TextSelection.collapsed(offset: _input.text.length);
+      },
+      listenOptions: SpeechListenOptions(
+        listenFor: const Duration(seconds: 60),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+      ),
+    );
   }
 
   static String _newId() =>
@@ -415,7 +464,9 @@ $pack''';
                         onSubmitted: (_) => _send(),
                         style: AppTypography.body,
                         decoration: InputDecoration(
-                          hintText: 'Ask about your day, or say a goal…',
+                          hintText: _listening
+                              ? 'Listening…'
+                              : 'Ask about your day, or say a goal…',
                           hintStyle: AppTypography.body
                               .copyWith(color: context.appTextTertiary),
                           contentPadding: const EdgeInsets.symmetric(
@@ -425,7 +476,26 @@ $pack''';
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      onPressed: _toggleMic,
+                      tooltip:
+                          _listening ? 'Stop listening' : 'Speak to Pico',
+                      style: IconButton.styleFrom(
+                        backgroundColor: _listening
+                            ? AppColors.missedRed.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                      ),
+                      icon: Icon(
+                        _listening
+                            ? Icons.mic_rounded
+                            : Icons.mic_none_rounded,
+                        color: _listening
+                            ? AppColors.missedRed
+                            : context.appTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
                     IconButton.filled(
                       onPressed: _sending ? null : _send,
                       style: IconButton.styleFrom(

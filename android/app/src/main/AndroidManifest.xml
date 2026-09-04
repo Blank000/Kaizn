@@ -7,6 +7,15 @@
          instead of being batched up to hours late by Doze / inexact alarms. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- Pico voice input (speech-to-text). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <queries>
+        <!-- Android 11+: make the platform speech recognizer visible. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
+    </queries>
 
     <application
         android:label="habit_reward_tracker"
