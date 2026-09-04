@@ -214,7 +214,8 @@ Future<String> buildContextPack(AppDatabase db) async {
   b.writeln('"milestones", "rewards" and "updates" are each optional (at least one).');
   b.writeln('Schema rules: recurrence ∈ daily|weekly|monthly|once.');
   b.writeln('weekly needs days_of_week (mon..sun); monthly may set "day_of_month" (1-31);');
-  b.writeln('once may set "due_date" (YYYY-MM-DD). All fields except name+recurrence are optional.');
+  b.writeln('once SHOULD set "due_date" (YYYY-MM-DD) — dateless once tasks land in');
+  b.writeln('the Anytime list instead of a specific day. All fields except name+recurrence are optional.');
   b.writeln('Points 5-25 by effort. Keep plans humane: 1-4 tasks per milestone,');
   b.writeln('start small (the app has a 2-minute-version culture).');
   b.writeln('UPDATE rules: "id" is the characters inside the brackets WITHOUT the');

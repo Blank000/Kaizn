@@ -483,6 +483,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     final upNext = <_TodayItem>[];
+    // Dateless one-shots: real todos, but not TODAY's schedule — they get
+    // their own quiet section instead of flooding Up next every day.
+    final anytime = <_TodayItem>[];
     final doneToday = <_TodayItem>[];
     final skippedToday = <_TodayItem>[];
     final missedToday = <_TodayItem>[];
@@ -516,7 +519,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           periodState.isMissed ||
           periodState.isSkipped) continue;
       if (surfacesToday(t)) {
-        if (waitingOnAnchor(t)) {
+        final isAnytime = t.recurrence == TaskRecurrence.none &&
+            t.dueDate == null &&
+            t.stackedAfterTaskId == null;
+        if (isAnytime) {
+          anytime.add(_TodayItem(t, const TaskRowState()));
+        } else if (waitingOnAnchor(t)) {
           hiddenQueuedCount++;
         } else {
           upNext.add(_TodayItem(t, const TaskRowState()));
@@ -955,6 +963,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   )),
             ],
+          ],
+          // Anytime: dateless one-shots — doable any day, counted for no
+          // day. Give one a due date (or finish it) to move it along.
+          if (anytime.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _SectionHeader('Anytime · ${anytime.length}'),
+            ...anytime.map((it) => TaskTile(
+                  key: ValueKey(it.task.id),
+                  task: it.task,
+                  rowState: it.rowState,
+                  showTimerButton: true,
+                  meta: _metaForHome(
+                    it.task,
+                    milestoneById[it.task.milestoneId],
+                    it.rowState,
+                    anchorName:
+                        taskById[it.task.stackedAfterTaskId]?.name,
+                  ),
+                )),
           ],
                     ],
                   ),
