@@ -45,6 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pico, the in-app assistant, uses the microphone so you can speak your questions and plans instead of typing them.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition turns your voice into text for the Pico chat. Audio is processed by the device&apos;s speech service and is never sent to the app&apos;s AI provider.</string>
 	<key>GIDClientID</key>
 	<string>1056390719903-0uitubentgq7k6l15cf7ebodtjm6qeea.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>

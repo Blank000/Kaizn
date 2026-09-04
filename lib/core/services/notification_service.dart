@@ -204,7 +204,18 @@ class NotificationService {
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: androidSettings);
+    // iOS: Darwin settings are REQUIRED (the plugin throws on iOS without
+    // them, crashing launch). Permission prompts stay out of initialize()
+    // and fire from the requestPermission branch below instead.
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const settings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: notificationTapForeground,
@@ -219,6 +230,9 @@ class NotificationService {
       // this the OS silently downgrades our exactAllowWhileIdle to inexact and
       // task reminders drift by tens of minutes.
       await android?.requestExactAlarmsPermission();
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      await ios?.requestPermissions(alert: true, badge: true, sound: true);
     }
   }
 
