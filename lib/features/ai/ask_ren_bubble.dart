@@ -51,9 +51,17 @@ class _AskRenBubbleState extends State<AskRenBubble> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onPanUpdate: (d) => setState(() {
+                // Accumulate against the LIVE position, not the build-time
+                // capture — multiple drag events can land between frames,
+                // and stale math made him crawl behind the finger.
+                final cur = Offset(
+                  (_frac.dx * box.maxWidth).clamp(minX, maxX),
+                  (_frac.dy * box.maxHeight).clamp(minY, maxY),
+                );
                 _frac = Offset(
-                  ((pos.dx + d.delta.dx).clamp(minX, maxX)) / box.maxWidth,
-                  ((pos.dy + d.delta.dy).clamp(minY, maxY)) / box.maxHeight,
+                  ((cur.dx + d.delta.dx).clamp(minX, maxX)) / box.maxWidth,
+                  ((cur.dy + d.delta.dy).clamp(minY, maxY)) /
+                      box.maxHeight,
                 );
               }),
               onTap: () {
