@@ -30,6 +30,7 @@ class MilestonesScreen extends ConsumerWidget {
         title: Text('Milestones', style: AppTypography.heading1),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-milestones',
         onPressed: () => showMilestoneFormSheet(context),
         icon: const Icon(Icons.add_rounded),
         label: const Text('NEW MILESTONE'),

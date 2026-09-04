@@ -89,6 +89,7 @@ class MilestoneDetailScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-milestone-detail',
         onPressed: () =>
             showTaskFormSheet(context, milestoneId: milestoneId),
         icon: const Icon(Icons.add_rounded),

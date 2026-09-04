@@ -616,6 +616,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       floatingActionButton: showEmptyState
           ? null
           : FloatingActionButton.extended(
+              // Unique tag: the tab shell keeps every visited tab's FAB
+              // alive, and duplicate default hero tags crash route pushes.
+              heroTag: 'fab-home',
               onPressed: () => showTaskFormSheet(context),
               icon: const Icon(Icons.add_rounded),
               label: const Text('ADD TASK'),
