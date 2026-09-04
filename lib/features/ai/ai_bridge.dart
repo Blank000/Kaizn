@@ -759,10 +759,11 @@ Future<void> exportContextPack(BuildContext context, WidgetRef ref) async {
 }
 
 /// Paste → parse → preview → apply. [initialText] (e.g. a Pico chat reply)
-/// skips the paste step and lands straight on the preview.
-Future<void> showAiPlanImportSheet(BuildContext context, WidgetRef ref,
+/// skips the paste step and lands straight on the preview. Resolves to
+/// true only when the plan was actually applied.
+Future<bool?> showAiPlanImportSheet(BuildContext context, WidgetRef ref,
     {String? initialText}) {
-  return showModalBottomSheet(
+  return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -860,7 +861,7 @@ class _AiPlanImportSheetState extends State<_AiPlanImportSheet> {
       final n = await applyAiPlan(db, plan);
       HapticFeedback.mediumImpact();
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
       final parts = [
         if (n.milestones > 0)
           '${n.milestones} milestone${n.milestones == 1 ? '' : 's'}',

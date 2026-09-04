@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -37,7 +38,15 @@ class _ChatMsg {
   /// Local error notices render as bubbles but are never replayed to the
   /// API — the model must not see transport failures as its own words.
   final bool isError;
-  _ChatMsg(this.role, this.content, {this.isError = false});
+
+  /// Row id in ai_chat_messages once persisted.
+  String? dbId;
+
+  /// One-shot guard: a plan block can be applied exactly once.
+  bool planApplied;
+
+  _ChatMsg(this.role, this.content,
+      {this.isError = false, this.dbId, this.planApplied = false});
 }
 
 class _AskRenScreenState extends ConsumerState<AskRenScreen> {
@@ -79,16 +88,21 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
       _messages.addAll([
         for (final m in all)
           if (m.threadId == last)
-            _ChatMsg(m.role, m.content, isError: m.isError),
+            _ChatMsg(m.role, m.content,
+                isError: m.isError,
+                dbId: m.id,
+                planApplied: m.planApplied),
       ]);
     });
     _autoscroll();
   }
 
   Future<void> _persist(_ChatMsg m) {
+    final id = _newId();
+    m.dbId = id;
     return ref.read(databaseProvider).insertAiChatMessage(
           AiChatMessagesCompanion.insert(
-            id: _newId(),
+            id: id,
             threadId: _threadId,
             role: m.role,
             content: m.content,
@@ -177,7 +191,9 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
                               ..addAll([
                                 for (final m in msgs)
                                   _ChatMsg(m.role, m.content,
-                                      isError: m.isError),
+                                      isError: m.isError,
+                                      dbId: m.id,
+                                      planApplied: m.planApplied),
                               ]);
                           });
                           if (sheetCtx.mounted) {
@@ -492,8 +508,17 @@ $pack''';
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: context.appBorder),
                   ),
-                  child: SelectableText(m.content,
-                      style: AppTypography.body.copyWith(fontSize: 14.5)),
+                  // Assistant replies arrive as markdown; render it. User
+                  // text and error notices stay plain.
+                  child: isUser || m.isError
+                      ? SelectableText(m.content,
+                          style:
+                              AppTypography.body.copyWith(fontSize: 14.5))
+                      : MarkdownBody(
+                          data: m.content,
+                          selectable: true,
+                          styleSheet: _mdStyle(context),
+                        ),
                 ),
               ),
             ],
@@ -501,25 +526,74 @@ $pack''';
           if (hasPlan)
             Padding(
               padding: const EdgeInsets.only(left: 32, top: 6),
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  await showAiPlanImportSheet(context, ref,
-                      initialText: m.content);
-                  // The plan may have changed the data — rebuild the
-                  // system prompt so Ren answers from reality.
-                  _systemPrompt = null;
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                ),
-                icon: const Text('🦊'),
-                label: const Text('PREVIEW & CREATE THIS PLAN'),
-              ),
+              child: m.planApplied
+                  // One-shot: once applied, the button retires — no
+                  // duplicate milestones from an eager double-tap.
+                  ? OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Text('✅'),
+                      label: const Text('PLAN CREATED'),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: () async {
+                        final applied = await showAiPlanImportSheet(
+                            context, ref,
+                            initialText: m.content);
+                        if (applied != true) return;
+                        setState(() => m.planApplied = true);
+                        final id = m.dbId;
+                        if (id != null) {
+                          unawaited(ref
+                              .read(databaseProvider)
+                              .markAiChatPlanApplied(id));
+                        }
+                        // The data changed — rebuild the system prompt so
+                        // Pico answers from reality.
+                        _systemPrompt = null;
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                      ),
+                      icon: const Text('🤖'),
+                      label: const Text('PREVIEW & CREATE THIS PLAN'),
+                    ),
             ),
         ],
+      ),
+    );
+  }
+
+  MarkdownStyleSheet _mdStyle(BuildContext context) {
+    final base = MarkdownStyleSheet.fromTheme(Theme.of(context));
+    final mono = AppTypography.caption.copyWith(
+      fontFamily: 'monospace',
+      fontSize: 12,
+      color: context.appTextPrimary,
+      backgroundColor: Colors.transparent,
+    );
+    return base.copyWith(
+      p: AppTypography.body.copyWith(fontSize: 14.5),
+      listBullet: AppTypography.body.copyWith(fontSize: 14.5),
+      strong: AppTypography.body
+          .copyWith(fontSize: 14.5, fontWeight: FontWeight.w800),
+      h1: AppTypography.heading2,
+      h2: AppTypography.heading2.copyWith(fontSize: 17),
+      h3: AppTypography.body.copyWith(fontWeight: FontWeight.w800),
+      code: mono,
+      codeblockPadding: const EdgeInsets.all(10),
+      codeblockDecoration: BoxDecoration(
+        color: context.appPageBackground,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.appBorder),
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: context.appPageBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+            left: BorderSide(color: AppColors.primary, width: 3)),
       ),
     );
   }

@@ -17,6 +17,10 @@ class AiChatMessages extends Table {
   /// to the API.
   BoolColumn get isError => boolean().withDefault(const Constant(false))();
 
+  /// Assistant messages carrying a plan block: set once the user applies
+  /// it, so the create button stays disabled forever (no duplicate work).
+  BoolColumn get planApplied => boolean().withDefault(const Constant(false))();
+
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   @override

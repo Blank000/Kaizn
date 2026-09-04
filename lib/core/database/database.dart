@@ -66,8 +66,10 @@ class AppDatabase extends _$AppDatabase {
   //        triage tag; powers Goldilocks "3× same reason" suggestions later).
   // 10 → 11 Pico chat history: `ai_chat_messages` table (threads of the
   //        in-app AI assistant, stored locally).
+  // 11 → 12 `plan_applied` on ai_chat_messages — one-shot guard for the
+  //        chat's PREVIEW & CREATE button.
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration {
@@ -128,6 +130,10 @@ class AppDatabase extends _$AppDatabase {
           // v10 → v11: Pico chat history.
           await m.createTable(aiChatMessages);
         }
+        if (from < 12) {
+          // v11 → v12: applied-plan guard on chat messages.
+          await m.addColumn(aiChatMessages, aiChatMessages.planApplied);
+        }
       },
     );
   }
@@ -152,6 +158,10 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteAiChatThread(String threadId) =>
       (delete(aiChatMessages)..where((m) => m.threadId.equals(threadId)))
           .go();
+
+  Future<void> markAiChatPlanApplied(String id) =>
+      (update(aiChatMessages)..where((m) => m.id.equals(id)))
+          .write(const AiChatMessagesCompanion(planApplied: Value(true)));
 
   // ============ Change log (append-only mutation journal) ============
 

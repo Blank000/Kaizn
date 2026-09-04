@@ -90,6 +90,7 @@ dependencies:
 
   # Home screen widget (Android AppWidget + iOS WidgetKit).
   home_widget: ^0.7.0
+  flutter_markdown_plus: ^1.0.7
 
 dev_dependencies:
   flutter_test:

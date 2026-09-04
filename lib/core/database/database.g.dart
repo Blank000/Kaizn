@@ -4990,6 +4990,21 @@ class $AiChatMessagesTable extends AiChatMessages
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _planAppliedMeta = const VerificationMeta(
+    'planApplied',
+  );
+  @override
+  late final GeneratedColumn<bool> planApplied = GeneratedColumn<bool>(
+    'plan_applied',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("plan_applied" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -5009,6 +5024,7 @@ class $AiChatMessagesTable extends AiChatMessages
     role,
     content,
     isError,
+    planApplied,
     createdAt,
   ];
   @override
@@ -5058,6 +5074,15 @@ class $AiChatMessagesTable extends AiChatMessages
         isError.isAcceptableOrUnknown(data['is_error']!, _isErrorMeta),
       );
     }
+    if (data.containsKey('plan_applied')) {
+      context.handle(
+        _planAppliedMeta,
+        planApplied.isAcceptableOrUnknown(
+          data['plan_applied']!,
+          _planAppliedMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -5093,6 +5118,10 @@ class $AiChatMessagesTable extends AiChatMessages
         DriftSqlType.bool,
         data['${effectivePrefix}is_error'],
       )!,
+      planApplied: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}plan_applied'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -5117,6 +5146,10 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
   /// Local error notices (transport failures) — rendered, never replayed
   /// to the API.
   final bool isError;
+
+  /// Assistant messages carrying a plan block: set once the user applies
+  /// it, so the create button stays disabled forever (no duplicate work).
+  final bool planApplied;
   final DateTime createdAt;
   const AiChatMessage({
     required this.id,
@@ -5124,6 +5157,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
     required this.role,
     required this.content,
     required this.isError,
+    required this.planApplied,
     required this.createdAt,
   });
   @override
@@ -5134,6 +5168,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
     map['role'] = Variable<String>(role);
     map['content'] = Variable<String>(content);
     map['is_error'] = Variable<bool>(isError);
+    map['plan_applied'] = Variable<bool>(planApplied);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -5145,6 +5180,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
       role: Value(role),
       content: Value(content),
       isError: Value(isError),
+      planApplied: Value(planApplied),
       createdAt: Value(createdAt),
     );
   }
@@ -5160,6 +5196,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
       role: serializer.fromJson<String>(json['role']),
       content: serializer.fromJson<String>(json['content']),
       isError: serializer.fromJson<bool>(json['isError']),
+      planApplied: serializer.fromJson<bool>(json['planApplied']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -5172,6 +5209,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
       'role': serializer.toJson<String>(role),
       'content': serializer.toJson<String>(content),
       'isError': serializer.toJson<bool>(isError),
+      'planApplied': serializer.toJson<bool>(planApplied),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -5182,6 +5220,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
     String? role,
     String? content,
     bool? isError,
+    bool? planApplied,
     DateTime? createdAt,
   }) => AiChatMessage(
     id: id ?? this.id,
@@ -5189,6 +5228,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
     role: role ?? this.role,
     content: content ?? this.content,
     isError: isError ?? this.isError,
+    planApplied: planApplied ?? this.planApplied,
     createdAt: createdAt ?? this.createdAt,
   );
   AiChatMessage copyWithCompanion(AiChatMessagesCompanion data) {
@@ -5198,6 +5238,9 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
       role: data.role.present ? data.role.value : this.role,
       content: data.content.present ? data.content.value : this.content,
       isError: data.isError.present ? data.isError.value : this.isError,
+      planApplied: data.planApplied.present
+          ? data.planApplied.value
+          : this.planApplied,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -5210,6 +5253,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
           ..write('role: $role, ')
           ..write('content: $content, ')
           ..write('isError: $isError, ')
+          ..write('planApplied: $planApplied, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -5217,7 +5261,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
 
   @override
   int get hashCode =>
-      Object.hash(id, threadId, role, content, isError, createdAt);
+      Object.hash(id, threadId, role, content, isError, planApplied, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -5227,6 +5271,7 @@ class AiChatMessage extends DataClass implements Insertable<AiChatMessage> {
           other.role == this.role &&
           other.content == this.content &&
           other.isError == this.isError &&
+          other.planApplied == this.planApplied &&
           other.createdAt == this.createdAt);
 }
 
@@ -5236,6 +5281,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
   final Value<String> role;
   final Value<String> content;
   final Value<bool> isError;
+  final Value<bool> planApplied;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const AiChatMessagesCompanion({
@@ -5244,6 +5290,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
     this.role = const Value.absent(),
     this.content = const Value.absent(),
     this.isError = const Value.absent(),
+    this.planApplied = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -5253,6 +5300,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
     required String role,
     required String content,
     this.isError = const Value.absent(),
+    this.planApplied = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -5265,6 +5313,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
     Expression<String>? role,
     Expression<String>? content,
     Expression<bool>? isError,
+    Expression<bool>? planApplied,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -5274,6 +5323,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
       if (role != null) 'role': role,
       if (content != null) 'content': content,
       if (isError != null) 'is_error': isError,
+      if (planApplied != null) 'plan_applied': planApplied,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -5285,6 +5335,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
     Value<String>? role,
     Value<String>? content,
     Value<bool>? isError,
+    Value<bool>? planApplied,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -5294,6 +5345,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
       role: role ?? this.role,
       content: content ?? this.content,
       isError: isError ?? this.isError,
+      planApplied: planApplied ?? this.planApplied,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -5317,6 +5369,9 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
     if (isError.present) {
       map['is_error'] = Variable<bool>(isError.value);
     }
+    if (planApplied.present) {
+      map['plan_applied'] = Variable<bool>(planApplied.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -5334,6 +5389,7 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
           ..write('role: $role, ')
           ..write('content: $content, ')
           ..write('isError: $isError, ')
+          ..write('planApplied: $planApplied, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -8624,6 +8680,7 @@ typedef $$AiChatMessagesTableCreateCompanionBuilder =
       required String role,
       required String content,
       Value<bool> isError,
+      Value<bool> planApplied,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -8634,6 +8691,7 @@ typedef $$AiChatMessagesTableUpdateCompanionBuilder =
       Value<String> role,
       Value<String> content,
       Value<bool> isError,
+      Value<bool> planApplied,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -8669,6 +8727,11 @@ class $$AiChatMessagesTableFilterComposer
 
   ColumnFilters<bool> get isError => $composableBuilder(
     column: $table.isError,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get planApplied => $composableBuilder(
+    column: $table.planApplied,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8712,6 +8775,11 @@ class $$AiChatMessagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get planApplied => $composableBuilder(
+    column: $table.planApplied,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -8741,6 +8809,11 @@ class $$AiChatMessagesTableAnnotationComposer
 
   GeneratedColumn<bool> get isError =>
       $composableBuilder(column: $table.isError, builder: (column) => column);
+
+  GeneratedColumn<bool> get planApplied => $composableBuilder(
+    column: $table.planApplied,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -8784,6 +8857,7 @@ class $$AiChatMessagesTableTableManager
                 Value<String> role = const Value.absent(),
                 Value<String> content = const Value.absent(),
                 Value<bool> isError = const Value.absent(),
+                Value<bool> planApplied = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AiChatMessagesCompanion(
@@ -8792,6 +8866,7 @@ class $$AiChatMessagesTableTableManager
                 role: role,
                 content: content,
                 isError: isError,
+                planApplied: planApplied,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -8802,6 +8877,7 @@ class $$AiChatMessagesTableTableManager
                 required String role,
                 required String content,
                 Value<bool> isError = const Value.absent(),
+                Value<bool> planApplied = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AiChatMessagesCompanion.insert(
@@ -8810,6 +8886,7 @@ class $$AiChatMessagesTableTableManager
                 role: role,
                 content: content,
                 isError: isError,
+                planApplied: planApplied,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
