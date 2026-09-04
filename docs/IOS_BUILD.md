@@ -36,13 +36,15 @@ flutter run --release            # device attached
 flutter build ipa                # paid account: produces the .ipa for TestFlight
 ```
 
-## If Podfile complains about the platform version
-First `pod install` generates `ios/Podfile`. If any pod demands a newer
-iOS, uncomment/edit its second line to:
-```ruby
-platform :ios, '13.0'
-```
-then `pod install` again. (The Xcode project is already at 13.0.)
+## Podfile & recovery
+`ios/Podfile` is committed and already pins `platform :ios, '13.0'` with
+per-pod deployment targets (ported from the old ios-release branch) — no
+generation step needed. If a build hits codesign / xattr / stale-Pods
+errors, run the canonical reset: `bash tools/ios_reset.sh` (it also warns
+if the project path contains a space — the classic silent killer).
+`iOS_SETUP.md` in the repo root is the deeper first-Mac guide (Xcode
+signing, Developer Mode, Google Sign-In OAuth gotchas) written during the
+first real Mac attempt — use it if this runbook's happy path fails.
 
 ## Google Sign-In on iOS — verify once
 Info.plist already carries `GIDClientID` and the reversed-client-id URL
