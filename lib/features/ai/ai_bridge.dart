@@ -186,6 +186,7 @@ Future<String> buildContextPack(AppDatabase db) async {
       "tasks": [
         {
           "name": "Morning run",
+          "description": "optional — the how/why; shown during focus runs",
           "recurrence": "weekly",
           "interval": 1,
           "days_of_week": ["mon", "wed", "fri"],
@@ -231,6 +232,7 @@ Future<String> buildContextPack(AppDatabase db) async {
 
 class AiPlanTask {
   final String name;
+  final String? description;
   final TaskRecurrence recurrence;
   final int interval;
   final List<int> daysOfWeek; // 1=Mon..7=Sun
@@ -244,6 +246,7 @@ class AiPlanTask {
 
   AiPlanTask({
     required this.name,
+    this.description,
     required this.recurrence,
     required this.interval,
     required this.daysOfWeek,
@@ -313,9 +316,9 @@ class AiPlanUpdate {
   static const allowedKeys = {
     'milestone': {'name', 'description', 'target_date', 'completion_bonus'},
     'task': {
-      'name', 'points', 'start_time', 'reminder', 'duration_minutes',
-      'tiny_version', 'recurrence', 'days_of_week', 'day_of_month',
-      'interval', 'due_date',
+      'name', 'description', 'points', 'start_time', 'reminder',
+      'duration_minutes', 'tiny_version', 'recurrence', 'days_of_week',
+      'day_of_month', 'interval', 'due_date',
     },
     'reward': {'name', 'description', 'points_threshold'},
   };
@@ -435,6 +438,7 @@ AiPlan _parseAiPlanInner(String raw) {
         final dom = (rt['day_of_month'] as num?)?.toInt();
         tasks.add(AiPlanTask(
           name: tName,
+          description: (rt['description'] as String?)?.trim(),
           recurrence: rec,
           interval: min(12, max(1, (rt['interval'] as num?)?.toInt() ?? 1)),
           daysOfWeek: days,
@@ -539,6 +543,8 @@ Future<({int milestones, int tasks, int rewards, int updates, int skipped})>
         id: _generateId(),
         milestoneId: Value(mId),
         name: t.name,
+        description:
+            Value(t.description?.isEmpty ?? true ? null : t.description),
         pointsPerCompletion: Value(t.points),
         recurrence: Value(t.recurrence),
         recurrenceConfig: Value(t.rule().toJsonString()),
@@ -656,6 +662,9 @@ Future<bool> _applyTaskUpdate(
   if (t == null) return false;
   var updated = t.copyWith(
     name: _cleanStr(set['name']) ?? t.name,
+    description: set.containsKey('description')
+        ? Value(_cleanStr(set['description']))
+        : Value(t.description),
     pointsPerCompletion: set['points'] is num
         ? min(100, max(1, (set['points'] as num).toInt()))
         : t.pointsPerCompletion,

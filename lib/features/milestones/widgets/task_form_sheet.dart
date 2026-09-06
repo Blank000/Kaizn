@@ -58,6 +58,7 @@ class _TaskFormSheet extends ConsumerStatefulWidget {
 
 class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   late final TextEditingController _nameController;
+  late final TextEditingController _descController;
   late final TextEditingController _pointsController;
   late final TextEditingController _tinyController;
 
@@ -110,6 +111,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     super.initState();
     final t = widget.task;
     _nameController = TextEditingController(text: t?.name ?? '');
+    _descController = TextEditingController(text: t?.description ?? '');
     _pointsController =
         TextEditingController(text: (t?.pointsPerCompletion ?? 10).toString());
     _tinyController = TextEditingController(text: t?.tinyName ?? '');
@@ -232,6 +234,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   @override
   void dispose() {
     _nameController.dispose();
+    _descController.dispose();
     _pointsController.dispose();
     _tinyController.dispose();
     super.dispose();
@@ -357,6 +360,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         : _startTime!.hour * 60 + _startTime!.minute;
     final tinyTrimmed = _tinyController.text.trim();
     final tinyName = tinyTrimmed.isEmpty ? null : tinyTrimmed;
+    final descTrimmed = _descController.text.trim();
+    final description = descTrimmed.isEmpty ? null : descTrimmed;
     // Persist the override only; a null reminderMinute with reminderEnabled on
     // means "follow the start time".
     final reminderMin = _reminderOverride == null
@@ -370,6 +375,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
       final t = widget.task!;
       await db.updateTask(t.copyWith(
         name: name,
+        description: Value(description),
         milestoneId: Value(_selectedMilestoneId),
         pointsPerCompletion: points,
         recurrence: _frequency,
@@ -388,6 +394,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         id: _generateId(),
         milestoneId: Value(_selectedMilestoneId),
         name: name,
+        description: Value(description),
         pointsPerCompletion: Value(points),
         recurrence: Value(_frequency),
         recurrenceConfig: Value(cfg),
@@ -449,6 +456,17 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 decoration: const InputDecoration(
                   labelText: 'Name',
                   hintText: 'e.g. 20 pushups',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _descController,
+                textCapitalization: TextCapitalization.sentences,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  hintText: 'Why it matters, how to do it, links…',
                 ),
               ),
               const SizedBox(height: 16),

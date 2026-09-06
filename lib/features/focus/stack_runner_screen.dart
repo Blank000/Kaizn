@@ -259,6 +259,19 @@ class _StackRunnerScreenState extends ConsumerState<StackRunnerScreen> {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
+              // The description is the how/why — most useful right here,
+              // mid-effort, where the screen has room for it.
+              if (task.description?.isNotEmpty ?? false) ...[
+                const SizedBox(height: 8),
+                Text(
+                  task.description!,
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
               const SizedBox(height: 28),
               SizedBox(
                 width: 220,
