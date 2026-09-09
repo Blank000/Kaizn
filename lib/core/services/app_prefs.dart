@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// App-level user preferences stored in SharedPreferences.
@@ -100,14 +102,16 @@ class AppPrefs {
   static const _nmtDismissedKey = 'nmt_dismissed_date';
   static DateTime? _nmtDismissedCache;
 
+  // Legacy single-timer keys (schema before multi-session). Read once at
+  // hydrate to fold any in-flight timer into the new list, then removed.
   static const _activeTimerTaskIdKey = 'active_timer_task_id';
   static const _activeTimerStartedAtKey = 'active_timer_started_at_millis';
   static const _activeTimerAccumKey = 'active_timer_accum_seconds';
   static const _activeTimerPausedKey = 'active_timer_paused';
-  static String? _activeTimerTaskIdCache;
-  static int? _activeTimerStartedAtCache;
-  static int _activeTimerAccumCache = 0;
-  static bool _activeTimerPausedCache = false;
+
+  /// JSON array of stopwatch sessions — see TimerService.
+  static const _timerSessionsKey = 'timer_sessions_json';
+  static String _timerSessionsCache = '[]';
 
   static const _coachDismissedKey = 'coach_dismissed_date';
   static DateTime? _coachDismissedCache;
@@ -122,10 +126,8 @@ class AppPrefs {
     _homeViewModeCache = p.getString(_homeViewModeKey) ?? 'list';
     final nmtIso = p.getString(_nmtDismissedKey);
     _nmtDismissedCache = nmtIso == null ? null : DateTime.tryParse(nmtIso);
-    _activeTimerTaskIdCache = p.getString(_activeTimerTaskIdKey);
-    _activeTimerStartedAtCache = p.getInt(_activeTimerStartedAtKey);
-    _activeTimerAccumCache = p.getInt(_activeTimerAccumKey) ?? 0;
-    _activeTimerPausedCache = p.getBool(_activeTimerPausedKey) ?? false;
+    _timerSessionsCache = p.getString(_timerSessionsKey) ?? '[]';
+    await _migrateLegacyTimer(p);
     final coachIso = p.getString(_coachDismissedKey);
     _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
     final restIso = p.getString(_restModeUntilKey);
@@ -344,59 +346,67 @@ class AppPrefs {
     _nmtDismissedCache = dateOnly;
   }
 
-  // ── Active stopwatch timer (stopwatch-lite) ──────────────────────────────
-  // Four values ARE the whole persistence story: elapsed = accumulated
-  // (banked by pauses) + wall-clock time since the last resume. Everything
-  // is recomputed on read, so the timer survives app kill and OEM process
-  // death with zero background services. Sync caches so the Home banner can
-  // render on the first frame after a cold start. Pause is ALWAYS manual —
-  // the app never auto-pauses on backgrounding (timing off-screen work is
-  // legitimate; owner decision, do not "fix").
+  // ── Stopwatch sessions ───────────────────────────────────────────────────
+  // One JSON array IS the whole live-state persistence story: each entry is
+  // {sessionId, taskId, startedAt, accum, paused}, and elapsed is always
+  // recomputed on read as banked seconds + wall clock since the last resume.
+  // No background service, nothing for an aggressive OEM to kill; a cold
+  // start renders correctly on the first frame via the sync cache.
+  //
+  // Multiple sessions may exist (one per task) but at most one is unpaused —
+  // TimerService owns that invariant. Pause is ALWAYS deliberate: the app
+  // never auto-pauses on backgrounding (timing off-screen work is
+  // legitimate; owner decision, do not "fix"). Starting a second task is the
+  // one exception, and it is logged to the ledger as `auto_pause`.
 
-  static String? get activeTimerTaskIdSync => _activeTimerTaskIdCache;
-  static int? get activeTimerStartedAtMillisSync => _activeTimerStartedAtCache;
-  static int get activeTimerAccumSecondsSync => _activeTimerAccumCache;
-  static bool get activeTimerPausedSync => _activeTimerPausedCache;
+  static String get timerSessionsJsonSync => _timerSessionsCache;
 
-  static Future<void> setActiveTimer(String taskId, int startedAtMillis) async {
+  static Future<void> setTimerSessionsJson(String json) async {
     final p = await SharedPreferences.getInstance();
-    await p.setString(_activeTimerTaskIdKey, taskId);
-    await p.setInt(_activeTimerStartedAtKey, startedAtMillis);
-    await p.setInt(_activeTimerAccumKey, 0);
-    await p.setBool(_activeTimerPausedKey, false);
-    _activeTimerTaskIdCache = taskId;
-    _activeTimerStartedAtCache = startedAtMillis;
-    _activeTimerAccumCache = 0;
-    _activeTimerPausedCache = false;
+    await p.setString(_timerSessionsKey, json);
+    _timerSessionsCache = json;
   }
 
-  /// Pause/resume bookkeeping: [accumSeconds] is the banked total of all
-  /// finished run segments; [startedAtMillis] restarts the wall clock on
-  /// resume (ignored while paused).
-  static Future<void> setActiveTimerRunState({
-    required int startedAtMillis,
-    required int accumSeconds,
-    required bool paused,
-  }) async {
+  /// Re-reads the sessions from disk before a mutation.
+  ///
+  /// The sync cache is per-isolate, and the notification background isolate
+  /// writes to the same key (a "Done" tap ends a running session). Without
+  /// this, the foreground's next write would resurrect a session the
+  /// background isolate just finished. Not a lock — SharedPreferences has
+  /// none — but it closes the window to the width of one write.
+  static Future<String> reloadTimerSessionsJson() async {
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_activeTimerStartedAtKey, startedAtMillis);
-    await p.setInt(_activeTimerAccumKey, accumSeconds);
-    await p.setBool(_activeTimerPausedKey, paused);
-    _activeTimerStartedAtCache = startedAtMillis;
-    _activeTimerAccumCache = accumSeconds;
-    _activeTimerPausedCache = paused;
+    try {
+      await p.reload();
+    } catch (_) {
+      // Reload is best-effort; the cached value is still usable.
+    }
+    _timerSessionsCache = p.getString(_timerSessionsKey) ?? '[]';
+    return _timerSessionsCache;
   }
 
-  static Future<void> clearActiveTimer() async {
-    final p = await SharedPreferences.getInstance();
+  /// Folds a pre-multi-session timer into the new list, once. Preserves the
+  /// running clock across the upgrade instead of dropping the user's session.
+  static Future<void> _migrateLegacyTimer(SharedPreferences p) async {
+    final legacyTaskId = p.getString(_activeTimerTaskIdKey);
+    if (legacyTaskId == null) return;
+    final startedAt = p.getInt(_activeTimerStartedAtKey);
+    if (startedAt != null && _timerSessionsCache == '[]') {
+      final entry = {
+        'sessionId': 'legacy-$startedAt',
+        'taskId': legacyTaskId,
+        'startedAt': startedAt,
+        'accum': p.getInt(_activeTimerAccumKey) ?? 0,
+        'paused': p.getBool(_activeTimerPausedKey) ?? false,
+      };
+      final json = jsonEncode([entry]);
+      await p.setString(_timerSessionsKey, json);
+      _timerSessionsCache = json;
+    }
     await p.remove(_activeTimerTaskIdKey);
     await p.remove(_activeTimerStartedAtKey);
     await p.remove(_activeTimerAccumKey);
     await p.remove(_activeTimerPausedKey);
-    _activeTimerTaskIdCache = null;
-    _activeTimerStartedAtCache = null;
-    _activeTimerAccumCache = 0;
-    _activeTimerPausedCache = false;
   }
 
   /// Date the Goldilocks coach banner was dismissed — max one suggestion

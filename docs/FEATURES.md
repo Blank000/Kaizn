@@ -66,8 +66,20 @@ hands.
 - Date stepper: past-day review, future-day plan preview (both read-only).
 
 ## Focus tools
-- Per-task **stopwatch** (pause/resume, never auto-pauses; persistent
-  banner; conflict dialog; duration lands on the completion row).
+- Per-task **stopwatch**: every task can hold its own session, but only one
+  ever runs — starting or resuming a second task banks and pauses the first
+  instead of asking you to discard it. Never auto-pauses on backgrounding.
+  Duration lands on the completion row (a paused session still counts).
+- **Where a timer shows**: the pinned Home banner carries ONLY the running
+  session (matched-mass PAUSE and STOP buttons); paused work shows as an
+  amber "⏸ 12:34" pill in its own task row, on every surface that renders a
+  task tile. Top of the app answers one question: what am I doing now?
+- **Time ledger** (`timer_events`, append-only): every start / pause /
+  auto-pause / resume / stop / complete / discard is logged with the clock
+  reading and wall-clock time. Per task via long-press → *Time log* or the
+  stop sheet; across all tasks at `/stats/time-log` — session cards, active
+  vs. away time, typical session length, most common start hour,
+  interruption counts. Nothing edits or deletes these rows.
 - **Stack Runner**: guided queue execution — countdown per step, DONE /
   SKIP / +5 min / 2-min rescue, wakelock, auto-advance; **Ren meditates
   beside the timer, opens one eye on pause**, leaves before the fanfare.

@@ -6,6 +6,7 @@ import '../../core/database/database.dart';
 import '../../core/services/app_prefs.dart';
 import '../../core/services/notification_scheduler.dart';
 import '../../core/services/shield_service.dart';
+import '../../core/services/timer_service.dart';
 import '../../core/services/widget_service.dart';
 
 /// Global provider for the app database
@@ -23,6 +24,8 @@ final databaseProvider = Provider<AppDatabase>((ref) {
   Future.microtask(() => WidgetService.init(database));
   // Wire notification scheduling to this database (idempotent).
   Future.microtask(() => NotificationScheduler.init(database));
+  // Give the stopwatch somewhere to write its time ledger.
+  TimerService.attachLedger(database);
   return database;
 });
 

@@ -12,13 +12,19 @@ import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
 import 'moment_celebrations.dart';
 import 'reward_unlock_snackbar.dart';
+import 'time_ledger_sheet.dart';
 
-/// Stop-flow for the running stopwatch. Completion surface #5 — the MARK
+/// Stop-flow for a stopwatch session. Completion surface #5 — the MARK
 /// COMPLETE branch routes through TaskCompletionService like every other
 /// call site, so stacking/identity/clutch hooks all fire here too.
-Future<void> showStopTimerSheet(BuildContext context, WidgetRef ref) async {
+///
+/// Defaults to the running session; pass [taskId] to stop a specific one
+/// (a paused session stopped from its own task row, for instance).
+Future<void> showStopTimerSheet(BuildContext context, WidgetRef ref,
+    {String? taskId}) async {
   // Re-read at open: the sheet can race a completion from another surface.
-  final timer = TimerService.current;
+  final timer =
+      taskId == null ? TimerService.running : TimerService.forTask(taskId);
   if (timer == null) return;
 
   final db = ref.read(databaseProvider);
@@ -27,7 +33,7 @@ Future<void> showStopTimerSheet(BuildContext context, WidgetRef ref) async {
 
   if (task == null) {
     // Task was deleted while its timer ran.
-    await TimerService.clear();
+    await TimerService.clear(timer.taskId, kind: TimerEventKind.vanished);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('That task vanished — timer cleared.')),
@@ -52,10 +58,11 @@ Future<void> showStopTimerSheet(BuildContext context, WidgetRef ref) async {
       elapsedSeconds: elapsed,
       cappedSeconds: capped,
       overCap: overCap,
+      isPaused: timer.isPaused,
       alreadyDoneToday: existing != null,
       existingCompletionId: existing?.id,
       hostContext: context,
-      dbRef: ref,
+      db: db,
     ),
   );
 }
@@ -65,23 +72,29 @@ class _StopTimerSheet extends StatelessWidget {
   final int elapsedSeconds;
   final int cappedSeconds;
   final bool overCap;
+  final bool isPaused;
   final bool alreadyDoneToday;
   final String? existingCompletionId;
 
-  /// Context/ref of the SCREEN under the sheet — snackbars must outlive the
+  /// Context of the SCREEN under the sheet — snackbars must outlive the
   /// sheet's own context.
   final BuildContext hostContext;
-  final WidgetRef dbRef;
+
+  /// The database itself, NOT the caller's WidgetRef: the tile that opened
+  /// this sheet can be disposed while the sheet is up (list rebuild, one-shot
+  /// completed elsewhere), and a `ref.read` after that throws.
+  final AppDatabase db;
 
   const _StopTimerSheet({
     required this.task,
     required this.elapsedSeconds,
     required this.cappedSeconds,
     required this.overCap,
+    required this.isPaused,
     required this.alreadyDoneToday,
     required this.existingCompletionId,
     required this.hostContext,
-    required this.dbRef,
+    required this.db,
   });
 
   @override
@@ -111,7 +124,11 @@ class _StopTimerSheet extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              alreadyDoneToday ? 'Already done today ✅' : 'Nice session! ⏱',
+              alreadyDoneToday
+                  ? 'Already done today ✅'
+                  : isPaused
+                      ? 'Paused session ⏸'
+                      : 'Nice session! ⏱',
               style: AppTypography.heading2,
               textAlign: TextAlign.center,
             ),
@@ -161,11 +178,20 @@ class _StopTimerSheet extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('KEEP TIMING'),
+                onPressed: () async {
+                  Navigator.of(context).pop();
+                  if (isPaused) {
+                    await TimerService.resume(task.id, taskName: task.name);
+                  }
+                },
+                child: Text(isPaused ? 'RESUME TIMER' : 'KEEP TIMING'),
               ),
             ],
             const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => _showLedger(context),
+              child: const Text('Time log for this task'),
+            ),
             TextButton(
               onPressed: () => _discard(context),
               child: const Text('Discard session'),
@@ -178,10 +204,17 @@ class _StopTimerSheet extends StatelessWidget {
 
   Future<void> _markComplete(BuildContext sheetContext) async {
     Navigator.of(sheetContext).pop();
-    // Double-tap / stale-sheet guard: the timer may already be gone.
-    if (TimerService.current?.taskId != task.id) return;
+    // Stale-sheet guard: another surface finished this session while the
+    // sheet was open. Say so instead of doing nothing at all.
+    if (TimerService.forTask(task.id) == null) {
+      if (hostContext.mounted) {
+        ScaffoldMessenger.of(hostContext).showSnackBar(const SnackBar(
+          content: Text('That session was already wrapped up elsewhere.'),
+        ));
+      }
+      return;
+    }
 
-    final db = dbRef.read(databaseProvider);
     // Timer auto-attach inside the service stamps the duration + clears.
     final result = await TaskCompletionService.completeToday(db, task);
     HapticFeedback.mediumImpact();
@@ -217,26 +250,55 @@ class _StopTimerSheet extends StatelessWidget {
 
   Future<void> _addTime(BuildContext sheetContext) async {
     Navigator.of(sheetContext).pop();
-    if (TimerService.current?.taskId != task.id) return;
-    final cid = existingCompletionId;
-    final db = dbRef.read(databaseProvider);
-    if (cid != null) {
-      await db.addDurationToCompletion(cid, cappedSeconds);
+    // Re-read the clock at press time. The sheet has no ticker, so its
+    // snapshot goes stale the moment it opens — crediting that would quietly
+    // lose however long the user sat looking at it.
+    final live = TimerService.forTask(task.id);
+    if (live == null) {
+      if (hostContext.mounted) {
+        ScaffoldMessenger.of(hostContext).showSnackBar(const SnackBar(
+          content: Text('That session was already wrapped up elsewhere.'),
+        ));
+      }
+      return;
     }
-    await TimerService.clear();
+    final seconds = TimerService.cappedElapsedSeconds(live);
+    final cid = existingCompletionId;
+    // The completion may have been undone under us; only credit a row that
+    // is still there.
+    final stillThere =
+        cid == null ? null : await db.getCompletionForTaskOn(task.id, DateTime.now());
+    if (stillThere != null) {
+      await db.addDurationToCompletion(stillThere.id, seconds);
+    }
+    await TimerService.clear(task.id,
+        kind: stillThere != null
+            ? TimerEventKind.complete
+            : TimerEventKind.stop,
+        taskName: task.name);
     HapticFeedback.lightImpact();
     if (hostContext.mounted) {
       // No UNDO — undoing would nuke the whole completion, not just the time.
       ScaffoldMessenger.of(hostContext).showSnackBar(SnackBar(
-        content: Text(
-            'Added ${TimerService.formatElapsed(cappedSeconds)} to ${task.name} ⏱'),
+        content: Text(stillThere == null
+            ? "That completion is gone, so the time wasn't added. "
+                'Session closed.'
+            : 'Added ${TimerService.formatElapsed(seconds)} to ${task.name} ⏱'),
       ));
+    }
+  }
+
+  Future<void> _showLedger(BuildContext sheetContext) async {
+    Navigator.of(sheetContext).pop();
+    if (hostContext.mounted) {
+      await showTimeLedgerSheet(hostContext, db, task);
     }
   }
 
   Future<void> _discard(BuildContext sheetContext) async {
     Navigator.of(sheetContext).pop();
-    await TimerService.clear();
+    await TimerService.clear(task.id,
+        kind: TimerEventKind.discard, taskName: task.name);
     HapticFeedback.lightImpact();
     if (hostContext.mounted) {
       ScaffoldMessenger.of(hostContext).showSnackBar(
@@ -247,57 +309,44 @@ class _StopTimerSheet extends StatelessWidget {
   }
 }
 
-/// "One timer at a time" — shown when starting a timer while another runs.
-Future<void> showTimerConflictDialog(
+/// The one timer gesture, shared by every surface that shows a task.
+///
+/// - No session → start one. Anything already running is paused and banked,
+///   never discarded, and we say whose clock we just stopped.
+/// - Paused session → resume it (same auto-pause rule).
+/// - Running session → open the stop sheet.
+///
+/// This replaced the old "One timer at a time" conflict dialog: switching
+/// tasks is a normal thing to do, not an error to arbitrate.
+Future<void> handleTaskTimerTap(
   BuildContext context,
-  WidgetRef ref, {
-  required Task newTask,
-}) async {
-  final running = TimerService.current;
-  if (running == null) {
-    await TimerService.start(newTask.id);
+  WidgetRef ref,
+  Task task,
+) async {
+  final existing = TimerService.forTask(task.id);
+
+  if (existing != null && !existing.isPaused) {
+    await showStopTimerSheet(context, ref, taskId: task.id);
     return;
   }
-  final db = ref.read(databaseProvider);
-  final runningTask = await db.getTaskById(running.taskId);
+
+  final resuming = existing != null;
+  final autoPausedId = resuming
+      ? await TimerService.resume(task.id, taskName: task.name)
+      : await TimerService.start(task.id, taskName: task.name);
+  HapticFeedback.lightImpact();
   if (!context.mounted) return;
 
-  final choice = await showDialog<String>(
-    context: context,
-    builder: (dctx) => AlertDialog(
-      title: const Text('One timer at a time ⏱'),
-      content: Text(runningTask == null
-          ? "You're already timing another task."
-          : "You're already timing '${runningTask.name}'."),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dctx).pop('finish'),
-          child: const Text('FINISH THAT ONE'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(dctx).pop('discard'),
-          child: const Text('DISCARD IT'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(dctx).pop(null),
-          child: const Text('CANCEL'),
-        ),
-      ],
-    ),
-  );
-  if (!context.mounted) return;
-
-  switch (choice) {
-    case 'finish':
-      await showStopTimerSheet(context, ref);
-      // Start the new timer only if the sheet actually resolved the old one.
-      if (TimerService.current == null) {
-        await TimerService.start(newTask.id);
-      }
-    case 'discard':
-      await TimerService.clear();
-      await TimerService.start(newTask.id);
-    default:
-      break; // cancelled — old timer keeps running
+  var line = resuming
+      ? "▶ Back on '${task.name}'."
+      : "⏱ Timer on! Go get '${task.name}'.";
+  if (autoPausedId != null) {
+    final paused = await ref.read(databaseProvider).getTaskById(autoPausedId);
+    if (paused != null) {
+      line = "$line '${paused.name}' paused — its time is safe.";
+    }
   }
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(line)));
 }

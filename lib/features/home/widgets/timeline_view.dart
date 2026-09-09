@@ -9,7 +9,6 @@ import '../../../core/database/database.dart';
 import '../../../core/services/app_event_bus.dart';
 import '../../../core/services/streak_service.dart';
 import '../../../core/services/task_completion_service.dart';
-import '../../../core/services/timer_service.dart';
 import '../../../shared/widgets/stop_timer_sheet.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -1480,22 +1479,7 @@ Future<void> _toggleTask(
 
 Future<void> _handleTimerAction(
     BuildContext context, WidgetRef ref, Task task) async {
-  final current = TimerService.current;
-  if (current?.taskId == task.id) {
-    if (context.mounted) await showStopTimerSheet(context, ref);
-  } else if (current != null) {
-    if (context.mounted) {
-      await showTimerConflictDialog(context, ref, newTask: task);
-    }
-  } else {
-    await TimerService.start(task.id);
-    HapticFeedback.lightImpact();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("⏱ Timer on! Go get '${task.name}'."),
-      ));
-    }
-  }
+  if (context.mounted) await handleTaskTimerTap(context, ref, task);
 }
 
 // ── Skip/missed sheet (small duplicate of task_tile's; OK for now) ─────────

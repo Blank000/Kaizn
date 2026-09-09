@@ -29,7 +29,11 @@
       "PowerShell(Select-String *)",
       "PowerShell(Set-Content *)",
       "PowerShell(adb devices *)",
-      "PowerShell(adb *)"
+      "PowerShell(adb *)",
+      "PowerShell(Select-String -Path \"lib\\\\shared\\\\providers\\\\database_provider.dart\" -Pattern \"tasksForMilestoneProvider\" | Select-Object -First 2 | ForEach-Object { $_.LineNumber })",
+      "PowerShell(git *)",
+      "WebSearch",
+      "PowerShell(flutter pub *)"
     ]
   }
 }

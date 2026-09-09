@@ -103,19 +103,27 @@ class TaskCompletionService {
     int? durationSeconds,
     bool tiny = false,
   }) async {
-    // Timer auto-attach: if THIS task's stopwatch is running, completing it
-    // by any means (tile tap, chip, timeline, notification Done, stop sheet)
-    // stops the timer and credits the session. Solved once here instead of
-    // being five bug reports.
+    // Timer auto-attach: if THIS task has a stopwatch session — running OR
+    // paused — completing it by any means (tile tap, chip, timeline,
+    // notification Done, stop sheet) ends the session and credits the time.
+    // Solved once here instead of being five bug reports. Paused counts:
+    // a session you stepped away from is still time you spent.
     var attachSeconds = durationSeconds;
-    final timer = TimerService.current;
-    if (attachSeconds == null && timer != null && timer.taskId == task.id) {
+    final timer = TimerService.forTask(task.id);
+    if (attachSeconds == null && timer != null) {
       attachSeconds = TimerService.cappedElapsedSeconds(timer);
-      await TimerService.clear();
     }
 
     final outcome = await db.completeTaskNow(task,
         durationSeconds: attachSeconds, tiny: tiny);
+
+    // Only NOW is the time safely recorded on the completion row, so only
+    // now is it safe to drop the session. Clearing first would destroy the
+    // user's tracked time if the insert threw.
+    if (durationSeconds == null && timer != null) {
+      await TimerService.clear(task.id,
+          kind: TimerEventKind.complete, taskName: task.name);
+    }
     // One hook, every surface: tile, chip, timeline, runner, notification,
     // stop-timer sheet all chime identically. No-op unless sounds are on.
     unawaited(SoundService.play(AppSound.complete));

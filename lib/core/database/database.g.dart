@@ -5397,6 +5397,467 @@ class AiChatMessagesCompanion extends UpdateCompanion<AiChatMessage> {
   }
 }
 
+class $TimerEventsTable extends TimerEvents
+    with TableInfo<$TimerEventsTable, TimerEvent> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TimerEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _taskIdMeta = const VerificationMeta('taskId');
+  @override
+  late final GeneratedColumn<String> taskId = GeneratedColumn<String>(
+    'task_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _taskNameMeta = const VerificationMeta(
+    'taskName',
+  );
+  @override
+  late final GeneratedColumn<String> taskName = GeneratedColumn<String>(
+    'task_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _elapsedSecondsMeta = const VerificationMeta(
+    'elapsedSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> elapsedSeconds = GeneratedColumn<int>(
+    'elapsed_seconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    sessionId,
+    taskId,
+    taskName,
+    kind,
+    elapsedSeconds,
+    at,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'timer_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TimerEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sessionIdMeta);
+    }
+    if (data.containsKey('task_id')) {
+      context.handle(
+        _taskIdMeta,
+        taskId.isAcceptableOrUnknown(data['task_id']!, _taskIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskIdMeta);
+    }
+    if (data.containsKey('task_name')) {
+      context.handle(
+        _taskNameMeta,
+        taskName.isAcceptableOrUnknown(data['task_name']!, _taskNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_taskNameMeta);
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('elapsed_seconds')) {
+      context.handle(
+        _elapsedSecondsMeta,
+        elapsedSeconds.isAcceptableOrUnknown(
+          data['elapsed_seconds']!,
+          _elapsedSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    } else if (isInserting) {
+      context.missing(_atMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TimerEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TimerEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      )!,
+      taskId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_id'],
+      )!,
+      taskName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}task_name'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      elapsedSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}elapsed_seconds'],
+      )!,
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}at'],
+      )!,
+    );
+  }
+
+  @override
+  $TimerEventsTable createAlias(String alias) {
+    return $TimerEventsTable(attachedDatabase, alias);
+  }
+}
+
+class TimerEvent extends DataClass implements Insertable<TimerEvent> {
+  final String id;
+
+  /// Groups events into one stopwatch session (start → … → stop).
+  final String sessionId;
+  final String taskId;
+
+  /// Snapshot of the task name at event time — survives task deletion.
+  final String taskName;
+
+  /// One of [TimerEventKind]'s wire values.
+  final String kind;
+
+  /// Banked seconds on the clock at the moment of the event.
+  final int elapsedSeconds;
+
+  /// When it happened (wall clock).
+  final DateTime at;
+  const TimerEvent({
+    required this.id,
+    required this.sessionId,
+    required this.taskId,
+    required this.taskName,
+    required this.kind,
+    required this.elapsedSeconds,
+    required this.at,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['session_id'] = Variable<String>(sessionId);
+    map['task_id'] = Variable<String>(taskId);
+    map['task_name'] = Variable<String>(taskName);
+    map['kind'] = Variable<String>(kind);
+    map['elapsed_seconds'] = Variable<int>(elapsedSeconds);
+    map['at'] = Variable<DateTime>(at);
+    return map;
+  }
+
+  TimerEventsCompanion toCompanion(bool nullToAbsent) {
+    return TimerEventsCompanion(
+      id: Value(id),
+      sessionId: Value(sessionId),
+      taskId: Value(taskId),
+      taskName: Value(taskName),
+      kind: Value(kind),
+      elapsedSeconds: Value(elapsedSeconds),
+      at: Value(at),
+    );
+  }
+
+  factory TimerEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TimerEvent(
+      id: serializer.fromJson<String>(json['id']),
+      sessionId: serializer.fromJson<String>(json['sessionId']),
+      taskId: serializer.fromJson<String>(json['taskId']),
+      taskName: serializer.fromJson<String>(json['taskName']),
+      kind: serializer.fromJson<String>(json['kind']),
+      elapsedSeconds: serializer.fromJson<int>(json['elapsedSeconds']),
+      at: serializer.fromJson<DateTime>(json['at']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'sessionId': serializer.toJson<String>(sessionId),
+      'taskId': serializer.toJson<String>(taskId),
+      'taskName': serializer.toJson<String>(taskName),
+      'kind': serializer.toJson<String>(kind),
+      'elapsedSeconds': serializer.toJson<int>(elapsedSeconds),
+      'at': serializer.toJson<DateTime>(at),
+    };
+  }
+
+  TimerEvent copyWith({
+    String? id,
+    String? sessionId,
+    String? taskId,
+    String? taskName,
+    String? kind,
+    int? elapsedSeconds,
+    DateTime? at,
+  }) => TimerEvent(
+    id: id ?? this.id,
+    sessionId: sessionId ?? this.sessionId,
+    taskId: taskId ?? this.taskId,
+    taskName: taskName ?? this.taskName,
+    kind: kind ?? this.kind,
+    elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+    at: at ?? this.at,
+  );
+  TimerEvent copyWithCompanion(TimerEventsCompanion data) {
+    return TimerEvent(
+      id: data.id.present ? data.id.value : this.id,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
+      taskId: data.taskId.present ? data.taskId.value : this.taskId,
+      taskName: data.taskName.present ? data.taskName.value : this.taskName,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      elapsedSeconds: data.elapsedSeconds.present
+          ? data.elapsedSeconds.value
+          : this.elapsedSeconds,
+      at: data.at.present ? data.at.value : this.at,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TimerEvent(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('taskId: $taskId, ')
+          ..write('taskName: $taskName, ')
+          ..write('kind: $kind, ')
+          ..write('elapsedSeconds: $elapsedSeconds, ')
+          ..write('at: $at')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, sessionId, taskId, taskName, kind, elapsedSeconds, at);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TimerEvent &&
+          other.id == this.id &&
+          other.sessionId == this.sessionId &&
+          other.taskId == this.taskId &&
+          other.taskName == this.taskName &&
+          other.kind == this.kind &&
+          other.elapsedSeconds == this.elapsedSeconds &&
+          other.at == this.at);
+}
+
+class TimerEventsCompanion extends UpdateCompanion<TimerEvent> {
+  final Value<String> id;
+  final Value<String> sessionId;
+  final Value<String> taskId;
+  final Value<String> taskName;
+  final Value<String> kind;
+  final Value<int> elapsedSeconds;
+  final Value<DateTime> at;
+  final Value<int> rowid;
+  const TimerEventsCompanion({
+    this.id = const Value.absent(),
+    this.sessionId = const Value.absent(),
+    this.taskId = const Value.absent(),
+    this.taskName = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.elapsedSeconds = const Value.absent(),
+    this.at = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TimerEventsCompanion.insert({
+    required String id,
+    required String sessionId,
+    required String taskId,
+    required String taskName,
+    required String kind,
+    this.elapsedSeconds = const Value.absent(),
+    required DateTime at,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       sessionId = Value(sessionId),
+       taskId = Value(taskId),
+       taskName = Value(taskName),
+       kind = Value(kind),
+       at = Value(at);
+  static Insertable<TimerEvent> custom({
+    Expression<String>? id,
+    Expression<String>? sessionId,
+    Expression<String>? taskId,
+    Expression<String>? taskName,
+    Expression<String>? kind,
+    Expression<int>? elapsedSeconds,
+    Expression<DateTime>? at,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (sessionId != null) 'session_id': sessionId,
+      if (taskId != null) 'task_id': taskId,
+      if (taskName != null) 'task_name': taskName,
+      if (kind != null) 'kind': kind,
+      if (elapsedSeconds != null) 'elapsed_seconds': elapsedSeconds,
+      if (at != null) 'at': at,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TimerEventsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? sessionId,
+    Value<String>? taskId,
+    Value<String>? taskName,
+    Value<String>? kind,
+    Value<int>? elapsedSeconds,
+    Value<DateTime>? at,
+    Value<int>? rowid,
+  }) {
+    return TimerEventsCompanion(
+      id: id ?? this.id,
+      sessionId: sessionId ?? this.sessionId,
+      taskId: taskId ?? this.taskId,
+      taskName: taskName ?? this.taskName,
+      kind: kind ?? this.kind,
+      elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+      at: at ?? this.at,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
+    if (taskId.present) {
+      map['task_id'] = Variable<String>(taskId.value);
+    }
+    if (taskName.present) {
+      map['task_name'] = Variable<String>(taskName.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (elapsedSeconds.present) {
+      map['elapsed_seconds'] = Variable<int>(elapsedSeconds.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<DateTime>(at.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TimerEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('sessionId: $sessionId, ')
+          ..write('taskId: $taskId, ')
+          ..write('taskName: $taskName, ')
+          ..write('kind: $kind, ')
+          ..write('elapsedSeconds: $elapsedSeconds, ')
+          ..write('at: $at, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -5412,6 +5873,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ChangeLogTable changeLog = $ChangeLogTable(this);
   late final $LeagueWeeksTable leagueWeeks = $LeagueWeeksTable(this);
   late final $AiChatMessagesTable aiChatMessages = $AiChatMessagesTable(this);
+  late final $TimerEventsTable timerEvents = $TimerEventsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -5426,6 +5888,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     changeLog,
     leagueWeeks,
     aiChatMessages,
+    timerEvents,
   ];
 }
 
@@ -8915,6 +9378,246 @@ typedef $$AiChatMessagesTableProcessedTableManager =
       AiChatMessage,
       PrefetchHooks Function()
     >;
+typedef $$TimerEventsTableCreateCompanionBuilder =
+    TimerEventsCompanion Function({
+      required String id,
+      required String sessionId,
+      required String taskId,
+      required String taskName,
+      required String kind,
+      Value<int> elapsedSeconds,
+      required DateTime at,
+      Value<int> rowid,
+    });
+typedef $$TimerEventsTableUpdateCompanionBuilder =
+    TimerEventsCompanion Function({
+      Value<String> id,
+      Value<String> sessionId,
+      Value<String> taskId,
+      Value<String> taskName,
+      Value<String> kind,
+      Value<int> elapsedSeconds,
+      Value<DateTime> at,
+      Value<int> rowid,
+    });
+
+class $$TimerEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $TimerEventsTable> {
+  $$TimerEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get taskName => $composableBuilder(
+    column: $table.taskName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get elapsedSeconds => $composableBuilder(
+    column: $table.elapsedSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$TimerEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TimerEventsTable> {
+  $$TimerEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get taskId => $composableBuilder(
+    column: $table.taskId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get taskName => $composableBuilder(
+    column: $table.taskName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get elapsedSeconds => $composableBuilder(
+    column: $table.elapsedSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TimerEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TimerEventsTable> {
+  $$TimerEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
+
+  GeneratedColumn<String> get taskId =>
+      $composableBuilder(column: $table.taskId, builder: (column) => column);
+
+  GeneratedColumn<String> get taskName =>
+      $composableBuilder(column: $table.taskName, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<int> get elapsedSeconds => $composableBuilder(
+    column: $table.elapsedSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get at =>
+      $composableBuilder(column: $table.at, builder: (column) => column);
+}
+
+class $$TimerEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TimerEventsTable,
+          TimerEvent,
+          $$TimerEventsTableFilterComposer,
+          $$TimerEventsTableOrderingComposer,
+          $$TimerEventsTableAnnotationComposer,
+          $$TimerEventsTableCreateCompanionBuilder,
+          $$TimerEventsTableUpdateCompanionBuilder,
+          (
+            TimerEvent,
+            BaseReferences<_$AppDatabase, $TimerEventsTable, TimerEvent>,
+          ),
+          TimerEvent,
+          PrefetchHooks Function()
+        > {
+  $$TimerEventsTableTableManager(_$AppDatabase db, $TimerEventsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TimerEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TimerEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TimerEventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> sessionId = const Value.absent(),
+                Value<String> taskId = const Value.absent(),
+                Value<String> taskName = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<int> elapsedSeconds = const Value.absent(),
+                Value<DateTime> at = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TimerEventsCompanion(
+                id: id,
+                sessionId: sessionId,
+                taskId: taskId,
+                taskName: taskName,
+                kind: kind,
+                elapsedSeconds: elapsedSeconds,
+                at: at,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String sessionId,
+                required String taskId,
+                required String taskName,
+                required String kind,
+                Value<int> elapsedSeconds = const Value.absent(),
+                required DateTime at,
+                Value<int> rowid = const Value.absent(),
+              }) => TimerEventsCompanion.insert(
+                id: id,
+                sessionId: sessionId,
+                taskId: taskId,
+                taskName: taskName,
+                kind: kind,
+                elapsedSeconds: elapsedSeconds,
+                at: at,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TimerEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TimerEventsTable,
+      TimerEvent,
+      $$TimerEventsTableFilterComposer,
+      $$TimerEventsTableOrderingComposer,
+      $$TimerEventsTableAnnotationComposer,
+      $$TimerEventsTableCreateCompanionBuilder,
+      $$TimerEventsTableUpdateCompanionBuilder,
+      (
+        TimerEvent,
+        BaseReferences<_$AppDatabase, $TimerEventsTable, TimerEvent>,
+      ),
+      TimerEvent,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -8937,4 +9640,6 @@ class $AppDatabaseManager {
       $$LeagueWeeksTableTableManager(_db, _db.leagueWeeks);
   $$AiChatMessagesTableTableManager get aiChatMessages =>
       $$AiChatMessagesTableTableManager(_db, _db.aiChatMessages);
+  $$TimerEventsTableTableManager get timerEvents =>
+      $$TimerEventsTableTableManager(_db, _db.timerEvents);
 }

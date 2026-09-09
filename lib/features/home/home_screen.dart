@@ -572,8 +572,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Never-miss-twice banner (Atomic Habits). Auto-hides reactively the
     // moment a real completion lands today (the completions stream re-emits).
     // One-attention-slot policy: the live timer banner outranks it.
-    final timerRunning =
-        ref.watch(activeTimerProvider).valueOrNull != null;
+    final timerRunning = ref.watch(runningTimerProvider) != null;
     final showNmtBanner = !resting &&
         !timerRunning &&
         shouldShowNeverMissTwice(

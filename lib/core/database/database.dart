@@ -13,11 +13,13 @@ import 'tables/task_completions.dart';
 import 'tables/points_history.dart';
 import 'tables/rewards.dart';
 import 'tables/streak.dart';
+import 'tables/timer_events.dart';
 
 // Re-export the hand-written enums so callers only need one import.
 export 'tables/milestones.dart' show MilestoneStatus;
 export 'tables/tasks.dart' show TaskRecurrence, TaskStatus;
 export 'tables/points_history.dart' show PointsReason;
+export 'tables/timer_events.dart' show TimerEventKind;
 
 part 'database.g.dart';
 
@@ -42,6 +44,7 @@ typedef DbCompletionOutcome = ({
   ChangeLog,
   LeagueWeeks,
   AiChatMessages,
+  TimerEvents,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -68,8 +71,10 @@ class AppDatabase extends _$AppDatabase {
   //        in-app AI assistant, stored locally).
   // 11 → 12 `plan_applied` on ai_chat_messages — one-shot guard for the
   //        chat's PREVIEW & CREATE button.
+  // 12 → 13 `timer_events` table — the append-only stopwatch time ledger
+  //        (start/pause/resume/stop per task, for later pattern analysis).
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration {
@@ -134,6 +139,10 @@ class AppDatabase extends _$AppDatabase {
           // v11 → v12: applied-plan guard on chat messages.
           await m.addColumn(aiChatMessages, aiChatMessages.planApplied);
         }
+        if (from < 13) {
+          // v12 → v13: the stopwatch time ledger.
+          await m.createTable(timerEvents);
+        }
       },
     );
   }
@@ -162,6 +171,50 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markAiChatPlanApplied(String id) =>
       (update(aiChatMessages)..where((m) => m.id.equals(id)))
           .write(const AiChatMessagesCompanion(planApplied: Value(true)));
+
+  // ── Time ledger (timer_events) ───────────────────────────────────────────
+  // Append-only. Nothing in the app updates or deletes these rows — that is
+  // exactly what makes them worth analysing later.
+
+  Future<void> insertTimerEvent(TimerEventsCompanion row) =>
+      into(timerEvents).insert(row);
+
+  /// Every event for one task, oldest first.
+  Future<List<TimerEvent>> getTimerEventsForTask(String taskId) =>
+      (select(timerEvents)
+            ..where((e) => e.taskId.equals(taskId))
+            ..orderBy([(e) => OrderingTerm.asc(e.at)]))
+          .get();
+
+  Stream<List<TimerEvent>> watchTimerEventsForTask(String taskId) =>
+      (select(timerEvents)
+            ..where((e) => e.taskId.equals(taskId))
+            ..orderBy([(e) => OrderingTerm.asc(e.at)]))
+          .watch();
+
+  /// Everything logged on or after [since], oldest first — the input to the
+  /// time-pattern screen.
+  Future<List<TimerEvent>> getTimerEventsSince(DateTime since) =>
+      (select(timerEvents)
+            ..where((e) => e.at.isBiggerOrEqualValue(since))
+            ..orderBy([(e) => OrderingTerm.asc(e.at)]))
+          .get();
+
+  Stream<List<TimerEvent>> watchTimerEventsSince(DateTime since) =>
+      (select(timerEvents)
+            ..where((e) => e.at.isBiggerOrEqualValue(since))
+            ..orderBy([(e) => OrderingTerm.asc(e.at)]))
+          .watch();
+
+  /// How many events exist for a task — cheap enough to gate a "Time log"
+  /// menu row on.
+  Future<int> countTimerEventsForTask(String taskId) async {
+    final rows = await (selectOnly(timerEvents)
+          ..addColumns([timerEvents.id.count()])
+          ..where(timerEvents.taskId.equals(taskId)))
+        .get();
+    return rows.isEmpty ? 0 : (rows.first.read(timerEvents.id.count()) ?? 0);
+  }
 
   // ============ Change log (append-only mutation journal) ============
 

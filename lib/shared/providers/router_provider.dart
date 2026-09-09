@@ -17,6 +17,7 @@ import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/rewards/rewards_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/stats/stats_screen.dart';
+import '../../features/stats/time_ledger_screen.dart';
 import '../widgets/bottom_nav_shell.dart';
 import 'auth_provider.dart';
 
@@ -156,6 +157,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                     path: 'achievements',
                     name: 'achievements',
                     builder: (context, state) => const AchievementsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'time-log',
+                    name: 'timeLog',
+                    builder: (context, state) => const TimeLedgerScreen(),
                   ),
                 ],
               ),

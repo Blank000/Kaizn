@@ -170,6 +170,14 @@ class StatsScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             _TimeInvestedCard(data: timeInvested),
           ],
+          const SizedBox(height: 12),
+          // Way into the raw stopwatch ledger — every start, pause and resume
+          // ever recorded, for the "when do I actually work?" question.
+          OutlinedButton.icon(
+            onPressed: () => context.pushNamed('timeLog'),
+            icon: const Icon(Icons.history_rounded, size: 18),
+            label: const Text('Open the time log'),
+          ),
           if (hourly.values.any((v) => v > 0)) ...[
             const SizedBox(height: 20),
             _SectionLabel('Time of day · Last $_hourlyDays days'),

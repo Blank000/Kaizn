@@ -11,6 +11,7 @@ import 'notification_scheduler.dart';
 import 'notification_service.dart';
 import 'streak_service.dart';
 import 'task_completion_service.dart';
+import 'timer_service.dart';
 
 /// Handlers for taps on notification action buttons (Done / Skip / Snooze /
 /// Undo). These let the user update a task straight from the notification
@@ -70,6 +71,10 @@ Future<void> handleNotificationAction(
     await AppPrefs.hydrate();
   }
   final db = existingDb ?? AppDatabase();
+  // Give the stopwatch a ledger here too — a "Done" tap from the lock screen
+  // ends a running session, and that transition has to be recorded or the
+  // session stays open in the time log forever.
+  TimerService.attachLedger(db);
 
   try {
     switch (actionId) {
@@ -89,7 +94,12 @@ Future<void> handleNotificationAction(
   } catch (e) {
     debugPrint('handleNotificationAction($actionId) failed: $e');
   } finally {
-    if (ownDb) await db.close();
+    if (ownDb) {
+      // Let the stopwatch finish writing its ledger rows before the database
+      // goes away under them.
+      await TimerService.ledgerSettled();
+      await db.close();
+    }
   }
 }
 

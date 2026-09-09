@@ -23,6 +23,7 @@ import 'moment_celebrations.dart';
 import 'queue_sheet.dart';
 import 'reward_unlock_snackbar.dart';
 import 'stop_timer_sheet.dart';
+import 'time_ledger_sheet.dart';
 
 /// State of a task row at the time it's rendered. The four "active" states
 /// are mutually exclusive in practice — priority is `checked > missed >
@@ -340,8 +341,7 @@ class _TaskTileState extends ConsumerState<TaskTile>
                     ),
                   ),
                   if (widget.queueCount > 0) _buildQueueChip(),
-                  if (widget.showTimerButton && _isUnchecked)
-                    _buildTimerButton(),
+                  _buildTimerAffordance(),
                   if (widget.trailing != null) widget.trailing!,
                 ],
               ),
@@ -493,8 +493,7 @@ class _TaskTileState extends ConsumerState<TaskTile>
       // cancel) — let it grow past the default half-screen cap.
       isScrollControlled: true,
       builder: (ctx) {
-        final ownsTimer =
-            TimerService.current?.taskId == widget.task.id;
+        final session = TimerService.forTask(widget.task.id);
         final tiny = widget.task.tinyName;
         final base = widget.task.pointsPerCompletion;
         final tinyPts = base > 0 ? (base + 1) ~/ 2 : 0;
@@ -525,13 +524,30 @@ class _TaskTileState extends ConsumerState<TaskTile>
                   Navigator.of(ctx).pop();
                   _completeNow(tiny: true);
                 },
-          timerTitle: ownsTimer ? 'Stop timer' : 'Start timer',
-          timerSubtitle: ownsTimer
-              ? '${TimerService.formatElapsed(TimerService.elapsedSeconds(TimerService.current!))} on the clock'
-              : 'Time this session. Stop anytime from Home.',
+          timerTitle: session == null
+              ? 'Start timer'
+              : session.isPaused
+                  ? 'Resume timer'
+                  : 'Stop timer',
+          timerSubtitle: session == null
+              ? 'Time this session. Stop anytime from Home.'
+              : '${TimerService.formatElapsed(TimerService.elapsedSeconds(session))} on the clock'
+                  '${session.isPaused ? ' · paused' : ''}',
           onTimer: () {
             Navigator.of(ctx).pop();
             _handleTimerAction();
+          },
+          // Ending a paused session without resuming it first.
+          onStopTimer: session == null || !session.isPaused
+              ? null
+              : () {
+                  Navigator.of(ctx).pop();
+                  showStopTimerSheet(context, ref, taskId: widget.task.id);
+                },
+          onLedger: () {
+            Navigator.of(ctx).pop();
+            showTimeLedgerSheet(
+                context, ref.read(databaseProvider), widget.task);
           },
           onSkip: () {
             Navigator.of(ctx).pop();
@@ -578,40 +594,89 @@ class _TaskTileState extends ConsumerState<TaskTile>
     );
   }
 
-  /// Compact ▶ / ⏱ affordance. Plain outline when idle; filled primary when
-  /// THIS task's stopwatch is running (the Home banner shows the elapsed).
-  Widget _buildTimerButton() {
-    final ownsTimer =
-        ref.watch(activeTimerProvider).valueOrNull?.taskId == widget.task.id;
-    return IconButton(
-      icon: Icon(
-        ownsTimer ? Icons.timer_rounded : Icons.play_circle_outline_rounded,
-        size: 22,
-        color: ownsTimer ? AppColors.primary : context.appTextTertiary,
+  /// The task row's own timer state.
+  ///
+  /// - No session → the compact ▶ start affordance (opt-in per surface).
+  /// - Paused → an amber "⏸ 12:34" pill, ALWAYS shown, on every surface.
+  ///   This is where paused work lives now: the top of the app is reserved
+  ///   for the one thing actually running, so a task you stepped away from
+  ///   says so in its own row instead of squatting in the banner.
+  /// - Running → a primary "⏱" pill (the banner carries the live clock).
+  Widget _buildTimerAffordance() {
+    final session = ref.watch(timerForTaskProvider(widget.task.id));
+
+    if (session == null) {
+      if (!widget.showTimerButton || !_isUnchecked) {
+        return const SizedBox.shrink();
+      }
+      return IconButton(
+        icon: Icon(
+          Icons.play_circle_outline_rounded,
+          size: 22,
+          color: context.appTextTertiary,
+        ),
+        tooltip: 'Start timer',
+        visualDensity: VisualDensity.compact,
+        onPressed: _handleTimerAction,
+      );
+    }
+
+    final paused = session.isPaused;
+    final color = paused ? AppColors.streakOrange : AppColors.primary;
+    // Paused time is frozen, so this needs no ticker. A running row shows
+    // the icon only — the pinned banner owns the second-by-second clock.
+    final label = paused
+        ? TimerService.formatElapsed(session.accumSeconds)
+        : 'RUNNING';
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Tooltip(
+        message: paused
+            ? 'Paused — tap to resume, long-press to log or drop it'
+            : 'Running — tap to stop',
+        child: InkWell(
+          onTap: _handleTimerAction,
+          // A paused session must be endable without resuming it first —
+          // resuming would pause whatever you're actually doing.
+          onLongPress: !paused
+              ? null
+              : () => showStopTimerSheet(context, ref, taskId: widget.task.id),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  paused ? Icons.pause_rounded : Icons.timer_rounded,
+                  size: 14,
+                  color: color,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: AppTypography.caption.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      tooltip: ownsTimer ? 'Stop timer' : 'Start timer',
-      visualDensity: VisualDensity.compact,
-      onPressed: _handleTimerAction,
     );
   }
 
   Future<void> _handleTimerAction() async {
-    final current = TimerService.current;
-    if (current?.taskId == widget.task.id) {
-      if (mounted) await showStopTimerSheet(context, ref);
-    } else if (current != null) {
-      if (mounted) {
-        await showTimerConflictDialog(context, ref, newTask: widget.task);
-      }
-    } else {
-      await TimerService.start(widget.task.id);
-      HapticFeedback.lightImpact();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("⏱ Timer on! Go get '${widget.task.name}'."),
-        ));
-      }
-    }
+    if (mounted) await handleTaskTimerTap(context, ref, widget.task);
   }
 
   Future<void> _skipToday() async {
@@ -1058,6 +1123,12 @@ class _SkipActionsSheet extends StatelessWidget {
   final String? timerSubtitle;
   final VoidCallback? onTimer;
 
+  /// Ends a paused session (log the time or drop it) without resuming first.
+  final VoidCallback? onStopTimer;
+
+  /// Opens the per-task time ledger (start/pause/resume history).
+  final VoidCallback? onLedger;
+
   /// Two-minute-rule row: shown when the task has a tiny version defined.
   final String? tinyTitle;
   final String? tinySubtitle;
@@ -1077,6 +1148,8 @@ class _SkipActionsSheet extends StatelessWidget {
     this.timerTitle,
     this.timerSubtitle,
     this.onTimer,
+    this.onStopTimer,
+    this.onLedger,
     this.tinyTitle,
     this.tinySubtitle,
     this.onTiny,
@@ -1151,6 +1224,26 @@ class _SkipActionsSheet extends StatelessWidget {
                 subtitle:
                     timerSubtitle ?? 'Time this session. Stop anytime from Home.',
                 onTap: onTimer!,
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (onStopTimer != null) ...[
+              _OptionRow(
+                icon: Icons.stop_circle_outlined,
+                iconColor: AppColors.streakOrange,
+                title: 'End the paused session',
+                subtitle: 'Log the time or drop it — without resuming.',
+                onTap: onStopTimer!,
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (onLedger != null) ...[
+              _OptionRow(
+                icon: Icons.history_rounded,
+                iconColor: AppColors.infoBlue,
+                title: 'Time log',
+                subtitle: 'Every start, pause and resume for this task.',
+                onTap: onLedger!,
               ),
               const SizedBox(height: 12),
             ],
