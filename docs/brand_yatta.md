@@ -18,11 +18,60 @@ user would say "yatta!"
 own celebration, promoted to the launcher. Users who tap the icon are tapping
 the feeling they get inside it. That loop is the brand.
 
-## SHIPPED (2026-09-17) — Master Ren's head, no burst
+## SHIPPED — the victory figure
 
-The Victory Burst below is **kept as history, not as spec.** When it was
-actually rendered and judged at launcher sizes it lost, and the launcher icon
-is now **Master Ren's head on the brand green**. What happened:
+**The mark:** a figure with both arms raised, which is also the letter **Y**.
+"Yatta!" is the shout you make with your arms in the air, so the name, the
+gesture and the letterform are one shape. Near-white limbs, a single gold
+head, on a **deep emerald** ground.
+
+**Why this and not a character.** Master Ren went on the launcher first and
+was rejected in use: *"doesn't seem professional, it's like a kid icon."*
+Cartoon eyes and a round muzzle set a children's-app register, which is the
+wrong promise for an app about discipline and an ambitious life. Ren keeps
+his job **inside** the app — he owns reflection, rest, misses and Sundays.
+A mascot and a brand mark are different jobs, and this app needs the second
+one on the home screen.
+
+**Why deep emerald, not `#58CC02`.** The bright green stays the interface
+colour everywhere in the UI. At launcher size it reads playful, and green
+tiles are the most crowded shelf in the drawer. A deeper shade of the same
+family keeps the lineage and buys an adult value. One gold accent, never a
+second.
+
+**Directions that were built and lost** (all rendered and judged at 192 / 96
+/ 48 px, not argued about on paper):
+
+| Direction | Why it lost |
+|---|---|
+| Fox crest / kamon (Ren, geometric) | The angled eye slits read villainous — a Batman-villain mask, not a sensei |
+| Summit / mountain | Clean, but every meditation and fitness app owns it. Generic. |
+| Ascent bars | Reads as signal strength or an analytics dashboard, not a life |
+| Ensō + gold check | Genuinely strong runner-up; lost only because circle-plus-check is a crowded pattern and says nothing about *you* |
+| Victory figure ✅ | Name, gesture and letter in one shape; nothing else in the category looks like it |
+
+**Sizing rules that must survive future edits**
+
+- Full-bleed square (`assets/icon.png`) is iOS + legacy Android; the mark
+  runs at 1.10× and fills 54% × 67% of the canvas.
+- The adaptive foreground (`assets/icon_foreground.png`) is transparent and
+  drawn at **1.42×**, because `flutter_launcher_icons` wraps it in
+  `android:inset="16%"`. Size it by the **true opaque-pixel radius**, not the
+  bounding box — this mark's corners are empty, so the box overstates its
+  reach by a wide margin.
+- Target: furthest opaque pixel at **r ≈ 303 after the inset**, inside the
+  66/108dp guaranteed-safe circle (r = 312) every OEM mask respects.
+- Regenerate with `tools/generate_icon.py`, then
+  `dart run flutter_launcher_icons`. Verify against simulated circle,
+  squircle and square masks before shipping.
+
+---
+
+## Superseded (2026-09-17) — Master Ren's head, no burst
+
+Shipped for part of a day, then rejected as a kids' icon (see above). Kept
+because the burst post-mortem under it is still the reason no starburst
+should go behind any character:
 
 - **The burst and a character head cannot share an icon.** Both are radial.
   Stacked, every single attempt — enclosing starburst, thin impact rays,
