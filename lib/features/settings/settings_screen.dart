@@ -430,7 +430,7 @@ class SettingsScreen extends ConsumerWidget {
   void _showAbout(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'Habit Reward Tracker',
+      applicationName: 'Yatta!',
       applicationVersion: '1.0.0',
       applicationIcon: Container(
         width: 48,

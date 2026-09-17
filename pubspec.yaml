@@ -121,7 +121,10 @@ flutter_launcher_icons:
   min_sdk_android: 21
   remove_alpha_ios: true
   adaptive_icon_background: "#58CC02"
-  adaptive_icon_foreground: "assets/icon.png"
+  # A separate transparent foreground, NOT the full square. Android masks the
+  # foreground to a circle and only guarantees the central 66/108 of it, so
+  # reusing icon.png here shaved Ren's ears off on round-mask launchers.
+  adaptive_icon_foreground: "assets/icon_foreground.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

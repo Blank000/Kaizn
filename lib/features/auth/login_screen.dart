@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Habit Reward Tracker',
+                'Yatta!',
                 style: AppTypography.heading1.copyWith(fontSize: 28),
                 textAlign: TextAlign.center,
               ),

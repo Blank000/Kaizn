@@ -11,7 +11,8 @@ void main() {
       ),
     );
 
-    // Verify that app title is shown
-    expect(find.text('Habit Reward Tracker'), findsOneWidget);
+    // The login screen wordmark. Guards the rename: if this ever reads
+    // 'Habit Reward Tracker' again, a display-name revert slipped through.
+    expect(find.text('Yatta!'), findsOneWidget);
   });
 }

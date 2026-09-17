@@ -202,7 +202,7 @@ class _HabitRewardTrackerAppState extends ConsumerState<HabitRewardTrackerApp>
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'Habit Reward Tracker',
+      title: 'Yatta!',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       theme: AppTheme.lightTheme,
