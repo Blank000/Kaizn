@@ -26,7 +26,7 @@ import os
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "images", "Tick App Icon.png")
+SRC = os.path.join(ROOT, "images", "App Icon", "Tick App Icon.png")
 OUT_FULL = os.path.join(ROOT, "assets", "icon.png")
 OUT_FG = os.path.join(ROOT, "assets", "icon_foreground.png")
 
