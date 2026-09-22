@@ -29,12 +29,12 @@ import '../../shared/widgets/pico_figure.dart';
 
 // ─── The app manual ───────────────────────────────────────────────────────
 // Ships inside every prompt (chat + export) so the model knows exactly what
-// Yatta! can do, HOW the user does it, and — just as important — what it
+// Zuzu can do, HOW the user does it, and — just as important — what it
 // cannot do. The NOT SUPPORTED list is belt; the real suspenders is that
 // the plan pipeline can only CREATE new milestones/tasks.
 
 const String kAppManual = '''
-── APP MANUAL: what Yatta! can and cannot do ──
+── APP MANUAL: what Zuzu can and cannot do ──
 NAVIGATION: 4 tabs — Home, Milestones, Rewards, Stats — plus Settings (gear
 icon on Home).
 
@@ -124,8 +124,8 @@ Future<String> buildContextPack(AppDatabase db) async {
       : '${(minute ~/ 60).toString().padLeft(2, '0')}:${(minute % 60).toString().padLeft(2, '0')}';
 
   final b = StringBuffer();
-  b.writeln('=== YATTA! CONTEXT PACK · ${DateTime.now().toString().substring(0, 16)} ===');
-  b.writeln('You are my accountability assistant for "Yatta!", my gamified');
+  b.writeln('=== ZUZU CONTEXT PACK · ${DateTime.now().toString().substring(0, 16)} ===');
+  b.writeln('You are my accountability assistant for "Zuzu", my gamified');
   b.writeln('habit tracker (milestones → recurring tasks → points → rewards).');
   b.writeln('Answer questions using MY DATA below. Be concise and specific.');
   b.writeln();
@@ -224,7 +224,7 @@ Future<String> buildContextPack(AppDatabase db) async {
   b.writeln('fields being changed in "set"; "reminder": null clears a reminder; to');
   b.writeln('change scheduling include "recurrence" plus its fields. There is NO');
   b.writeln('delete operation — deleting is done manually in the app.');
-  b.writeln('I will paste your JSON into Yatta\'s "Import AI plan" screen.');
+  b.writeln('I will paste your JSON into Zuzu\'s "Import AI plan" screen.');
   return b.toString();
 }
 
@@ -763,7 +763,7 @@ Future<void> exportContextPack(BuildContext context, WidgetRef ref) async {
         '🦊 Context pack copied — paste it into ChatGPT/Claude/Gemini.'),
     action: SnackBarAction(
       label: 'SHARE',
-      onPressed: () => Share.share(pack, subject: 'Yatta! context pack'),
+      onPressed: () => Share.share(pack, subject: 'Zuzu context pack'),
     ),
   ));
 }

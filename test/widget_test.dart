@@ -13,6 +13,6 @@ void main() {
 
     // The login screen wordmark. Guards the rename: if this ever reads
     // 'Habit Reward Tracker' again, a display-name revert slipped through.
-    expect(find.text('Yatta!'), findsOneWidget);
+    expect(find.text('Zuzu'), findsOneWidget);
   });
 }

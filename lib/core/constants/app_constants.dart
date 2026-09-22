@@ -6,7 +6,7 @@ class AppConstants {
   // App Info. The display name only — the package id, database name, backup
   // filename and iOS app-group id all deliberately keep the old
   // habit_reward_tracker spelling: changing those orphans real user data.
-  static const String appName = 'Yatta!';
+  static const String appName = 'Zuzu';
   static const String appVersion = '1.0.0';
 
   // Database

@@ -75,14 +75,14 @@ class _ShareSheetState extends State<_ShareSheet> {
       if (bytes == null) return;
       final dir = await getTemporaryDirectory();
       final file = File(
-          '${dir.path}/yatta_week_${DateTime.now().millisecondsSinceEpoch}.png');
+          '${dir.path}/zuzu_week_${DateTime.now().millisecondsSinceEpoch}.png');
       await file.writeAsBytes(bytes.buffer.asUint8List());
       HapticFeedback.lightImpact();
       await Share.shareXFiles(
         [XFile(file.path)],
         text: widget.streakDay > 0
-            ? 'Day ${widget.streakDay} of my streak on Yatta! 🔥'
-            : 'My week on Yatta! ⭐',
+            ? 'Day ${widget.streakDay} of my streak on Zuzu 🔥'
+            : 'My week on Zuzu ⭐',
       );
     } finally {
       if (mounted) setState(() => _sharing = false);
@@ -218,7 +218,7 @@ class _ProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Yatta! 💥',
+            'Zuzu 💥',
             style: AppTypography.body.copyWith(
               color: AppColors.primary,
               fontWeight: FontWeight.w900,

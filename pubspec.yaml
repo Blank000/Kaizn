@@ -120,9 +120,9 @@ flutter_launcher_icons:
   image_path: "assets/icon.png"
   min_sdk_android: 21
   remove_alpha_ios: true
-  # Deep emerald, not the bright #58CC02 interface green: at launcher size the
-  # bright green reads playful. Same family, adult value.
-  adaptive_icon_background: "#0F3B2B"
+  # Sampled from the supplied artwork's card so the adaptive background and
+  # the foreground art sit on exactly the same teal.
+  adaptive_icon_background: "#034749"
   # A separate transparent foreground, NOT the full square. Android masks the
   # foreground to a circle and only guarantees the central 66/108 of it, so
   # reusing icon.png here shaved Ren's ears off on round-mask launchers.

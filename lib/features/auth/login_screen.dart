@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Yatta!',
+                'Zuzu',
                 style: AppTypography.heading1.copyWith(fontSize: 28),
                 textAlign: TextAlign.center,
               ),

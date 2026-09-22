@@ -1,4 +1,4 @@
-# Yatta! — Feature Inventory (as of `timetable` @ 2026-09-04)
+# Zuzu — Feature Inventory (as of `timetable` @ 2026-09-04)
 
 The canonical list of everything the app does. Written as the checklist for
 the iOS bring-up: almost all of this is shared Dart and ports for free —

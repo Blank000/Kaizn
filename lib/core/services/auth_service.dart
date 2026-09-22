@@ -25,7 +25,7 @@ class AuthService {
   static GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
 
   /// Incremental consent for the full Calendar scope (read other calendars
-  /// for the timeline overlay + manage the app's own Yatta! calendar +
+  /// for the timeline overlay + manage the app's own Zuzu calendar +
   /// edit the user's solo events). Returns true when granted.
   static Future<bool> requestCalendarAccess() async {
     if (_googleSignIn.currentUser == null) {

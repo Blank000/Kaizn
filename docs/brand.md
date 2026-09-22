@@ -1,3 +1,36 @@
+# Zuzu — Brand
+
+**FINAL (2026-09-22): the app is Zuzu.** The icon is the owner-supplied
+artwork in `images/Tick App Icon.png` — an open book with a checklist and a
+tick, with Zuzu the bird peeking over the top — on a deep teal card
+(`#034749`, sampled from the art itself).
+
+Build the shippable assets from that artwork with
+`python tools/build_icon_from_art.py`, then `dart run flutter_launcher_icons`.
+That script exists because the raw render is not a launcher icon: it is a
+rounded card on a transparent canvas, so the corners have to be filled out
+for iOS (which applies its own squircle), and the Android adaptive
+foreground needs the teal keyed out so the background layer can supply it.
+Keying the ground globally is safe even though the book's pages are the same
+teal — the background layer restores exactly that colour behind them.
+
+**Known trade-off, accepted by the owner:** this composition carries an open
+book, three checkbox rows, a tick and a bird. At 48px that is a smudge. A
+single-subject mark (the bird's head alone) would read far better small, and
+the artwork already contains it if we ever want to cut it out.
+
+**Names considered and rejected**, with the reasons, are below — Kaizn/Kaizen
+(six habit apps already use it), Arete, Kata, Mettle and Cadence (taken),
+Selfsmith, Ethon, Yattaro, and Kizora (held by a Nagpur software company with
+an App Store presence). The naming history is worth keeping because the same
+traps recur.
+
+**"YATTA!" still appears once, deliberately** — the Day Complete shout in
+`day_complete_sequence.dart`. It is no longer a brand reference, just the
+Japanese for "I did it", which is exactly what that moment is.
+
+---
+
 # Yatta! — Icon & Brand Brief
 
 *2026-07-23. The app is named **Yatta!** (やった — "I did it!"), the Japanese
