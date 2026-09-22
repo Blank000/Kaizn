@@ -16,9 +16,10 @@ hands.
   start time + duration (timeline placement), per-task reminder (recurring
   or one-shot date), 2-minute tiny version (half points, full streak
   credit), points per completion, habit stacking ("after X, do Y").
-- **Schema**: Drift/SQLite v12. Tables: milestones, tasks, task_completions
+- **Schema**: Drift/SQLite v13. Tables: milestones, tasks, task_completions
   (with duration, tiny, skip, nd, miss_reason), points_history, rewards,
-  streak, change_log, league_weeks, ai_chat_messages (+plan_applied).
+  streak, change_log, league_weeks, ai_chat_messages (+plan_applied),
+  timer_events (append-only stopwatch ledger).
 
 ## Logging & honesty rules
 - Tap tile → done now (+points, haptic, float-up). Tap again → undo (today).
