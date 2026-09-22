@@ -4,19 +4,37 @@ import '../../../core/services/app_prefs.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/context_colors.dart';
-import '../../../shared/widgets/ren_figure.dart';
+import '../../../shared/widgets/zuzu_figure.dart';
 
-/// The Sensei Post — Ren's permanent station at the top of Home, and the
-/// heart of his accountability job: he KNOWS today's plan and says so, by
+/// The daily post — **Zuzu's** permanent station at the top of Home, and the
+/// heart of the accountability job: he KNOWS today's plan and says so, by
 /// name and by number, morning to night. Tap for the full day's ledger.
 ///
 /// Contract: specific, watchful, never guilting. He states facts and hands
 /// the day back to you.
+///
+/// Cast note: this was Ren's card until the "A Day With Zuzu" storyboard.
+/// The split is now Zuzu owns the *daily* surface — invitation, first win,
+/// day close — and Ren keeps *reflection*: focus sessions, misses,
+/// comebacks and the Sunday review. The copy engine
+/// (`ZuzuLines.accountability`) is unchanged; only the face and the voice
+/// moved, because the lines are composed from real data and were never
+/// character-specific.
 class SenseiPost extends StatelessWidget {
   final String line;
   final VoidCallback onTap;
 
-  const SenseiPost({super.key, required this.line, required this.onTap});
+  /// Nothing recorded yet today — Zuzu plays the looping invitation rather
+  /// than standing still. Any other state gets frame 0, which is the same
+  /// neutral stance.
+  final bool inviting;
+
+  const SenseiPost({
+    super.key,
+    required this.line,
+    required this.onTap,
+    this.inviting = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +53,10 @@ class SenseiPost extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const RenFigure(size: 52),
+              ZuzuFigure(
+                moment: ZuzuMoment.invitation,
+                size: inviting ? 60 : 52,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -57,7 +78,7 @@ class SenseiPost extends StatelessWidget {
   }
 }
 
-/// The day's ledger — Ren's accounting, opened from the Sensei Post. What
+/// The day's ledger — Zuzu's accounting, opened from the daily post. What
 /// stands done, what remains (by name and size), what fell, this week's
 /// claw. One button out: back to the day.
 Future<void> showSenseiLedgerSheet(
@@ -94,7 +115,9 @@ Future<void> showSenseiLedgerSheet(
                 ),
               ),
               const SizedBox(height: 16),
-              const Center(child: RenFigure(size: 88)),
+              const Center(
+                  child: ZuzuFigure(
+                      moment: ZuzuMoment.invitation, size: 88)),
               const SizedBox(height: 12),
               Center(
                 child: Text("THE DAY'S LEDGER",
@@ -128,7 +151,7 @@ Future<void> showSenseiLedgerSheet(
                         '$missedToday missed — data, not a verdict'),
               if (AppPrefs.weeklyClawSync != null)
                 _LedgerRow(
-                    icon: '🦊',
+                    icon: '🐤',
                     text: 'One claw: ${AppPrefs.weeklyClawSync}'),
               if (currentStreak > 0)
                 _LedgerRow(

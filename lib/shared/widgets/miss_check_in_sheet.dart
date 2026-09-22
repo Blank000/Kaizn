@@ -12,7 +12,7 @@ import '../../features/milestones/widgets/task_form_sheet.dart';
 import '../providers/database_provider.dart';
 import 'achievement_snackbar.dart';
 import 'moment_celebrations.dart';
-import 'ren_figure.dart';
+import 'zuzu_figure.dart';
 import 'reward_unlock_snackbar.dart';
 
 /// Miss check-in (self-compassion + B=MAP triage). Shown right after a task
@@ -169,7 +169,9 @@ class _MissCheckInSheet extends StatelessWidget {
               // Ren receives the miss — he cannot frown, and the reason you
               // pick here is what he reflects back on Sundays.
               if (AppPrefs.renEnabledSync) ...[
-                const Center(child: RenFigure(size: 64)),
+                const Center(
+                    child: ZuzuFigure(
+                        moment: ZuzuMoment.nod, size: 64)),
                 const SizedBox(height: 10),
               ],
               Text(

@@ -8,7 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/providers/database_provider.dart';
-import '../../shared/widgets/ren_figure.dart';
+import '../../shared/widgets/zuzu_figure.dart';
 
 /// The Weekly Review — Ren's own room (Chapter Eight of the dojo storyline).
 /// Three unhurried scrolls: what burned, what slipped (with the miss reasons
@@ -72,7 +72,7 @@ class _WeeklyReviewScreenState extends ConsumerState<WeeklyReviewScreen> {
     HapticFeedback.mediumImpact();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('🦊 Stamped. One claw, all week — it lives on Home.')));
+        content: Text('🐤 Stamped. One claw, all week — it lives on Home.')));
     context.pop();
   }
 
@@ -293,7 +293,7 @@ class _WeeklyReviewScreenState extends ConsumerState<WeeklyReviewScreen> {
                           : _stamp,
                   style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: Text(_page < 2 ? 'NEXT SCROLL' : '🦊 STAMP IT'),
+                  child: Text(_page < 2 ? 'NEXT SCROLL' : '🐤 STAMP IT'),
                 ),
               ),
             ),
@@ -311,7 +311,9 @@ class _WeeklyReviewScreenState extends ConsumerState<WeeklyReviewScreen> {
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
       child: Column(
         children: [
-          const Center(child: RenFigure(size: 108)),
+          const Center(
+              child: ZuzuFigure(
+                  moment: ZuzuMoment.meditate, size: 108)),
           const SizedBox(height: 8),
           Text(renLine,
               style: AppTypography.body.copyWith(

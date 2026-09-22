@@ -202,7 +202,8 @@ class AppPrefs {
     _zenEnabledCache = on;
   }
 
-  // Master Ren, the fox sensei (ON by default). Gates every RenFigure.
+  // Zuzu the companion (ON by default). Gates every ZuzuFigure. Key name
+  // keeps the old 'ren' spelling so nobody's saved preference resets.
   static const _renEnabledKey = 'ren_enabled';
   static bool _renEnabledCache = true;
 
@@ -244,7 +245,7 @@ class AppPrefs {
   }
 
   // ── Weekly review: "one claw" intention ──────────────────────────────────
-  // Set in Ren's Sunday review; shown on the Home progress card during its
+  // Set in Zuzu's Sunday review; shown on the Home progress card during its
   // week. weekKey anchors weeks to the most recent Sunday.
   static const _weeklyClawKey = 'weekly_claw';
   static const _weeklyClawWeekKey = 'weekly_claw_week';

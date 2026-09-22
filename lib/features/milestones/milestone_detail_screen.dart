@@ -144,7 +144,7 @@ class MilestoneDetailScreen extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 20),
                 child: Text(
-                  '🦊 “The mountain has not moved. Take one step.”',
+                  '🐤 “The mountain has not moved. Take one step.”',
                   style: AppTypography.caption
                       .copyWith(color: context.appTextSecondary),
                   textAlign: TextAlign.center,

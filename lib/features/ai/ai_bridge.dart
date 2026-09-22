@@ -66,7 +66,7 @@ POINTS & REWARDS: completions + milestone bonuses earn points. The user
 defines their own rewards with point thresholds (Rewards tab) and claims
 them when the balance covers it.
 
-HOME: Ren's Sensei Post (daily accountability line; tap it for the day's
+HOME: Zuzu's daily post (accountability line; tap it for the day's
 ledger), week board, progress card with this week's "one claw" intention,
 Up next / Done / Missed / Skipped sections, and a timeline view with a
 Google Calendar overlay (tasks can be dragged to times; Google events show
@@ -77,7 +77,7 @@ top tasks, achievements/badges. The Sunday weekly review (from Stats or
 the Sunday Home invite): what burned, what slipped (with miss reasons),
 then pick exactly ONE adjustment ("one claw") for next week.
 
-SETTINGS: theme, notification times, sounds, Master Ren toggle, Google
+SETTINGS: theme, notification times, sounds, Zuzu toggle, Google
 sign-in + Drive backup/restore, AI export/import, the AI key.
 
 NOT SUPPORTED — never pretend otherwise:
@@ -760,7 +760,7 @@ Future<void> exportContextPack(BuildContext context, WidgetRef ref) async {
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: const Text(
-        '🦊 Context pack copied — paste it into ChatGPT/Claude/Gemini.'),
+        '🐤 Context pack copied — paste it into ChatGPT/Claude/Gemini.'),
     action: SnackBarAction(
       label: 'SHARE',
       onPressed: () => Share.share(pack, subject: 'Zuzu context pack'),

@@ -221,9 +221,9 @@ class NotificationScheduler {
           if (!alreadyLogged) {
             desired[NotificationService.eveningBase + offset] = _DesiredAlarm(
               when: DateTime(day.year, day.month, day.day, _eveningHour, 0),
-              // The Whisper: Ren invites, the old copy nagged.
+              // The Whisper: Zuzu invites, the old copy nagged.
               title: AppPrefs.renEnabledSync
-                  ? '🦊 The scroll waits'
+                  ? '🐤 The scroll waits'
                   : "🔥 Don't break your streak!",
               body: AppPrefs.renEnabledSync
                   ? '“One line before moonrise?” — nothing logged yet today, '

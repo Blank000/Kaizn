@@ -269,7 +269,7 @@ class _TimelineViewState extends ConsumerState<TimelineView> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(AppPrefs.renEnabledSync
-                    ? '🦊 “Rest chosen is rest earned.” Skip logged, streak safe.'
+                    ? '🐤 “Rest chosen is rest earned.” Skip logged, streak safe.'
                     : 'Skip logged — intentional rest, streak safe.'),
               ));
             }

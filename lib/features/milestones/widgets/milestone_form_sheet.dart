@@ -142,7 +142,7 @@ class _MilestoneFormSheetState extends ConsumerState<_MilestoneFormSheet> {
       if (mounted && AppPrefs.renEnabledSync) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
-              '🦊 “Name the mountain. Then forget the peak — watch the steps.”'),
+              '🐤 “Name the mountain. Then forget the peak — watch the steps.”'),
         ));
       }
     }

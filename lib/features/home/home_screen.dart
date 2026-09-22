@@ -27,7 +27,8 @@ import '../../shared/widgets/celebration_dialog.dart';
 import '../../shared/widgets/day_complete_sequence.dart';
 import '../../shared/widgets/stagger_in.dart';
 import '../../shared/widgets/streak_flame.dart';
-import '../../shared/widgets/ren_figure.dart';
+import '../../shared/widgets/zuzu_figure.dart';
+import '../../shared/widgets/zuzu_lines.dart';
 import 'widgets/sensei_post.dart';
 import '../../shared/widgets/spring_progress_bar.dart';
 import '../../shared/widgets/task_tile.dart';
@@ -730,7 +731,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               currentStreak: streak?.currentStreak ?? 0,
             ),
           ),
-          // The Sensei Post — Ren's daily accountability station: he names
+          // The daily post — Zuzu's accountability station: he names
           // what stands, what remains, and what fell yesterday. Present on
           // every real day (rest days and empty days have their own Ren).
           if (AppPrefs.renEnabledSync && !resting && totalScheduled > 0)
@@ -746,7 +747,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         c.completedOn.day == y.day)
                     .length;
                 return SenseiPost(
-                  line: RenLines.accountability(
+                  line: ZuzuLines.accountability(
                     hour: DateTime.now().hour,
                     done: doneToday.length,
                     remaining: upNext.length,
@@ -799,7 +800,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  '🦊 One claw: ${AppPrefs.weeklyClawSync}',
+                  '🐤 One claw: ${AppPrefs.weeklyClawSync}',
                   style: AppTypography.caption
                       .copyWith(color: context.appTextSecondary),
                   textAlign: TextAlign.center,
@@ -809,7 +810,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Center(
                 child: TextButton(
                   onPressed: () => context.push('/review'),
-                  child: const Text('🦊 Sunday review with Ren →'),
+                  child: const Text('🐤 Sunday review with Zuzu →'),
                 ),
               ),
           // Daily quest — a quiet list row, deliberately NOT a banner (the
@@ -1594,11 +1595,12 @@ class _NothingTodayState extends StatelessWidget {
       child: Column(
         children: [
           // Ren greets the blank scroll (falls back to the sunrise when the
-          // sensei is toggled off).
+          // companion is toggled off).
           if (AppPrefs.renEnabledSync)
-            RenFigure(
+            ZuzuFigure(
+              moment: ZuzuMoment.invitation,
               size: 88,
-              line: hasMilestones ? RenLines.empty() : 'One task. Choose it well.',
+              line: hasMilestones ? ZuzuLines.empty() : 'One task. Choose it well.',
             )
           else
             const Text('🌅', style: TextStyle(fontSize: 48)),
@@ -1732,7 +1734,7 @@ class _RestBanner extends StatelessWidget {
         children: [
           // Ren tends the rest day — the moment his casting exists for.
           if (AppPrefs.renEnabledSync)
-            const RenFigure(size: 56)
+            const ZuzuFigure(moment: ZuzuMoment.meditate, size: 56)
           else
             const Text('😴', style: TextStyle(fontSize: 24)),
           const SizedBox(width: 12),
@@ -1747,7 +1749,7 @@ class _RestBanner extends StatelessWidget {
                 ),
                 Text(
                   AppPrefs.renEnabledSync
-                      ? '“${RenLines.rest()}” — streak safe, no pings.'
+                      ? '“${ZuzuLines.rest()}” — streak safe, no pings.'
                       : 'Streak safe · no pings · no quests. Recovery is training.',
                   style: AppTypography.caption
                       .copyWith(color: context.appTextSecondary),

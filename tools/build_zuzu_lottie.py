@@ -331,10 +331,46 @@ def day_complete():
                            wingR_ks=wingR, wingL_ks=wingL))
 
 
+# ── 4. Meditate - loop ────────────────────────────────────────────────────
+# Took over Master Ren's surfaces when he was retired: focus sessions, the
+# rest banner, the Sunday review. Calm, eyes closed, almost still - this
+# plays behind a running countdown and must never compete with it.
+def meditate():
+    op = 150                                   # 5.0s
+    eyes = dict(s=kf([(0, [100, 14, 100]), (150, [100, 14, 100])]))
+    root = dict(s=kf([(0, [100, 100, 100]), (75, [100.6, 101.4, 100]),
+                      (150, [100, 100, 100])]))
+    head = dict(r=kf([(0, [0]), (50, [2.5]), (100, [-2.5]), (150, [0])]))
+    # Wings tucked in close, the way hands rest in a seated posture.
+    wingL = dict(r=kf([(0, [14]), (75, [17]), (150, [14])]))
+    wingR = dict(r=kf([(0, [-14]), (75, [-17]), (150, [-14])]))
+    return comp("zuzu_meditate", op,
+                zuzu_parts(op, eyes_ks=eyes, root_ks=root, head_ks=head,
+                           wingL_ks=wingL, wingR_ks=wingR))
+
+
+# ── 5. Nod - one shot ─────────────────────────────────────────────────────
+# For honest misses and comebacks. Understanding, never disappointed: the
+# head dips slowly and comes back up, and the eyes soften rather than close.
+# Deliberately has NO celebratory motion - a miss must never read as a win.
+def nod():
+    op = 48                                    # 1.6s
+    head = dict(r=kf([(0, [0]), (12, [11]), (24, [2]), (34, [9]),
+                      (48, [0])]))
+    eyes = dict(s=kf([(0, [100, 100, 100]), (10, [100, 52, 100]),
+                      (34, [100, 52, 100]), (48, [100, 100, 100])]))
+    # One wing lifts a little, as if making room beside him.
+    wingR = dict(r=kf([(0, [0]), (18, [-24]), (38, [-20]), (48, [0])]))
+    return comp("zuzu_nod", op,
+                zuzu_parts(op, head_ks=head, eyes_ks=eyes, wingR_ks=wingR))
+
+
 BUILDS = {
     "zuzu_invitation.json": invitation,
     "zuzu_first_win.json": first_win,
     "zuzu_day_complete.json": day_complete,
+    "zuzu_meditate.json": meditate,
+    "zuzu_nod.json": nod,
 }
 
 if __name__ == "__main__":

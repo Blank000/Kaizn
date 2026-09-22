@@ -102,15 +102,15 @@ class StatsScreen extends ConsumerWidget {
           const _LastWeekRecapLine(),
           if (AppPrefs.renEnabledSync) ...[
             const SizedBox(height: 8),
-            // The Review — Ren's Sunday room, reachable any day from here.
+            // The Review — Zuzu's Sunday room, reachable any day from here.
             Card(
               margin: EdgeInsets.zero,
               child: ListTile(
-                leading: const Text('🦊', style: TextStyle(fontSize: 22)),
+                leading: const Text('🐤', style: TextStyle(fontSize: 22)),
                 title: Text(
                     AppPrefs.weeklyReviewDoneSync
                         ? 'Weekly review — stamped'
-                        : 'Weekly review with Ren',
+                        : 'Weekly review with Zuzu',
                     style: AppTypography.body
                         .copyWith(fontWeight: FontWeight.w700)),
                 subtitle: Text(
@@ -1511,7 +1511,7 @@ class _TimeOfDayCard extends StatelessWidget {
               child: Text(
                 // The Observatory: the data speaks in Ren's voice.
                 AppPrefs.renEnabledSync
-                    ? '🦊 “You hunt best when the forest is quiet — ${_formatHour(peakHour)}.”'
+                    ? '🐤 “You hunt best when the forest is quiet — ${_formatHour(peakHour)}.”'
                     : 'Most active around ${_formatHour(peakHour)}',
                 style: AppTypography.body
                     .copyWith(fontWeight: FontWeight.w700),

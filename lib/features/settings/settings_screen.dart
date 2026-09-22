@@ -140,12 +140,12 @@ class SettingsScreen extends ConsumerWidget {
               _Divider(),
               StatefulBuilder(builder: (context, setTileState) {
                 return SwitchListTile(
-                  secondary: const Text('🦊',
+                  secondary: const Text('🐤',
                       style: TextStyle(fontSize: 20)),
-                  title: Text('Master Ren, the fox sensei',
+                  title: Text('Zuzu, your companion',
                       style: AppTypography.body),
                   subtitle: Text(
-                    'Your guide on rest days, comebacks and quiet moments',
+                    'He meets you on rest days, comebacks and quiet moments',
                     style: AppTypography.caption
                         .copyWith(color: context.appTextSecondary),
                   ),
