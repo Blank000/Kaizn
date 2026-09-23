@@ -5,8 +5,10 @@ step assumes the previous one succeeded.
 
 ## 0. Path warning
 
-**Do not put the project at a path that contains a space.** Apple's codesign
-tool and several Flutter build phases choke on spaces. Use something like:
+**Do not put the project under iCloud `Documents`, and do not use a path
+with a space.** Codesign fails with `resource fork, Finder information, or
+similar detritus not allowed`. `bash tools/ios_reset.sh` strips that
+metadata, then iCloud puts it back. Use something like:
 
 ```
 ~/Projects/Kaizn
@@ -15,14 +17,16 @@ tool and several Flutter build phases choke on spaces. Use something like:
 Not:
 
 ```
-~/Documents/Github Projects/Kaizn       ← will cause "codesign failed" loops
+~/Documents/Github Projects/Kaizn
 ```
 
-If you already cloned it under a spaced path, move it:
+If `~/Projects/Kaizn` already exists, pick another folder name. If you
+already cloned it under Documents, move it:
 
 ```bash
 mv "/Users/USER/Documents/Github Projects/Kaizn" ~/Projects/Kaizn
 cd ~/Projects/Kaizn
+xattr -cr .
 ```
 
 ## 1. Install Flutter + Xcode + CocoaPods
@@ -87,12 +91,24 @@ Plug iPhone in. On the iPhone:
 - Settings → Privacy & Security → **Developer Mode** → ON → restart
 - After restart, confirm with passcode
 
-## 6. Run
+## 6. Install a build that survives closing the terminal
+
+`flutter run` is a debug session. Quit that terminal and the app dies.
+To leave Zuzu on the phone, install a release build. The id is the middle
+column from `flutter devices`:
 
 ```bash
-flutter devices                              # find your iPhone's ID
-flutter run -d <iphone-id>
+flutter devices
+flutter build ios --release && flutter install --release -d <iphone-id>
 ```
+
+Then open the app from the home screen. No terminal needs to stay open.
+A free Apple ID install expires after 7 days; run the same command again.
+
+`flutter run -d <iphone-id>` is only for a live debug session (hot reload,
+logs). Wi-Fi works after one USB pair: Xcode → Window → Devices and
+Simulators → select the iPhone → **Connect via network**. Keep the phone
+unlocked. On iOS 26 that attach is slow; a cable is faster when it stalls.
 
 On first launch on the phone:
 - Settings → General → VPN & Device Management → tap your Apple Development
@@ -111,7 +127,10 @@ flutter run -d <iphone-id>
 ```
 
 That script strips macOS extended attributes, wipes Pods, reinstalls
-everything, and warns if your project path has a space.
+everything, and warns if your project path has a space. If codesign still
+says `resource fork, Finder information, or similar detritus not allowed`,
+the folder is still in iCloud Documents. Move it (section 0) and build
+again.
 
 ### "Unable to find a destination matching … iOS X.Y is not installed"
 

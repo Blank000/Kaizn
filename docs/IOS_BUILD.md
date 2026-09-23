@@ -1,6 +1,6 @@
 # Building Zuzu for iOS (run this on the Mac)
 
-*Current as of 2026-09-22, branch `timetable`. Everything that could be
+*Current as of 2026-09-23, branch `timetable`. Everything that could be
 prepared from Windows is already committed. The Mac only has to compile and
 sign — no feature work belongs here.*
 
@@ -41,14 +41,19 @@ Do not redo any of this:
    ```
 3. `flutter doctor` until the Xcode row is green.
 
-**Put the checkout somewhere with no spaces in the path.** A space in the
-project path is the classic silent CocoaPods killer.
+**Put the checkout outside iCloud, in a path with no spaces.** Both
+`Documents` (iCloud Drive) and a space in the path make codesign fail with
+`resource fork, Finder information, or similar detritus not allowed`.
+`bash tools/ios_reset.sh` strips that metadata, then iCloud stamps it
+back on the next build. Clone into something like `~/Projects/Kaizn`.
+If that folder already exists, use another name (`~/Projects/Kaizn-timetable`
+worked). Do not use `~/Documents/Github Projects/Kaizn`.
 
 ## Every build
 
 ```bash
-git clone git@github.com:Blank000/Kaizn.git
-cd Kaizn
+git clone git@github.com:Blank000/Kaizn.git ~/Projects/Kaizn
+cd ~/Projects/Kaizn
 git checkout timetable
 flutter pub get
 cd ios && pod install && cd ..
@@ -57,28 +62,72 @@ open ios/Runner.xcworkspace        # ALWAYS .xcworkspace, never .xcodeproj
 
 In Xcode, select the **Runner** target → **Signing & Capabilities**:
 
-- **Team** — your personal Apple ID team. A free account is enough to
-  install on your own device; the build expires after 7 days. A paid
-  account is required for TestFlight.
-- **Bundle identifier** — keep whatever the project has. It must stay
-  `com.alokraj.habit_reward_tracker`-shaped, because the Google OAuth
-  client is registered against it and the Drive backup path depends on it.
+- **Automatically manage signing** — on.
+- **Team** — your personal Apple ID (shows as Personal Team on a free
+  account). A free account is enough to install on your own iPhone; the
+  install expires after 7 days. A paid account is required for TestFlight.
+- **Bundle identifier** — keep `com.alokraj.habitRewardTracker`. Google
+  Sign-In is registered against it.
 
-Then run onto a plugged-in iPhone from Xcode, or:
+### Phone
+
+1. Plug in with a data cable, unlock, tap **Trust**.
+2. **Settings → Privacy & Security → Developer Mode → On**, then restart.
+3. Find the id (the middle column):
 
 ```bash
-flutter run --release        # device attached
-flutter build ipa            # paid account — produces the .ipa for TestFlight
+flutter devices
 ```
+
+```text
+Prachi’s iPhone (wireless) • 00008150-001169583A78401C • ios • iOS 26.6.2
+```
+
+Wi-Fi works after one USB pair. Xcode → **Window → Devices and Simulators**
+→ select the iPhone → **Connect via network**. Same Wi-Fi, phone unlocked.
+On iOS 26 the wireless attach often sits on “waiting to connect” for a
+minute after the Mac already has a link. Leave it. A cable is faster when
+that stalls.
+
+### Use the app without a terminal
+
+`flutter run` is a debug session. Closing that terminal kills the app.
+Install a release build instead, then open Zuzu from the home screen:
+
+```bash
+flutter build ios --release && flutter install --release -d <iphone-id>
+```
+
+Example:
+
+```bash
+flutter build ios --release && flutter install --release -d 00008150-001169583A78401C
+```
+
+The first launch may ask you to trust the developer certificate:
+**Settings → General → VPN & Device Management**. When the free install
+expires (7 days), run the same command again.
+
+SQLite `MIN` / `MAX` lines during the Xcode build are warnings. The
+failure that matters is the codesign “detritus” line, and that is the
+path problem above.
+
+`flutter build ipa` is the TestFlight / App Store package. It needs the
+paid Apple Developer Program.
 
 ## If the build fights you
 
-Run the canonical reset — it clears Pods, DerivedData and xattr problems,
-and warns if the project path contains a space:
+Run the canonical reset — it clears Pods and extended attributes, and
+warns if the project path contains a space:
 
 ```bash
 bash tools/ios_reset.sh
 ```
+
+If the error is still `resource fork, Finder information, or similar
+detritus not allowed`, the checkout is still under iCloud `Documents`.
+Move it (see the path rule above) and build again. Resetting in place
+does not stick there.
 
 `iOS_SETUP.md` in the repo root is the deeper first-Mac guide (Xcode
 signing, Developer Mode on the phone, Google Sign-In OAuth gotchas), written

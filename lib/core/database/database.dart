@@ -95,53 +95,56 @@ class AppDatabase extends _$AppDatabase {
         }
         if (from < 3) {
           // v2 → v3: add the color_index column to milestones, default 0.
-          await m.addColumn(milestones, milestones.colorIndex);
+          await _addColumnIfMissing(m, milestones, milestones.colorIndex);
         }
         if (from < 4) {
           // v3 → v4: add scheduling columns to tasks.
-          await m.addColumn(tasks, tasks.startMinute);
-          await m.addColumn(tasks, tasks.durationMinutes);
+          await _addColumnIfMissing(m, tasks, tasks.startMinute);
+          await _addColumnIfMissing(m, tasks, tasks.durationMinutes);
         }
         if (from < 5) {
           // v4 → v5: add per-task reminder columns.
-          await m.addColumn(tasks, tasks.reminderEnabled);
-          await m.addColumn(tasks, tasks.reminderMinute);
+          await _addColumnIfMissing(m, tasks, tasks.reminderEnabled);
+          await _addColumnIfMissing(m, tasks, tasks.reminderMinute);
         }
         if (from < 6) {
           // v5 → v6: add one-shot reminder date, nullable.
-          await m.addColumn(tasks, tasks.reminderDate);
+          await _addColumnIfMissing(m, tasks, tasks.reminderDate);
         }
         if (from < 7) {
           // v6 → v7: Atomic Habits wave — single batched migration.
-          await m.addColumn(tasks, tasks.stackedAfterTaskId);
-          await m.addColumn(taskCompletions, taskCompletions.durationSeconds);
-          await m.addColumn(milestones, milestones.identity);
-          await m.createTable(changeLog);
+          await _addColumnIfMissing(m, tasks, tasks.stackedAfterTaskId);
+          await _addColumnIfMissing(
+              m, taskCompletions, taskCompletions.durationSeconds);
+          await _addColumnIfMissing(m, milestones, milestones.identity);
+          await _createTableIfMissing(m, changeLog);
         }
         if (from < 8) {
           // v7 → v8: two-minute rule.
-          await m.addColumn(tasks, tasks.tinyName);
-          await m.addColumn(taskCompletions, taskCompletions.isTiny);
+          await _addColumnIfMissing(m, tasks, tasks.tinyName);
+          await _addColumnIfMissing(m, taskCompletions, taskCompletions.isTiny);
         }
         if (from < 9) {
           // v8 → v9: weekly league close-outs.
-          await m.createTable(leagueWeeks);
+          await _createTableIfMissing(m, leagueWeeks);
         }
         if (from < 10) {
           // v9 → v10: miss check-in reason tag.
-          await m.addColumn(taskCompletions, taskCompletions.missReason);
+          await _addColumnIfMissing(
+              m, taskCompletions, taskCompletions.missReason);
         }
         if (from < 11) {
           // v10 → v11: Pico chat history.
-          await m.createTable(aiChatMessages);
+          await _createTableIfMissing(m, aiChatMessages);
         }
         if (from < 12) {
           // v11 → v12: applied-plan guard on chat messages.
-          await m.addColumn(aiChatMessages, aiChatMessages.planApplied);
+          await _addColumnIfMissing(
+              m, aiChatMessages, aiChatMessages.planApplied);
         }
         if (from < 13) {
           // v12 → v13: the stopwatch time ledger.
-          await m.createTable(timerEvents);
+          await _createTableIfMissing(m, timerEvents);
         }
       },
     );
@@ -242,6 +245,35 @@ class AppDatabase extends _$AppDatabase {
       ..addColumns([changeLog.seq.max()]);
     final row = await query.getSingle();
     return row.read(changeLog.seq.max()) ?? 0;
+  }
+
+  /// A half-finished upgrade leaves `user_version` behind columns that were
+  /// already added. The next open retries `ADD COLUMN` and sqlite rejects the
+  /// duplicate, which blocks every later write.
+  ///
+  /// `PRAGMA table_info` does not return rows through drift's query API, so
+  /// the check has to be a real SELECT against `pragma_table_info`.
+  Future<void> _addColumnIfMissing(
+    Migrator m,
+    TableInfo table,
+    GeneratedColumn column,
+  ) async {
+    final rows = await m.database.customSelect(
+      'SELECT name FROM pragma_table_info(?) WHERE name = ?',
+      variables: [
+        Variable.withString(table.actualTableName),
+        Variable.withString(column.name),
+      ],
+    ).get();
+    if (rows.isEmpty) await m.addColumn(table, column);
+  }
+
+  Future<void> _createTableIfMissing(Migrator m, TableInfo table) async {
+    final rows = await m.database.customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable.withString(table.actualTableName)],
+    ).get();
+    if (rows.isEmpty) await m.createTable(table);
   }
 
   Future<void> _initStreakSingleton() async {

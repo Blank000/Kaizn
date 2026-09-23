@@ -28,10 +28,11 @@ Future<void> showTaskFormSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _TaskFormSheet(
-        milestoneId: milestoneId,
-        task: task,
-        initialStartTime: initialStartTime,
-        initialStackedAfterTaskId: initialStackedAfterTaskId),
+      milestoneId: milestoneId,
+      task: task,
+      initialStartTime: initialStartTime,
+      initialStackedAfterTaskId: initialStackedAfterTaskId,
+    ),
   );
 }
 
@@ -46,11 +47,12 @@ class _TaskFormSheet extends ConsumerStatefulWidget {
   /// sheet) and expands More options so the chain is visible.
   final String? initialStackedAfterTaskId;
 
-  const _TaskFormSheet(
-      {required this.milestoneId,
-      this.task,
-      this.initialStartTime,
-      this.initialStackedAfterTaskId});
+  const _TaskFormSheet({
+    required this.milestoneId,
+    this.task,
+    this.initialStartTime,
+    this.initialStackedAfterTaskId,
+  });
 
   @override
   ConsumerState<_TaskFormSheet> createState() => _TaskFormSheetState();
@@ -112,8 +114,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final t = widget.task;
     _nameController = TextEditingController(text: t?.name ?? '');
     _descController = TextEditingController(text: t?.description ?? '');
-    _pointsController =
-        TextEditingController(text: (t?.pointsPerCompletion ?? 10).toString());
+    _pointsController = TextEditingController(
+      text: (t?.pointsPerCompletion ?? 10).toString(),
+    );
     _tinyController = TextEditingController(text: t?.tinyName ?? '');
 
     final today = DateTime.now();
@@ -283,7 +286,10 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         return null;
       case TaskRecurrence.daily:
         return RecurrenceRule.daily(
-            interval: _interval, anchor: _anchor, until: _until);
+          interval: _interval,
+          anchor: _anchor,
+          until: _until,
+        );
       case TaskRecurrence.weekly:
         return RecurrenceRule.weekly(
           interval: _interval,
@@ -313,9 +319,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Give your task a name')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Give your task a name')));
       return;
     }
     if (_selectedMilestoneId == null) {
@@ -333,14 +339,18 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     // Habit stacking: defense-in-depth cycle check at save (the picker
     // already excludes loop candidates; this catches stale state).
     if (_stackedAfterTaskId != null) {
-      final anchor =
-          _allTasks.where((t) => t.id == _stackedAfterTaskId).firstOrNull;
-      if (anchor == null || anchor.id == widget.task?.id ||
+      final anchor = _allTasks
+          .where((t) => t.id == _stackedAfterTaskId)
+          .firstOrNull;
+      if (anchor == null ||
+          anchor.id == widget.task?.id ||
           _wouldLoop(anchor)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text("That anchor would create a loop — pick another task")),
+            content: Text(
+              "That anchor would create a loop — pick another task",
+            ),
+          ),
         );
         return;
       }
@@ -373,40 +383,44 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
 
     if (_isEdit) {
       final t = widget.task!;
-      await db.updateTask(t.copyWith(
-        name: name,
-        description: Value(description),
-        milestoneId: Value(_selectedMilestoneId),
-        pointsPerCompletion: points,
-        recurrence: _frequency,
-        recurrenceConfig: Value(cfg),
-        dueDate: Value(dueDate),
-        startMinute: Value(startMin),
-        durationMinutes: _durationMinutes,
-        reminderEnabled: _reminderEnabled,
-        reminderMinute: Value(reminderMin),
-        reminderDate: Value(reminderDate),
-        stackedAfterTaskId: Value(_stackedAfterTaskId),
-        tinyName: Value(tinyName),
-      ));
+      await db.updateTask(
+        t.copyWith(
+          name: name,
+          description: Value(description),
+          milestoneId: Value(_selectedMilestoneId),
+          pointsPerCompletion: points,
+          recurrence: _frequency,
+          recurrenceConfig: Value(cfg),
+          dueDate: Value(dueDate),
+          startMinute: Value(startMin),
+          durationMinutes: _durationMinutes,
+          reminderEnabled: _reminderEnabled,
+          reminderMinute: Value(reminderMin),
+          reminderDate: Value(reminderDate),
+          stackedAfterTaskId: Value(_stackedAfterTaskId),
+          tinyName: Value(tinyName),
+        ),
+      );
     } else {
-      await db.insertTask(TasksCompanion.insert(
-        id: _generateId(),
-        milestoneId: Value(_selectedMilestoneId),
-        name: name,
-        description: Value(description),
-        pointsPerCompletion: Value(points),
-        recurrence: Value(_frequency),
-        recurrenceConfig: Value(cfg),
-        dueDate: Value(dueDate),
-        startMinute: Value(startMin),
-        durationMinutes: Value(_durationMinutes),
-        reminderEnabled: Value(_reminderEnabled),
-        reminderMinute: Value(reminderMin),
-        reminderDate: Value(reminderDate),
-        stackedAfterTaskId: Value(_stackedAfterTaskId),
-        tinyName: Value(tinyName),
-      ));
+      await db.insertTask(
+        TasksCompanion.insert(
+          id: _generateId(),
+          milestoneId: Value(_selectedMilestoneId),
+          name: name,
+          description: Value(description),
+          pointsPerCompletion: Value(points),
+          recurrence: Value(_frequency),
+          recurrenceConfig: Value(cfg),
+          dueDate: Value(dueDate),
+          startMinute: Value(startMin),
+          durationMinutes: Value(_durationMinutes),
+          reminderEnabled: Value(_reminderEnabled),
+          reminderMinute: Value(reminderMin),
+          reminderDate: Value(reminderDate),
+          stackedAfterTaskId: Value(_stackedAfterTaskId),
+          tinyName: Value(tinyName),
+        ),
+      );
     }
     await AppPrefs.setLastUsedMilestoneId(_selectedMilestoneId!);
     // Reflect the new/changed reminder in the scheduled notifications.
@@ -441,8 +455,10 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text(_isEdit ? 'Edit task' : 'New task',
-                  style: AppTypography.heading2),
+              Text(
+                _isEdit ? 'Edit task' : 'New task',
+                style: AppTypography.heading2,
+              ),
               const SizedBox(height: 20),
               if (_milestonesLoaded && _milestones.isEmpty)
                 _NoMilestonesPanel()
@@ -487,17 +503,24 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(
-                      value: TaskRecurrence.none, label: Text('Once')),
+                    value: TaskRecurrence.none,
+                    label: Text('Once'),
+                  ),
                   ButtonSegment(
-                      value: TaskRecurrence.daily, label: Text('Daily')),
+                    value: TaskRecurrence.daily,
+                    label: Text('Daily'),
+                  ),
                   ButtonSegment(
-                      value: TaskRecurrence.weekly, label: Text('Weekly')),
+                    value: TaskRecurrence.weekly,
+                    label: Text('Weekly'),
+                  ),
                   ButtonSegment(
-                      value: TaskRecurrence.monthly, label: Text('Monthly')),
+                    value: TaskRecurrence.monthly,
+                    label: Text('Monthly'),
+                  ),
                 ],
                 selected: {_frequency},
-                onSelectionChanged: (s) =>
-                    setState(() => _frequency = s.first),
+                onSelectionChanged: (s) => setState(() => _frequency = s.first),
               ),
               const SizedBox(height: 16),
               if (_frequency != TaskRecurrence.none) _buildIntervalRow(),
@@ -535,8 +558,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (_saving ||
-                          (_milestonesLoaded && _milestones.isEmpty))
+                  onPressed:
+                      (_saving || (_milestonesLoaded && _milestones.isEmpty))
                       ? null
                       : _save,
                   child: Text(_isEdit ? 'SAVE CHANGES' : 'ADD TASK'),
@@ -554,14 +577,14 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   Widget _buildMilestoneDropdown() {
     return DropdownButtonFormField<String>(
       value: _selectedMilestoneId,
-      decoration: const InputDecoration(
-        labelText: 'Milestone',
-      ),
+      decoration: const InputDecoration(labelText: 'Milestone'),
       items: _milestones
-          .map((m) => DropdownMenuItem(
-                value: m.id,
-                child: Text(m.name, overflow: TextOverflow.ellipsis),
-              ))
+          .map(
+            (m) => DropdownMenuItem(
+              value: m.id,
+              child: Text(m.name, overflow: TextOverflow.ellipsis),
+            ),
+          )
           .toList(),
       onChanged: (v) => setState(() => _selectedMilestoneId = v),
     );
@@ -707,8 +730,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final unit = _frequency == TaskRecurrence.daily
         ? 'day'
         : _frequency == TaskRecurrence.weekly
-            ? 'week'
-            : 'month';
+        ? 'week'
+        : 'month';
     return InkWell(
       onTap: _pickAnchor,
       borderRadius: BorderRadius.circular(8),
@@ -791,11 +814,12 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
     final usual = _usualSeconds == null
         ? ''
         : ' · usually takes ~${formatQueueMinutes(((_usualSeconds! / 60).round()).clamp(1, 24 * 60))}';
-    final durationHint = (anchored
+    final durationHint =
+        (anchored
             ? 'Runs whenever you finish its anchor — no start time needed'
             : has
-                ? 'Sets the size of its timeline block'
-                : 'Feeds timeline blocks and task-queue totals') +
+            ? 'Sets the size of its timeline block'
+            : 'Feeds timeline blocks and task-queue totals') +
         usual;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -814,8 +838,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
             Expanded(
               child: Text(
                 durationHint,
-                style: AppTypography.caption
-                    .copyWith(color: context.appTextSecondary),
+                style: AppTypography.caption.copyWith(
+                  color: context.appTextSecondary,
+                ),
               ),
             ),
           ],
@@ -841,8 +866,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               child: Text(
                 timeLabel,
                 style: AppTypography.body.copyWith(
-                  color:
-                      has ? context.appTextPrimary : context.appTextSecondary,
+                  color: has
+                      ? context.appTextPrimary
+                      : context.appTextSecondary,
                 ),
               ),
             ),
@@ -863,9 +889,8 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   }
 
   Future<void> _pickReminderTime() async {
-    final base = _reminderOverride ??
-        _startTime ??
-        const TimeOfDay(hour: 9, minute: 0);
+    final base =
+        _reminderOverride ?? _startTime ?? const TimeOfDay(hour: 9, minute: 0);
     final picked = await showTimePicker(context: context, initialTime: base);
     if (picked != null) setState(() => _reminderOverride = picked);
   }
@@ -885,8 +910,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
   Widget _buildReminderRow() {
     final followsStart = _reminderOverride == null && _startTime != null;
     final effective = _reminderOverride ?? _startTime;
-    final timeLabel =
-        effective == null ? 'Pick a time' : effective.format(context);
+    final timeLabel = effective == null
+        ? 'Pick a time'
+        : effective.format(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -899,8 +925,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                   Text('Remind me', style: AppTypography.body),
                   Text(
                     'Notify on days this task is due',
-                    style: AppTypography.caption
-                        .copyWith(color: context.appTextSecondary),
+                    style: AppTypography.caption.copyWith(
+                      color: context.appTextSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -955,8 +982,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                     : IconButton(
                         icon: const Icon(Icons.clear),
                         tooltip: 'Clear date',
-                        onPressed: () =>
-                            setState(() => _reminderDate = null),
+                        onPressed: () => setState(() => _reminderDate = null),
                       ),
               ),
               child: Text(
@@ -1034,8 +1060,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
             decoration: const InputDecoration(
               labelText: '2-minute version (optional)',
               hintText: 'e.g. Read one page',
-              helperText:
-                  'A bad-day fallback: half points, full streak credit',
+              helperText: 'A bad-day fallback: half points, full streak credit',
               helperMaxLines: 2,
             ),
           ),
@@ -1049,9 +1074,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 helperText: anchor == null
                     ? null
                     : _scheduleMismatch(anchor)
-                        ? "⚠ This task and its anchor aren't due on the same days"
-                        : 'Surfaces after you finish that task · '
-                            '${_scheduleSummaryOf(anchor)}',
+                    ? "⚠ This task and its anchor aren't due on the same days"
+                    : 'Surfaces after you finish that task · '
+                          '${_scheduleSummaryOf(anchor)}',
                 helperMaxLines: 2,
                 suffixIcon: _stackedAfterTaskId == null
                     ? const Icon(Icons.link_rounded)
@@ -1088,8 +1113,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
               child: Text(
                 '💡 End with something you enjoy — a queue that finishes '
                 'with a treat gets started more.',
-                style: AppTypography.caption
-                    .copyWith(color: context.appTextSecondary),
+                style: AppTypography.caption.copyWith(
+                  color: context.appTextSecondary,
+                ),
               ),
             ),
           ],
@@ -1117,8 +1143,7 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
         ),
         decoration: BoxDecoration(
           color: ctx.appCardSurface,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
         child: Column(
@@ -1141,17 +1166,21 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.link_off_rounded),
-                    title: Text('No anchor — starts on its own',
-                        style: AppTypography.body),
+                    title: Text(
+                      'No anchor — starts on its own',
+                      style: AppTypography.body,
+                    ),
                     onTap: () => Navigator.of(ctx).pop('__none__'),
                   ),
                   for (final t in candidates)
                     ListTile(
                       leading: const Icon(Icons.link_rounded),
-                      title: Text(t.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.body),
+                      title: Text(
+                        t.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body,
+                      ),
                       subtitle: Text(
                         [
                           if (milestoneById[t.milestoneId] != null)
@@ -1172,8 +1201,9 @@ class _TaskFormSheetState extends ConsumerState<_TaskFormSheet> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   "Tasks that would loop back to this one aren't listed.",
-                  style: AppTypography.caption
-                      .copyWith(color: ctx.appTextTertiary),
+                  style: AppTypography.caption.copyWith(
+                    color: ctx.appTextTertiary,
+                  ),
                 ),
               ),
           ],
@@ -1232,9 +1262,10 @@ class _NoMilestonesPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('No milestones yet',
-              style: AppTypography.body
-                  .copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            'No milestones yet',
+            style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 4),
           Text(
             'Tasks belong to milestones. Create one first, then come back.',
@@ -1243,8 +1274,13 @@ class _NoMilestonesPanel extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () {
-              Navigator.of(context).pop();
-              showMilestoneFormSheet(context);
+              final navigator = Navigator.of(context);
+              navigator.pop();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (navigator.context.mounted) {
+                  showMilestoneFormSheet(navigator.context);
+                }
+              });
             },
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('CREATE MILESTONE'),
@@ -1288,8 +1324,7 @@ class _Stepper extends StatelessWidget {
             child: Text(
               '$value',
               textAlign: TextAlign.center,
-              style: AppTypography.body
-                  .copyWith(fontWeight: FontWeight.w700),
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           IconButton(
@@ -1331,8 +1366,7 @@ class _DurationStepper extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.remove),
-            onPressed:
-                minutes > _min ? () => onChanged(minutes - _step) : null,
+            onPressed: minutes > _min ? () => onChanged(minutes - _step) : null,
             visualDensity: VisualDensity.compact,
           ),
           SizedBox(
@@ -1340,14 +1374,12 @@ class _DurationStepper extends StatelessWidget {
             child: Text(
               _label(minutes),
               textAlign: TextAlign.center,
-              style:
-                  AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+              style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed:
-                minutes < _max ? () => onChanged(minutes + _step) : null,
+            onPressed: minutes < _max ? () => onChanged(minutes + _step) : null,
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -1412,8 +1444,11 @@ class _SchedulePreview extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.event_repeat_rounded,
-              size: 18, color: AppColors.primary),
+          const Icon(
+            Icons.event_repeat_rounded,
+            size: 18,
+            color: AppColors.primary,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
