@@ -21,7 +21,7 @@ return [
     //   - the iOS client id   (iPhone tokens carry this one; it is the
     //                          GIDClientID value in ios/Runner/Info.plist)
     'google_client_ids' => [
-        'REPLACE_WITH_WEB_CLIENT_ID.apps.googleusercontent.com',
+        '1056390719903-9jbv73e6dh6mhia19h5a421dsluc7sgm.apps.googleusercontent.com',
         '1056390719903-0uitubentgq7k6l15cf7ebodtjm6qeea.apps.googleusercontent.com',
     ],
 

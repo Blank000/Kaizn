@@ -32,7 +32,8 @@ bool get aiServerEnabled =>
 /// server checks - when sign-in is configured with a web client id. Getting
 /// this wrong makes Android sign-in fail outright, which is why it stays
 /// empty (and unused) until you have created the client and copied its id.
-const String kGoogleServerClientId = '';
+const String kGoogleServerClientId =
+    '1056390719903-9jbv73e6dh6mhia19h5a421dsluc7sgm.apps.googleusercontent.com';
 
 /// Shown to users; must match `daily_limit` in the server config.
 const int kAiDailyLimit = 50;
