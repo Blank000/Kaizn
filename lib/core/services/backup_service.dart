@@ -5,7 +5,23 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 
 import '../database/database.dart';
+import 'app_prefs.dart';
 import 'auth_service.dart';
+
+/// What an automatic backup attempt did.
+enum AutoBackupOutcome {
+  succeeded,
+  failed,
+
+  /// The last good backup is recent enough; nothing to do.
+  skippedFresh,
+
+  /// A recent attempt failed; waiting before hitting Drive again.
+  skippedThrottled,
+
+  /// Another attempt is already running in this isolate.
+  skippedBusy,
+}
 
 /// Backup the user's app data to a JSON file in their Google Drive AppData
 /// folder. AppData is a hidden, app-scoped folder — only this app can read
@@ -127,8 +143,124 @@ class BackupService {
     return files.first.modifiedTime;
   }
 
-  /// Push the local DB to Drive. Creates or updates the backup file.
+  /// Push the local DB to Drive. Creates or updates the backup file, and
+  /// records the outcome locally so automatic backup knows when it is due.
   static Future<void> backup(AppDatabase db) async {
+    try {
+      await _upload(db);
+      await AppPrefs.recordBackupSuccess(DateTime.now());
+    } catch (e) {
+      await AppPrefs.recordBackupFailure(describeError(e), DateTime.now());
+      rethrow;
+    }
+  }
+
+  // ── Automatic backup ──────────────────────────────────────────────────────
+
+  static bool _inFlight = false;
+
+  /// Back up only if the last successful backup is older than [maxAge] (or
+  /// there has never been one). Never throws: the outcome is returned and
+  /// recorded in AppPrefs, because callers are the app opening and a
+  /// background task - neither has anyone to show an exception to.
+  ///
+  /// [force] skips the staleness check; the nightly run uses it, because a
+  /// backup at 2 AM is the whole point of that run even if one happened
+  /// yesterday evening.
+  static Future<AutoBackupOutcome> backupIfDue(
+    AppDatabase db, {
+    Duration maxAge = const Duration(hours: 24),
+    bool force = false,
+  }) async {
+    if (_inFlight) return AutoBackupOutcome.skippedBusy;
+    await AppPrefs.reloadBackupState();
+    final now = DateTime.now();
+
+    if (!force &&
+        !isBackupDue(
+            lastSuccess: AppPrefs.backupLastSuccessSync,
+            now: now,
+            maxAge: maxAge)) {
+      return AutoBackupOutcome.skippedFresh;
+    }
+    // A failed attempt is not retried on every app resume - that would hit
+    // Drive repeatedly while offline. The nightly run ignores this throttle.
+    if (!force &&
+        recentlyFailed(
+            lastErrorAt: AppPrefs.backupLastErrorAtSync, now: now)) {
+      return AutoBackupOutcome.skippedThrottled;
+    }
+
+    _inFlight = true;
+    try {
+      if (AuthService.currentUser == null) {
+        await AuthService.trySilentSignIn();
+      }
+      if (AuthService.currentUser == null) {
+        await AppPrefs.recordBackupFailure(
+            'Not signed in to Google', DateTime.now());
+        return AutoBackupOutcome.failed;
+      }
+      await backup(db);
+      return AutoBackupOutcome.succeeded;
+    } catch (_) {
+      // backup() already recorded the reason.
+      return AutoBackupOutcome.failed;
+    } finally {
+      _inFlight = false;
+    }
+  }
+
+  /// Is a backup overdue? Pure, so it can be tested without Drive.
+  static bool isBackupDue({
+    required DateTime? lastSuccess,
+    required DateTime now,
+    Duration maxAge = const Duration(hours: 24),
+  }) {
+    if (lastSuccess == null) return true;
+    // A clock moved backwards makes the age negative; treat that as due
+    // rather than trusting a backup timestamped in the future.
+    final age = now.difference(lastSuccess);
+    return age.isNegative || age >= maxAge;
+  }
+
+  /// Back off for half an hour after a failure before trying again on
+  /// app open.
+  static bool recentlyFailed({
+    required DateTime? lastErrorAt,
+    required DateTime now,
+    Duration window = const Duration(minutes: 30),
+  }) {
+    if (lastErrorAt == null) return false;
+    final since = now.difference(lastErrorAt);
+    return !since.isNegative && since < window;
+  }
+
+  /// Turn a Drive / auth / socket exception into one short line a person can
+  /// act on. The raw text of these is usually a stack-shaped wall.
+  static String describeError(Object e) {
+    final s = e.toString();
+    final lower = s.toLowerCase();
+    if (e is _BackupException) return e.message;
+    if (lower.contains('socket') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network') ||
+        lower.contains('connection')) {
+      return 'No internet connection';
+    }
+    if (lower.contains('401') ||
+        lower.contains('invalid_grant') ||
+        lower.contains('unauthenticated') ||
+        lower.contains('sign_in')) {
+      return 'Google sign-in expired - sign in again';
+    }
+    if (lower.contains('403') || lower.contains('quota')) {
+      return 'Google Drive refused the upload (storage or quota)';
+    }
+    return s.length > 120 ? '${s.substring(0, 117)}...' : s;
+  }
+
+  static Future<void> _upload(AppDatabase db) async {
     final api = await _driveApi();
     final json = await exportToJson(db);
     final bytes = utf8.encode(json);

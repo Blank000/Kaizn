@@ -920,6 +920,18 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
 
   Future<void> _refreshLastBackupTime() async {
     setState(() => _loadingTime = true);
+    // Local record first: instant, works offline, and also reflects the
+    // nightly background run (which writes from another isolate).
+    await AppPrefs.reloadBackupState();
+    if (mounted && AppPrefs.backupLastSuccessSync != null) {
+      setState(() {
+        _lastBackupAt = AppPrefs.backupLastSuccessSync;
+        _loadingTime = false;
+      });
+      return;
+    }
+    // Nothing recorded locally (backups made before automatic backup
+    // existed) - ask Drive.
     try {
       final t = await BackupService.lastBackupAt();
       if (mounted) setState(() => _lastBackupAt = t);
@@ -1029,8 +1041,48 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                 ? 'No backup yet'
                 : 'Last backup ${_formatLastBackup(_lastBackupAt!)}';
 
+    final now = DateTime.now();
+    final stale = !_loadingTime &&
+        BackupService.isBackupDue(lastSuccess: _lastBackupAt, now: now);
+    final error = AppPrefs.backupLastErrorSync;
+
     return _Card(
       children: [
+        // What happens without you touching anything - and, when it has
+        // stopped working, exactly why.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                stale && error != null
+                    ? Icons.cloud_off_outlined
+                    : Icons.cloud_done_outlined,
+                size: 20,
+                color: stale && error != null
+                    ? AppColors.streakOrange
+                    : AppColors.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  stale && error != null
+                      ? 'Automatic backup is failing: $error. '
+                          'It will keep retrying; you can also back up now.'
+                      : 'Backs up automatically around 2 AM, and again '
+                          'whenever you open the app if the last backup is '
+                          'over a day old.',
+                  style: AppTypography.caption.copyWith(
+                    color: stale && error != null
+                        ? AppColors.streakOrange
+                        : context.appTextSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         ListTile(
           leading: const Icon(Icons.cloud_upload_outlined),
           title: Text('Back up now', style: AppTypography.body),

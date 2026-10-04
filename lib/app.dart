@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/services/app_event_bus.dart';
+import 'core/services/app_prefs.dart';
+import 'core/services/auto_backup.dart';
+import 'core/services/backup_service.dart';
 import 'core/services/notification_scheduler.dart';
 import 'core/services/widget_service.dart';
 import 'core/theme/app_colors.dart';
@@ -38,10 +41,51 @@ class _HabitRewardTrackerAppState extends ConsumerState<HabitRewardTrackerApp>
     // Drain any events that fired before this listener subscribed (typical on
     // cold-start where the notification tap arrives before initState runs).
     AppEventBus.drain();
+    // Backup catch-up on cold start, held back a few seconds so it never
+    // competes with the first frame or the startup database queries.
+    // A Timer, not Future.delayed: it must be cancellable in dispose().
+    _backupKickoff = Timer(const Duration(seconds: 6), _catchUpBackup);
+  }
+
+  Timer? _backupKickoff;
+
+  /// The reliable half of automatic backup: if the last successful upload is
+  /// over a day old, do it now. If that fails while the backup is stale, say
+  /// so once today instead of failing silently - silent failure is exactly
+  /// how backups went missing before.
+  Future<void> _catchUpBackup() async {
+    if (!mounted) return;
+    final outcome =
+        await BackupService.backupIfDue(ref.read(databaseProvider));
+    if (outcome != AutoBackupOutcome.failed || !mounted) return;
+
+    final now = DateTime.now();
+    if (!AutoBackup.shouldWarnStale(
+        lastSuccess: AppPrefs.backupLastSuccessSync,
+        warnedOn: AppPrefs.backupStaleWarnedDateSync,
+        now: now)) {
+      return;
+    }
+    await AppPrefs.setBackupStaleWarnedDate(now);
+    final last = AppPrefs.backupLastSuccessSync;
+    final age = last == null
+        ? "You haven't backed up yet"
+        : 'Last backup ${now.difference(last).inDays} '
+            '${now.difference(last).inDays == 1 ? 'day' : 'days'} ago';
+    rootScaffoldMessengerKey.currentState?.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text(
+          '$age. ${AppPrefs.backupLastErrorSync ?? 'Backup failed'}.'),
+      action: SnackBarAction(
+        label: 'SETTINGS',
+        onPressed: () => ref.read(routerProvider).push('/settings'),
+      ),
+    ));
   }
 
   @override
   void dispose() {
+    _backupKickoff?.cancel();
     _eventSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -56,6 +100,9 @@ class _HabitRewardTrackerAppState extends ConsumerState<HabitRewardTrackerApp>
       // Re-evaluate notifications against the latest data (e.g. drop today's
       // evening nudge if something was logged, pick up new/edited tasks).
       NotificationScheduler.reschedule();
+      // Overdue backup? Catch up now. Cheap when it isn't due: one local
+      // timestamp comparison, no network.
+      _catchUpBackup();
     }
   }
 

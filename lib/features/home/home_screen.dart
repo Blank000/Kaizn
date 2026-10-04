@@ -37,6 +37,7 @@ import '../../shared/providers/active_timer_provider.dart';
 import '../milestones/widgets/task_form_sheet.dart';
 import '../rewards/claim_flow.dart';
 import 'widgets/active_timer_banner.dart';
+import 'widgets/collapsible_section.dart';
 import 'widgets/never_miss_twice_banner.dart';
 import 'widgets/quick_capture_sheet.dart';
 import 'widgets/streak_popup.dart';
@@ -848,11 +849,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onAddTask: () => showTaskFormSheet(context),
             )
           else ...[
-            if (upNext.isNotEmpty) ...[
-              _SectionHeader('Up next today'),
-              // Projected finish (time-blindness aid): total remaining load
-              // incl. hidden queue members, projected from right now.
+            if (upNext.isNotEmpty)
               Builder(builder: (context) {
+                // Projected finish (time-blindness aid): total remaining
+                // load incl. hidden queue members, projected from now.
                 var total = 0;
                 for (final it in upNext) {
                   final queue = queueBehind(
@@ -863,17 +863,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
                 final finish =
                     DateTime.now().add(Duration(minutes: total));
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '~${formatQueueMinutes(total)} of work · done by '
-                    '${TimeOfDay.fromDateTime(finish).format(context)} '
-                    'if you start now',
-                    style: AppTypography.caption
-                        .copyWith(color: context.appTextTertiary),
+                final first = upNext.first.task;
+                final firstAt = first.startMinute == null
+                    ? null
+                    : TimeOfDay(
+                            hour: first.startMinute! ~/ 60,
+                            minute: first.startMinute! % 60)
+                        .format(context);
+                return CollapsibleSection(
+                  label: 'Up next today',
+                  count: upNext.length,
+                  accent: true,
+                  meta: '~${formatQueueMinutes(total)}',
+                  // Closing only lasts until midnight - see AppPrefs.
+                  open: AppPrefs.homeUpNextOpenSync,
+                  onToggle: (v) async {
+                    await AppPrefs.setHomeUpNextOpen(v);
+                    if (mounted) setState(() {});
+                  },
+                  peek: peekLine(
+                    context,
+                    prefix: 'Next:',
+                    names: [for (final it in upNext) it.task.name],
+                    firstSuffix: firstAt,
                   ),
-                );
-              }),
+                  children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '~${formatQueueMinutes(total)} of work · done by '
+                  '${TimeOfDay.fromDateTime(finish).format(context)} '
+                  'if you start now',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextTertiary),
+                ),
+              ),
               // Queue members waiting on an anchor are hidden — each tile
               // here is actionable NOW. Heads of queues show what's behind
               // them instead ("+2 in queue · ~45m").
@@ -909,10 +933,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 );
               }),
-            ],
+                  ],
+                );
+              }),
             if (doneToday.isNotEmpty) ...[
               const SizedBox(height: 16),
-              _SectionHeader('Done today'),
+              CollapsibleSection(
+                label: 'Done today',
+                count: doneToday.length,
+                open: AppPrefs.homeDoneOpenSync,
+                onToggle: (v) async {
+                  await AppPrefs.setHomeDoneOpen(v);
+                  if (mounted) setState(() {});
+                },
+                peek: peekLine(context,
+                    names: [for (final it in doneToday) it.task.name]),
+                children: [
               ...doneToday.indexed.map((entry) => StaggerIn(
                     key: ValueKey(entry.$2.task.id),
                     index: 4 + entry.$1,
@@ -931,6 +967,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   )),
+                ],
+              ),
             ],
             if (missedToday.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -971,7 +1009,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // day. Give one a due date (or finish it) to move it along.
           if (anytime.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _SectionHeader('Anytime · ${anytime.length}'),
+            CollapsibleSection(
+              label: 'Anytime',
+              count: anytime.length,
+              open: AppPrefs.homeAnytimeOpenSync,
+              onToggle: (v) async {
+                await AppPrefs.setHomeAnytimeOpen(v);
+                if (mounted) setState(() {});
+              },
+              peek: peekLine(context,
+                  names: [for (final it in anytime) it.task.name]),
+              children: [
             ...anytime.map((it) => TaskTile(
                   key: ValueKey(it.task.id),
                   task: it.task,
@@ -985,6 +1033,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         taskById[it.task.stackedAfterTaskId]?.name,
                   ),
                 )),
+              ],
+            ),
           ],
                     ],
                   ),

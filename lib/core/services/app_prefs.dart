@@ -130,6 +130,8 @@ class AppPrefs {
     await _migrateLegacyTimer(p);
     final coachIso = p.getString(_coachDismissedKey);
     _coachDismissedCache = coachIso == null ? null : DateTime.tryParse(coachIso);
+    _readBackupState(p);
+    _readHomeSections(p);
     final restIso = p.getString(_restModeUntilKey);
     _restModeUntilCache = restIso == null ? null : DateTime.tryParse(restIso);
     _soundEnabledCache = p.getBool(_soundEnabledKey) ?? false;
@@ -419,6 +421,141 @@ class AppPrefs {
     final p = await SharedPreferences.getInstance();
     await p.setString(_coachDismissedKey, dateOnly.toIso8601String());
     _coachDismissedCache = dateOnly;
+  }
+
+  // ── Home section open/closed state ───────────────────────────────────────
+  // Up next is the one section that must never stay hidden by accident: you
+  // could close it at night and open the app next morning blind to the day.
+  // So closing it only lasts until midnight - it stores the DATE it was
+  // closed, and counts as open on any other day. Anytime (the someday pile)
+  // and Done today simply remember what you last chose.
+
+  static const _upNextClosedOnKey = 'home_up_next_closed_on';
+  static const _anytimeOpenKey = 'home_anytime_open';
+  static const _doneOpenKey = 'home_done_open';
+
+  static DateTime? _upNextClosedOnCache;
+  static bool _anytimeOpenCache = false; // someday pile starts closed
+  static bool _doneOpenCache = true;
+
+  static void _readHomeSections(SharedPreferences p) {
+    final iso = p.getString(_upNextClosedOnKey);
+    _upNextClosedOnCache = iso == null ? null : DateTime.tryParse(iso);
+    _anytimeOpenCache = p.getBool(_anytimeOpenKey) ?? false;
+    _doneOpenCache = p.getBool(_doneOpenKey) ?? true;
+  }
+
+  /// Open unless it was closed earlier *today*.
+  static bool get homeUpNextOpenSync {
+    final closed = _upNextClosedOnCache;
+    if (closed == null) return true;
+    final n = DateTime.now();
+    return !(closed.year == n.year &&
+        closed.month == n.month &&
+        closed.day == n.day);
+  }
+
+  static bool get homeAnytimeOpenSync => _anytimeOpenCache;
+  static bool get homeDoneOpenSync => _doneOpenCache;
+
+  static Future<void> setHomeUpNextOpen(bool open) async {
+    final p = await SharedPreferences.getInstance();
+    if (open) {
+      await p.remove(_upNextClosedOnKey);
+      _upNextClosedOnCache = null;
+    } else {
+      final n = DateTime.now();
+      final today = DateTime(n.year, n.month, n.day);
+      await p.setString(_upNextClosedOnKey, today.toIso8601String());
+      _upNextClosedOnCache = today;
+    }
+  }
+
+  static Future<void> setHomeAnytimeOpen(bool open) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_anytimeOpenKey, open);
+    _anytimeOpenCache = open;
+  }
+
+  static Future<void> setHomeDoneOpen(bool open) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_doneOpenKey, open);
+    _doneOpenCache = open;
+  }
+
+  // ── Automatic Drive backup ───────────────────────────────────────────────
+  // Recorded LOCALLY so "is a backup due?" is instant and works offline —
+  // asking Drive for the file's modifiedTime costs a network round trip on
+  // every app open. Written by both the foreground app and the nightly
+  // background isolate, so readers that care call [reloadBackupState] first;
+  // each isolate has its own cache.
+
+  static const _backupOkKey = 'backup_last_success_millis';
+  static const _backupErrKey = 'backup_last_error';
+  static const _backupErrAtKey = 'backup_last_error_millis';
+  static const _backupWarnedKey = 'backup_stale_warned_date';
+
+  static DateTime? _backupOkCache;
+  static String? _backupErrCache;
+  static DateTime? _backupErrAtCache;
+  static DateTime? _backupWarnedCache;
+
+  static DateTime? _millis(int? v) =>
+      v == null ? null : DateTime.fromMillisecondsSinceEpoch(v);
+
+  static void _readBackupState(SharedPreferences p) {
+    _backupOkCache = _millis(p.getInt(_backupOkKey));
+    _backupErrCache = p.getString(_backupErrKey);
+    _backupErrAtCache = _millis(p.getInt(_backupErrAtKey));
+    final w = p.getString(_backupWarnedKey);
+    _backupWarnedCache = w == null ? null : DateTime.tryParse(w);
+  }
+
+  /// Last time a backup actually reached Drive, or null if never recorded.
+  static DateTime? get backupLastSuccessSync => _backupOkCache;
+
+  /// Why the most recent attempt failed. Cleared by the next success.
+  static String? get backupLastErrorSync => _backupErrCache;
+  static DateTime? get backupLastErrorAtSync => _backupErrAtCache;
+
+  /// The day the "your backup is stale" snackbar last showed — once a day,
+  /// never a nag.
+  static DateTime? get backupStaleWarnedDateSync => _backupWarnedCache;
+
+  /// Pull values the other isolate may have written since we hydrated.
+  static Future<void> reloadBackupState() async {
+    final p = await SharedPreferences.getInstance();
+    try {
+      await p.reload();
+    } catch (_) {
+      // Best-effort; the cached values are still usable.
+    }
+    _readBackupState(p);
+  }
+
+  static Future<void> recordBackupSuccess(DateTime at) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_backupOkKey, at.millisecondsSinceEpoch);
+    await p.remove(_backupErrKey);
+    await p.remove(_backupErrAtKey);
+    _backupOkCache = at;
+    _backupErrCache = null;
+    _backupErrAtCache = null;
+  }
+
+  static Future<void> recordBackupFailure(String error, DateTime at) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_backupErrKey, error);
+    await p.setInt(_backupErrAtKey, at.millisecondsSinceEpoch);
+    _backupErrCache = error;
+    _backupErrAtCache = at;
+  }
+
+  static Future<void> setBackupStaleWarnedDate(DateTime date) async {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_backupWarnedKey, dateOnly.toIso8601String());
+    _backupWarnedCache = dateOnly;
   }
 
   // ── Announced reward IDs (so each reward unlock fires its snackbar once) ─
