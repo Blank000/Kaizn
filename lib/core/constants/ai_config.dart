@@ -11,8 +11,19 @@
 /// user for their own key.
 library;
 
+import 'package:flutter/foundation.dart';
+
 /// The deployed proxy, e.g. `https://yourdomain.com/api/chat.php`.
-const String kAiProxyUrl = '';
+const String kAiProxyUrl = 'https://zuzu.gateauxdamour.in/api/chat.php';
+
+/// Whether this build can actually use the server. Android needs
+/// [kGoogleServerClientId] to get the ID token the server checks; iOS gets
+/// one from its own client id. Until then Android falls back to asking for
+/// a personal key rather than showing a sign-in error it can never clear.
+bool get aiServerEnabled =>
+    kAiProxyUrl.isNotEmpty &&
+    (kGoogleServerClientId.isNotEmpty ||
+        defaultTargetPlatform == TargetPlatform.iOS);
 
 /// The **Web** OAuth client id from the same Google Cloud project as the
 /// app (APIs & Services -> Credentials -> "Web application").

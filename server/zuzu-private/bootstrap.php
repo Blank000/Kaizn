@@ -70,8 +70,12 @@ function zuzu_config(): array
  */
 function zuzu_default_data_dir(): string
 {
-    if (basename(dirname(__DIR__)) === 'public_html') {
-        return dirname(__DIR__, 2) . '/zuzu-data';
+    // Anywhere under a public_html (directly, or inside a subdomain folder
+    // like public_html/zuzu/) the data goes beside that public_html instead.
+    for ($dir = dirname(__DIR__); $dir !== dirname($dir); $dir = dirname($dir)) {
+        if (basename($dir) === 'public_html') {
+            return dirname($dir) . '/zuzu-data';
+        }
     }
     return __DIR__ . '/data';
 }

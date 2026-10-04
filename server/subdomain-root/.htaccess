@@ -1,0 +1,27 @@
+# Root of a folder used ONLY for the Zuzu API, e.g. a subdomain such as
+# zuzu.example.com. Never upload this over an existing website's .htaccess.
+
+Options -Indexes
+
+<IfModule mod_headers.c>
+Header set X-Robots-Tag "noindex, nofollow"
+</IfModule>
+
+# Hostinger puts subdomain folders inside the main site's public_html, so a
+# WordPress parent's rules would otherwise apply here. Turning the rewrite
+# engine on in this folder stops the parent's rules being inherited, and
+# everything except the API and robots.txt answers 404.
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule !^(api/|robots\.txt$) - [R=404,L]
+</IfModule>
+
+# A WordPress parent may also prepend its Wordfence firewall to every PHP
+# file. The API doesn't need it (every request is checked with Google) and
+# it can mistake chat text for an attack, so switch it off for this folder.
+<IfModule LiteSpeed>
+php_value auto_prepend_file none
+</IfModule>
+<IfModule lsapi_module>
+php_value auto_prepend_file none
+</IfModule>

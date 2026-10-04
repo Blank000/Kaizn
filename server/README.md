@@ -72,6 +72,25 @@ domains/
 is what keeps your OpenAI key off the web. (Its `.htaccess` refuses all
 requests anyway, as a backstop.)
 
+### Or: a subdomain with its own folder (what Zuzu uses)
+
+Zuzu runs at `zuzu.gateauxdamour.in`, a subdomain of an existing WordPress
+site. Hostinger creates a subdomain's folder **inside** the main site's
+`public_html` (`public_html/zuzu/`), so everything goes in there:
+
+```
+public_html/zuzu/
+  .htaccess        <- from server/subdomain-root/ (404 for anything but /api,
+  robots.txt          no indexing, WordPress rules and Wordfence kept out)
+  api/             <- from server/public_html/api/
+  zuzu-private/    <- from server/zuzu-private/ (deny-all .htaccess)
+```
+
+The usage database is still written **outside** `public_html`, to
+`domains/<domain>/zuzu-data/`. Only use `subdomain-root/` in a folder
+dedicated to the API, never over an existing site's `.htaccess`.
+`tests/run_subdomain_layout.sh` covers this layout.
+
 ## Step 4 — Put your key in (3 min)
 
 1. In `zuzu-private/`, copy `config.sample.php` and name the copy

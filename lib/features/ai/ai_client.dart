@@ -46,7 +46,7 @@ class AiClient {
   /// A personal key always wins - the user chose it deliberately.
   static AiMode get mode {
     if ((AppPrefs.aiApiKeySync ?? '').isNotEmpty) return AiMode.ownKey;
-    if (kAiProxyUrl.isNotEmpty) return AiMode.zuzuServer;
+    if (aiServerEnabled) return AiMode.zuzuServer;
     return AiMode.unavailable;
   }
 

@@ -393,7 +393,7 @@ class SettingsScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (kAiProxyUrl.isNotEmpty) ...[
+            if (aiServerEnabled) ...[
               Text(
                 "Optional. Without a key, Pico uses Zuzu's built-in AI "
                 '($kAiDailyLimit messages a day). Add your own OpenAI key '
@@ -423,7 +423,7 @@ class SettingsScreen extends ConsumerWidget {
               onChanged();
               if (dctx.mounted) Navigator.of(dctx).pop();
             },
-            child: Text(kAiProxyUrl.isNotEmpty
+            child: Text(aiServerEnabled
                 ? 'USE ZUZU AI'
                 : 'CLEAR KEY'),
           ),
