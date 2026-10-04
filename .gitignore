@@ -46,3 +46,7 @@ app.*.map.json
 
 # Dart & Flutter DevTools local settings
 devtools_options.yaml
+
+# Zuzu AI server: the real config holds the OpenAI key; data/ holds usage.
+server/zuzu-private/config.php
+server/zuzu-private/data/

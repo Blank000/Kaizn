@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/constants/ai_config.dart';
 import '../ai/ai_bridge.dart';
+import '../ai/ai_client.dart';
 import '../../core/services/backup_service.dart';
 import '../../core/services/calendar_service.dart';
 import '../../core/services/cosmetics_service.dart';
@@ -298,15 +300,22 @@ class SettingsScreen extends ConsumerWidget {
           _Card(
             children: [
               StatefulBuilder(builder: (context, setTileState) {
-                final hasKey = (AppPrefs.aiApiKeySync ?? '').isNotEmpty;
+                final mode = AiClient.mode;
                 return ListTile(
                   leading: const Text('🤖', style: TextStyle(fontSize: 20)),
                   title: Text('Pico · AI companion',
                       style: AppTypography.body),
+                  // Never name the server's model - only the user's own.
                   subtitle: Text(
-                    hasKey
-                        ? 'Connected · ${AppPrefs.aiModelSync} · tap to manage'
-                        : 'Tap the floating Pico to set up, or manage here',
+                    switch (mode) {
+                      AiMode.ownKey =>
+                        'Your own key · ${AppPrefs.aiModelSync} · no daily limit',
+                      AiMode.zuzuServer =>
+                        'Included · $kAiDailyLimit messages a day · '
+                            'tap to use your own key instead',
+                      AiMode.unavailable =>
+                        'Tap the floating Pico to set up, or manage here',
+                    },
                     style: AppTypography.caption
                         .copyWith(color: context.appTextSecondary),
                   ),
@@ -382,7 +391,18 @@ class SettingsScreen extends ConsumerWidget {
         title: const Text('Pico · API access'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (kAiProxyUrl.isNotEmpty) ...[
+              Text(
+                "Optional. Without a key, Pico uses Zuzu's built-in AI "
+                '($kAiDailyLimit messages a day). Add your own OpenAI key '
+                'for no limit and your choice of model.',
+                style: AppTypography.caption
+                    .copyWith(color: dctx.appTextSecondary),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: keyCtrl,
               obscureText: true,
@@ -403,7 +423,9 @@ class SettingsScreen extends ConsumerWidget {
               onChanged();
               if (dctx.mounted) Navigator.of(dctx).pop();
             },
-            child: const Text('CLEAR KEY'),
+            child: Text(kAiProxyUrl.isNotEmpty
+                ? 'USE ZUZU AI'
+                : 'CLEAR KEY'),
           ),
           ElevatedButton(
             onPressed: () async {

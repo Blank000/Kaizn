@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -17,7 +15,9 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/context_colors.dart';
 import '../../shared/providers/database_provider.dart';
 import '../../shared/widgets/pico_figure.dart';
+import '../../core/constants/ai_config.dart';
 import 'ai_bridge.dart';
+import 'ai_client.dart';
 
 /// Ask Ren — the in-app AI assistant (V2 of the AI bridge). The floating
 /// bubble opens this chat; Ren answers from the live context pack and can
@@ -56,6 +56,10 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
   final _messages = <_ChatMsg>[];
   String? _systemPrompt;
   bool _sending = false;
+
+  /// Messages left today on Zuzu's server, as last reported by it. Null
+  /// until the first reply, and always null on the own-key route.
+  int? _remaining;
 
   /// Threads persist locally (ai_chat_messages) — the OpenAI API stores
   /// nothing. Opening the screen resumes the most recent thread.
@@ -317,21 +321,27 @@ $pack''';
       final window = replay.length > 30
           ? replay.sublist(replay.length - 30)
           : replay;
-      final reply = await _chatCompletion([
+      final result = await AiClient.complete([
         {'role': 'system', 'content': sys},
         for (final m in window) {'role': m.role, 'content': m.content},
       ]);
       if (!mounted) return;
-      final replyMsg = _ChatMsg('assistant', reply);
-      setState(() => _messages.add(replyMsg));
+      final replyMsg = _ChatMsg('assistant', result.text);
+      setState(() {
+        _messages.add(replyMsg);
+        _remaining = result.remaining;
+      });
       unawaited(_persist(replyMsg));
     } catch (e) {
       if (!mounted) return;
       final errMsg = _ChatMsg(
           'assistant',
-          '⚠️ ${e is _AiError ? e.message : 'Could not reach the AI — check your connection and try again.'}',
+          '⚠️ ${e is AiError ? e.message : 'Could not reach the AI — check your connection and try again.'}',
           isError: true);
-      setState(() => _messages.add(errMsg));
+      setState(() {
+        _messages.add(errMsg);
+        if (e is AiError && e.dailyLimit) _remaining = 0;
+      });
       unawaited(_persist(errMsg));
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -349,64 +359,10 @@ $pack''';
     });
   }
 
-  static Future<String> _chatCompletion(
-      List<Map<String, String>> messages) async {
-    final key = AppPrefs.aiApiKeySync;
-    if (key == null || key.isEmpty) {
-      throw _AiError('No API key set — add one below.');
-    }
-    final http.Response resp;
-    try {
-      resp = await http
-          .post(
-            Uri.parse('https://api.openai.com/v1/chat/completions'),
-            headers: {
-              'Authorization': 'Bearer $key',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'model': AppPrefs.aiModelSync,
-              'messages': messages,
-            }),
-          )
-          .timeout(const Duration(seconds: 60));
-    } catch (_) {
-      throw _AiError(
-          'Could not reach OpenAI — check your internet connection.');
-    }
-    if (resp.statusCode == 401) {
-      throw _AiError('The API key was rejected — re-check it in Settings.');
-    }
-    if (resp.statusCode == 429) {
-      throw _AiError(
-          'Rate/credit limit hit — check billing on platform.openai.com.');
-    }
-    if (resp.statusCode != 200) {
-      // Surface OpenAI's own message (a typo'd model name says so here).
-      String detail = '';
-      try {
-        detail = (jsonDecode(utf8.decode(resp.bodyBytes))
-                as Map)['error']['message'] as String? ??
-            '';
-      } catch (_) {}
-      throw _AiError(
-          'OpenAI error ${resp.statusCode}${detail.isEmpty ? '. Try again.' : ' — $detail'}');
-    }
-    final data = jsonDecode(utf8.decode(resp.bodyBytes));
-    final choices = data is Map ? data['choices'] : null;
-    if (choices is! List || choices.isEmpty) {
-      throw _AiError('Empty reply from the model — try again.');
-    }
-    final content = (choices[0] as Map?)?['message']?['content'];
-    if (content is! String || content.isEmpty) {
-      throw _AiError('Empty reply from the model — try again.');
-    }
-    return content;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final hasKey = (AppPrefs.aiApiKeySync ?? '').isNotEmpty;
+    final mode = AiClient.mode;
+    final hasKey = mode != AiMode.unavailable;
     return Scaffold(
       backgroundColor: context.appPageBackground,
       appBar: AppBar(
@@ -446,6 +402,26 @@ $pack''';
                       ],
                     ),
             ),
+            if (hasKey &&
+                mode == AiMode.zuzuServer &&
+                _remaining != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _remaining == 0
+                        ? "No messages left today - they're back at midnight"
+                        : '$_remaining of $kAiDailyLimit messages left today',
+                    style: AppTypography.caption.copyWith(
+                      fontSize: 11,
+                      color: _remaining! <= 5
+                          ? AppColors.streakOrange
+                          : context.appTextTertiary,
+                    ),
+                  ),
+                ),
+              ),
             if (hasKey)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
@@ -691,11 +667,6 @@ $pack''';
       ),
     );
   }
-}
-
-class _AiError implements Exception {
-  final String message;
-  _AiError(this.message);
 }
 
 /// First-run setup: explains the key honestly and stores it locally.

@@ -192,9 +192,17 @@ JSON backup and restore (wipe and reinsert in foreign-key order).
   History is immutable. Ids are normalised and fall back to a unique-name
   match; ambiguous targets are skipped and shown in red in the preview.
   Applying retires the button permanently so nothing is created twice.
-- **Bring your own key.** The user supplies their own OpenAI key, stored on
-  device only. Default model `gpt-4o-mini`. A setup gate explains this before
-  asking.
+- **Two routes to the model** (`lib/features/ai/ai_client.dart`):
+  - **Zuzu's server** (default) — a PHP proxy in `server/`, deployed on
+    Hostinger, holds the owner's OpenAI key and chosen model. **The app
+    never sees or names either.** Every request carries the user's Google
+    ID token, which the server verifies (including that it was issued to
+    *this* app) before spending anything. Capped at 50 messages per
+    Google account per day; failed calls are refunded; message content is
+    never stored. Setup: `server/README.md`.
+  - **Bring your own key** — a user who enters their own OpenAI key and
+    model in Settings goes straight to OpenAI, bypassing the server, with
+    no cap. A personal key always wins.
 - Settings also offers **Export for AI / Import plan**, giving the same
   powers by copy-paste with any chat AI.
 

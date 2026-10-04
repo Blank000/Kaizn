@@ -2,6 +2,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:googleapis/drive/v3.dart' as drive;
 
+import '../constants/ai_config.dart';
+
 /// Wraps Google Sign-In with the scopes we need (email + Drive AppData).
 /// Single static instance — the underlying SDK manages session persistence,
 /// so silent restoration on app start works automatically once we've called
@@ -18,7 +20,31 @@ class AuthService {
       'email',
       drive.DriveApi.driveAppdataScope,
     ],
+    // Required on Android for an ID token, which is how Pico's server knows
+    // who is asking. Only set once a real web client id exists - a wrong one
+    // breaks Android sign-in entirely. See lib/core/constants/ai_config.dart.
+    serverClientId:
+        kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
   );
+
+  /// A Google ID token for the signed-in user, for Pico's server to verify.
+  ///
+  /// ID tokens live about an hour. [refresh] forces a new one - the AI
+  /// client uses it once after the server says "expired", then gives up.
+  static Future<String?> idToken({bool refresh = false}) async {
+    try {
+      var user = _googleSignIn.currentUser ??
+          await _googleSignIn.signInSilently();
+      if (user == null) return null;
+      if (refresh) {
+        user = await _googleSignIn.signInSilently(reAuthenticate: true) ??
+            user;
+      }
+      return (await user.authentication).idToken;
+    } catch (_) {
+      return null;
+    }
+  }
 
   static GoogleSignIn get instance => _googleSignIn;
 

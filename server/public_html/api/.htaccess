@@ -1,0 +1,6 @@
+# Some LiteSpeed / Apache + PHP-FPM setups (Hostinger included) strip the
+# Authorization header before PHP sees it, so every request would look
+# signed out. Hand it through explicitly.
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
