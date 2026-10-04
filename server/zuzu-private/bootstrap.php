@@ -50,7 +50,7 @@ function zuzu_config(): array
         'max_messages' => 80,
         'openai_url' => 'https://api.openai.com/v1/chat/completions',
         'tokeninfo_url' => 'https://oauth2.googleapis.com/tokeninfo',
-        'data_dir' => __DIR__ . '/data',
+        'data_dir' => zuzu_default_data_dir(),
     ];
     $config = array_merge($defaults, $c);
     foreach (['openai_api_key', 'model', 'google_client_ids'] as $k) {
@@ -60,6 +60,20 @@ function zuzu_config(): array
         }
     }
     return $config;
+}
+
+/**
+ * Where the usage database lives. Never inside public_html if avoidable:
+ * when this code had to be uploaded INTO public_html (the Hostinger MCP
+ * can only write there), PHP itself can still create a folder one level
+ * above it, out of the web server's reach.
+ */
+function zuzu_default_data_dir(): string
+{
+    if (basename(dirname(__DIR__)) === 'public_html') {
+        return dirname(__DIR__, 2) . '/zuzu-data';
+    }
+    return __DIR__ . '/data';
 }
 
 /** Send JSON and stop. Never echoes anything from config. */
@@ -85,8 +99,13 @@ function zuzu_db(): PDO
         return $pdo;
     }
     $dir = zuzu_config()['data_dir'];
-    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-        zuzu_fail(500, 'storage', 'The AI server cannot write its data.');
+    if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+        // Could not create it outside the web root - fall back beside this
+        // file, where the deny-all .htaccess still keeps it unreachable.
+        $dir = __DIR__ . '/data';
+        if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+            zuzu_fail(500, 'storage', 'The AI server cannot write its data.');
+        }
     }
     $pdo = new PDO('sqlite:' . $dir . '/zuzu.sqlite');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
