@@ -297,11 +297,15 @@ function zuzu_openai(array $messages): ?string
             'Authorization: Bearer ' . $cfg['openai_api_key'],
             'Content-Type: application/json',
         ],
+        // max_completion_tokens, not max_tokens: the newer (reasoning)
+        // models reject max_tokens, and every chat model accepts this one.
         CURLOPT_POSTFIELDS => json_encode([
             'model' => $cfg['model'],
             'messages' => $messages,
-            'max_tokens' => (int)$cfg['max_output_tokens'],
-        ], JSON_UNESCAPED_UNICODE),
+            'max_completion_tokens' => (int)$cfg['max_output_tokens'],
+        ] + (empty($cfg['reasoning_effort']) ? [] : [
+            'reasoning_effort' => (string)$cfg['reasoning_effort'],
+        ]), JSON_UNESCAPED_UNICODE),
     ]);
     $raw = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

@@ -25,6 +25,12 @@ return [
         '1056390719903-0uitubentgq7k6l15cf7ebodtjm6qeea.apps.googleusercontent.com',
     ],
 
-    // Optional cost guards.
+    // Optional cost guards. With a reasoning model (gpt-5 family and newer)
+    // this cap also covers its hidden thinking, so keep it at 1500+.
     'max_output_tokens' => 1500,
+
+    // Optional, reasoning models only: 'minimal' or 'low' keeps replies
+    // fast and cheap. Leave empty for gpt-4o-mini / gpt-4.1 models, which
+    // reject this setting.
+    'reasoning_effort' => '',
 ];
