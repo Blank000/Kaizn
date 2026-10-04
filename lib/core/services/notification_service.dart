@@ -53,7 +53,7 @@ class NotificationService {
       channelDescription: 'Morning summary of what to do today',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
+      icon: '@mipmap/launcher_icon',
     ),
   );
 
@@ -64,7 +64,7 @@ class NotificationService {
       channelDescription: 'Evening nudge when nothing has been logged',
       importance: Importance.max,
       priority: Priority.max,
-      icon: '@mipmap/ic_launcher',
+      icon: '@mipmap/launcher_icon',
     ),
   );
 
@@ -85,7 +85,7 @@ class NotificationService {
         channelDescription: 'Reminders for individual tasks',
         importance: Importance.max,
         priority: Priority.max,
-        icon: '@mipmap/ic_launcher',
+        icon: '@mipmap/launcher_icon',
         largeIcon:
             const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
         color: const Color(0xFF58CC02), // Duolingo-style primary green
@@ -124,7 +124,7 @@ class NotificationService {
       channelDescription: 'Reminders for individual tasks',
       importance: Importance.max,
       priority: Priority.max,
-      icon: '@mipmap/ic_launcher',
+      icon: '@mipmap/launcher_icon',
       largeIcon: DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
       color: Color(0xFF58CC02),
       colorized: true,
@@ -160,7 +160,7 @@ class NotificationService {
       channelDescription: 'Confirmations for actions taken from notifications',
       importance: Importance.low,
       priority: Priority.low,
-      icon: '@mipmap/ic_launcher',
+      icon: '@mipmap/launcher_icon',
       timeoutAfter: 10000,
       actions: [
         AndroidNotificationAction(
@@ -203,7 +203,7 @@ class NotificationService {
     tz.setLocalLocation(tz.getLocation(localTz.identifier));
 
     const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
     // iOS: Darwin settings are REQUIRED (the plugin throws on iOS without
     // them, crashing launch). Permission prompts stay out of initialize()
     // and fire from the requestPermission branch below instead.

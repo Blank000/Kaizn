@@ -32,11 +32,24 @@ android {
         versionName = flutter.versionName
     }
 
+    // With minSdk 23 the build tools default to storing native libraries
+    // uncompressed, which doubled the APK (33 -> 69 MB). The APK is shared
+    // by hand, so keep it compressed.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
