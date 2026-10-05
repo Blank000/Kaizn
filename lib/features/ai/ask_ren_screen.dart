@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -18,6 +20,8 @@ import '../../shared/widgets/pico_figure.dart';
 import '../../core/constants/ai_config.dart';
 import 'ai_bridge.dart';
 import 'ai_client.dart';
+import 'chat_attachments.dart';
+import 'web_reader.dart';
 
 /// Ask Ren — the in-app AI assistant (V2 of the AI bridge). The floating
 /// bubble opens this chat; Ren answers from the live context pack and can
@@ -46,8 +50,28 @@ class _ChatMsg {
   /// One-shot guard: a plan block can be applied exactly once.
   bool planApplied;
 
+  /// Files, photos and read web pages sent with this message. In memory
+  /// only - a thread restored from history keeps just the "📎 names" line
+  /// in [content].
+  final List<ChatAttachment> attachments;
+
   _ChatMsg(this.role, this.content,
-      {this.isError = false, this.dbId, this.planApplied = false});
+      {this.isError = false,
+      this.dbId,
+      this.planApplied = false,
+      List<ChatAttachment>? attachments})
+      : attachments = attachments ?? [];
+
+  /// The chat-completions `content` for this message. Attachments go as
+  /// extra parts only when [withAttachments] - older ones are left out so
+  /// a long thread doesn't resend every photo on every message.
+  Object apiContent({required bool withAttachments}) {
+    if (!withAttachments || attachments.isEmpty) return content;
+    return [
+      if (content.isNotEmpty) {'type': 'text', 'text': content},
+      for (final a in attachments) a.toContentPart(),
+    ];
+  }
 }
 
 class _AskRenScreenState extends ConsumerState<AskRenScreen> {
@@ -56,6 +80,13 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
   final _messages = <_ChatMsg>[];
   String? _systemPrompt;
   bool _sending = false;
+
+  /// Attachments picked for the message being written, shown above the
+  /// input until it is sent.
+  final _pending = <ChatAttachment>[];
+
+  /// What Pico is doing while the reply is pending, e.g. reading a link.
+  String _status = '';
 
   /// Messages left today on Zuzu's server, as last reported by it. Null
   /// until the first reply, and always null on the own-key route.
@@ -125,6 +156,132 @@ class _AskRenScreenState extends ConsumerState<AskRenScreen> {
         partialResults: true,
       ),
     );
+  }
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _addPending(ChatAttachment a) {
+    if (!mounted) return;
+    if (_pending.length >= ChatAttachment.maxPerMessage) {
+      _snack('Up to ${ChatAttachment.maxPerMessage} attachments per message.');
+      return;
+    }
+    final total = _pending.fold<int>(a.requestBytes, (s, p) => s + p.requestBytes);
+    if (total > ChatAttachment.requestBudget) {
+      _snack('${a.name} would make this message too big - send it on its own.');
+      return;
+    }
+    setState(() => _pending.add(a));
+  }
+
+  Future<void> _attach() async {
+    if (_pending.length >= ChatAttachment.maxPerMessage) {
+      _snack('Up to ${ChatAttachment.maxPerMessage} attachments per message.');
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        decoration: BoxDecoration(
+          color: sheetCtx.appCardSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 16),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.of(sheetCtx).pop('camera'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Photos'),
+                subtitle: const Text('Screenshots, pictures of notes'),
+                onTap: () => Navigator.of(sheetCtx).pop('gallery'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('File'),
+                subtitle: const Text('PDF, or a text file (txt, md, csv, json)'),
+                onTap: () => Navigator.of(sheetCtx).pop('file'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    switch (choice) {
+      case 'camera':
+        await _pickImage(ImageSource.camera);
+      case 'gallery':
+        await _pickImage(ImageSource.gallery);
+      case 'file':
+        await _pickFiles();
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      // Shrunk on the phone: a full-size camera photo is several MB, and
+      // the model reads a 1600px image just as well.
+      final x = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 80,
+      );
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      final ext = x.name.contains('.') ? x.name.split('.').last : '';
+      _addPending(ChatAttachment(
+        kind: AttachmentKind.image,
+        name: x.name,
+        mime: ChatAttachment.imageMime(ext.toLowerCase()) ?? 'image/jpeg',
+        bytes: bytes,
+      ));
+    } catch (_) {
+      _snack(source == ImageSource.camera
+          ? "Couldn't open the camera."
+          : "Couldn't open your photos.");
+    }
+  }
+
+  Future<void> _pickFiles() async {
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pdf', ...ChatAttachment.textExtensions],
+        allowMultiple: true,
+        withData: true,
+      );
+    } catch (_) {
+      _snack("Couldn't open your files.");
+      return;
+    }
+    if (result == null) return;
+    for (final f in result.files) {
+      final bytes = f.bytes;
+      if (bytes == null) {
+        _snack("Couldn't read ${f.name}.");
+        continue;
+      }
+      final r = ChatAttachment.fromFile(f.name, bytes);
+      if (r.error != null) {
+        _snack(r.error!);
+      } else {
+        _addPending(r.attachment!);
+      }
+    }
   }
 
   static String _newId() =>
@@ -297,22 +454,49 @@ existing items via "updates" with their exact [m:/t:/r:] ids (they apply
 it with one tap); at most one short sentence after the block. You cannot
 delete anything and cannot touch completions, points, or streaks.
 
+The user can attach photos, PDFs and text files, and when they paste a
+link the app reads the page for you; its text arrives in their message
+between <<< and >>>. Use that content to answer - summarise it, pull out
+tasks, or turn it into a plan. A line ending "📎 names" in an older message
+means files were attached earlier that you can no longer see; ask the user
+to attach them again if you need them. When a page could not be read, or
+came back nearly empty, say so plainly and never invent what it says.
+
 $pack''';
     return _systemPrompt!;
   }
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _sending) return;
+    if ((text.isEmpty && _pending.isEmpty) || _sending) return;
     _input.clear();
-    final userMsg = _ChatMsg('user', text);
+    final files = List<ChatAttachment>.of(_pending);
+    // History keeps the text plus a "📎 names" line; the files themselves
+    // stay in memory on the message.
+    final note = ChatAttachment.describeForHistory(files);
+    final userMsg = _ChatMsg(
+      'user',
+      [if (text.isNotEmpty) text, ?note].join('\n\n'),
+      attachments: files,
+    );
+    final hasLinks = WebReader.extractUrls(text).isNotEmpty;
     setState(() {
       _messages.add(userMsg);
+      _pending.clear();
       _sending = true;
+      _status = hasLinks ? 'Reading the link…' : '';
     });
     _autoscroll();
     unawaited(_persist(userMsg));
     try {
+      if (hasLinks) {
+        final pages = await WebReader.readLinks(text);
+        if (!mounted) return;
+        setState(() {
+          userMsg.attachments.addAll(pages);
+          _status = '';
+        });
+      }
       final sys = await _system();
       // Replay at most the last 30 real messages — long threads stay
       // affordable and under the context limit.
@@ -321,9 +505,30 @@ $pack''';
       final window = replay.length > 30
           ? replay.sublist(replay.length - 30)
           : replay;
+      // Recent attachments are resent so follow-up questions about a file
+      // still work - newest first, at most three messages' worth, and
+      // only while they fit the request budget. The new message's own
+      // attachments always go.
+      final recentWithFiles = <_ChatMsg>{};
+      var budget = ChatAttachment.requestBudget;
+      for (final m in window.reversed) {
+        if (m.attachments.isEmpty) continue;
+        final size =
+            m.attachments.fold<int>(0, (s, a) => s + a.requestBytes);
+        if (m != userMsg && (size > budget || recentWithFiles.length >= 3)) {
+          break;
+        }
+        recentWithFiles.add(m);
+        budget -= size;
+      }
       final result = await AiClient.complete([
         {'role': 'system', 'content': sys},
-        for (final m in window) {'role': m.role, 'content': m.content},
+        for (final m in window)
+          {
+            'role': m.role,
+            'content': m.apiContent(
+                withAttachments: recentWithFiles.contains(m)),
+          },
       ]);
       if (!mounted) return;
       final replyMsg = _ChatMsg('assistant', result.text);
@@ -344,7 +549,12 @@ $pack''';
       });
       unawaited(_persist(errMsg));
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _status = '';
+        });
+      }
       _autoscroll();
     }
   }
@@ -422,27 +632,45 @@ $pack''';
                   ),
                 ),
               ),
+            if (hasKey && _pending.isNotEmpty)
+              SizedBox(
+                height: 64,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  children: [
+                    for (final a in _pending) _pendingChip(context, a),
+                  ],
+                ),
+              ),
             if (hasKey)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                padding: const EdgeInsets.fromLTRB(4, 4, 12, 12),
                 child: Row(
-                  // Field grows to 4 lines; keep the send button pinned to
-                  // its bottom edge instead of stretching with it.
+                  // Field grows to 6 lines; keep the buttons pinned to its
+                  // bottom edge instead of stretching with it.
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    IconButton(
+                      onPressed: _sending ? null : _attach,
+                      tooltip: 'Attach a photo or file',
+                      icon: Icon(Icons.add_circle_outline_rounded,
+                          color: context.appTextSecondary),
+                    ),
                     Expanded(
                       child: TextField(
                         controller: _input,
                         minLines: 1,
-                        maxLines: 4,
+                        maxLines: 6,
+                        // Enter starts a new line, like any chat app on a
+                        // phone; only the arrow button sends.
                         keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _send(),
+                        textInputAction: TextInputAction.newline,
                         style: AppTypography.body,
                         decoration: InputDecoration(
                           hintText: _listening
                               ? 'Listening…'
-                              : 'Ask about your day, or say a goal…',
+                              : 'Ask, paste a link, or attach a file…',
                           hintStyle: AppTypography.body
                               .copyWith(color: context.appTextTertiary),
                           contentPadding: const EdgeInsets.symmetric(
@@ -569,6 +797,18 @@ $pack''';
               ),
             ],
           ),
+          if (isUser && m.attachments.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final a in m.attachments) _sentAttachment(context, a),
+                ],
+              ),
+            ),
           if (hasPlan)
             Padding(
               padding: const EdgeInsets.only(left: 32, top: 6),
@@ -608,6 +848,74 @@ $pack''';
                     ),
             ),
         ],
+      ),
+    );
+  }
+
+  static IconData _iconFor(AttachmentKind kind) => switch (kind) {
+        AttachmentKind.image => Icons.image_outlined,
+        AttachmentKind.pdf => Icons.picture_as_pdf_outlined,
+        AttachmentKind.text => Icons.description_outlined,
+        AttachmentKind.webPage => Icons.link_rounded,
+      };
+
+  /// A picked attachment waiting above the input, with a remove button.
+  Widget _pendingChip(BuildContext context, ChatAttachment a) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.fromLTRB(6, 6, 2, 6),
+      constraints: const BoxConstraints(maxWidth: 200),
+      decoration: BoxDecoration(
+        color: context.appCardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (a.kind == AttachmentKind.image && a.bytes != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(a.bytes!,
+                  width: 40, height: 40, fit: BoxFit.cover),
+            )
+          else
+            Icon(_iconFor(a.kind), color: context.appTextSecondary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(a.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Remove',
+            icon: const Icon(Icons.close_rounded, size: 18),
+            onPressed: () => setState(() => _pending.remove(a)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Under a sent message: photo thumbnails, and which links Pico read.
+  /// Files already show in the message's "📎 names" line.
+  Widget _sentAttachment(BuildContext context, ChatAttachment a) {
+    if (a.kind == AttachmentKind.image && a.bytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(a.bytes!,
+            width: 120, height: 120, fit: BoxFit.cover),
+      );
+    }
+    if (a.kind != AttachmentKind.webPage) return const SizedBox.shrink();
+    final host = Uri.tryParse(a.name)?.host ?? a.name;
+    return Text(
+      a.failed ? "🔗 Couldn't read $host" : '🔗 Pico read $host',
+      style: AppTypography.caption.copyWith(
+        fontSize: 11,
+        color: a.failed ? AppColors.streakOrange : context.appTextTertiary,
       ),
     );
   }
@@ -659,7 +967,7 @@ $pack''';
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: context.appBorder),
             ),
-            child: Text('…',
+            child: Text(_status.isEmpty ? '…' : _status,
                 style: AppTypography.body
                     .copyWith(color: context.appTextSecondary)),
           ),

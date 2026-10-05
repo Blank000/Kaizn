@@ -100,5 +100,60 @@ check('oversized conversation rejected before spending', $s === 413);
 [$s, $j] = call('POST', $base, 'good-carol', msg('still fine'));
 check('rejected requests did not use up allowance', $s === 200 && $j['remaining'] === 2);
 
+// Attachments - a fresh person, since carol has used part of her allowance.
+function parts(array $parts): array
+{
+    return ['messages' => [
+        ['role' => 'system', 'content' => 'You are Pico.'],
+        ['role' => 'user', 'content' => $parts],
+    ]];
+}
+$png = 'data:image/png;base64,' . base64_encode('fake-png-bytes');
+$pdf = 'data:application/pdf;base64,' . base64_encode(str_repeat('%PDF', 1000));
+
+[$s, $j, $raw] = call('POST', $base, 'good-dave', parts([
+    ['type' => 'text', 'text' => 'what is this'],
+    ['type' => 'image_url', 'image_url' => ['url' => $png], 'evil' => 'x'],
+    ['type' => 'file', 'file' => ['filename' => 'plan.pdf', 'file_data' => $pdf]],
+]));
+check('photo + PDF reach the model',
+    $s === 200 && str_contains($j['reply'] ?? '', 'what is this [image_url] [file]'), $raw);
+
+[$s] = call('POST', $base, 'good-dave', parts([
+    ['type' => 'image_url', 'image_url' => ['url' => 'https://example.com/a.png']],
+]));
+check('remote image URL refused (no fetching on our bill)', $s === 400);
+
+[$s] = call('POST', $base, 'good-dave', parts([
+    ['type' => 'file', 'file' => ['filename' => 'x.exe',
+        'file_data' => 'data:application/x-msdownload;base64,TVqQ']],
+]));
+check('non-PDF file refused', $s === 400);
+
+[$s] = call('POST', $base, 'good-dave', parts([
+    ['type' => 'image_url', 'image_url' => ['url' => 'data:image/png;base64,not base64!']],
+]));
+check('corrupt image data refused', $s === 400);
+
+[$s] = call('POST', $base, 'good-dave', ['messages' => [
+    ['role' => 'assistant', 'content' => [['type' => 'text', 'text' => 'x']]],
+]]);
+check('only user messages may carry parts', $s === 400);
+
+[$s] = call('POST', $base, 'good-dave',
+    parts(array_fill(0, 13, ['type' => 'image_url', 'image_url' => ['url' => $png]])));
+check('more than 12 attachments refused', $s === 413);
+
+$big = 'data:application/pdf;base64,' . str_repeat('A', 13 * 1024 * 1024);
+[$s, $j, $raw] = call('POST', $base, 'good-dave', parts([
+    ['type' => 'file', 'file' => ['filename' => 'big.pdf', 'file_data' => $big]],
+]));
+check('a 10 MB PDF is accepted (no regex backtrack limit)',
+    $s === 200 && str_contains($j['reply'] ?? '', '[file]'), substr($raw, 0, 300));
+
+[$s, $j] = call('POST', $base, 'good-dave', msg('allowance check'));
+check('refused attachments did not use up allowance', $s === 200 && $j['remaining'] === 0,
+    json_encode($j));
+
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);

@@ -33,6 +33,12 @@ if ($path === '/v1/chat/completions') {
     }
     $body = json_decode(file_get_contents('php://input'), true);
     $last = end($body['messages'])['content'];
+    if (is_array($last)) {
+        // Attachments: echo the text parts and which part types arrived.
+        $last = implode(' ', array_map(
+            fn($p) => $p['type'] === 'text' ? $p['text'] : "[{$p['type']}]",
+            $last));
+    }
     if ($last === 'FAIL') {
         http_response_code(500);
         echo json_encode(['error' => ['message' => 'model secret-model-x overloaded']]);

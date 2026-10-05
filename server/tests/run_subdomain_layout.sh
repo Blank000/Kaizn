@@ -21,8 +21,8 @@ cat > "$SITE/zuzu-private/config.php" <<'EOF'
 ];
 EOF
 unset ZUZU_CONFIG
-php -S 127.0.0.1:9000 /srv/tests/mock_upstream.php >/tmp/mock.log 2>&1 &
-php -S 127.0.0.1:8000 -t "$SITE" >/tmp/app.log 2>&1 &
+php -d post_max_size=64M -d memory_limit=512M -S 127.0.0.1:9000 /srv/tests/mock_upstream.php >/tmp/mock.log 2>&1 &
+php -d post_max_size=64M -d memory_limit=512M -S 127.0.0.1:8000 -t "$SITE" >/tmp/app.log 2>&1 &
 sleep 1
 php /srv/tests/run_tests.php
 

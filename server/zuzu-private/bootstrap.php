@@ -48,6 +48,10 @@ function zuzu_config(): array
         'max_output_tokens' => 1500,
         'max_input_chars' => 150000,
         'max_messages' => 80,
+        // Photos and PDFs arrive base64-encoded inside the request. 30 MB
+        // covers a few photos plus a 10 MB PDF (about 13.5 MB encoded).
+        'max_body_bytes' => 30 * 1024 * 1024,
+        'max_attachments' => 12,
         'openai_url' => 'https://api.openai.com/v1/chat/completions',
         'tokeninfo_url' => 'https://oauth2.googleapis.com/tokeninfo',
         'data_dir' => zuzu_default_data_dir(),
@@ -253,9 +257,11 @@ function zuzu_refund(string $sub): void
 function zuzu_read_messages(): array
 {
     $cfg = zuzu_config();
-    $raw = file_get_contents('php://input', false, null, 0, 600001);
-    if ($raw === false || strlen($raw) > 600000) {
-        zuzu_fail(413, 'too_large', 'That conversation is too long.');
+    $maxBody = (int)$cfg['max_body_bytes'];
+    $raw = file_get_contents('php://input', false, null, 0, $maxBody + 1);
+    if ($raw === false || strlen($raw) > $maxBody) {
+        zuzu_fail(413, 'too_large',
+            'That message is too big - try fewer or smaller attachments.');
     }
     $body = json_decode($raw, true);
     $messages = is_array($body) ? ($body['messages'] ?? null) : null;
@@ -267,20 +273,99 @@ function zuzu_read_messages(): array
     }
     $clean = [];
     $chars = 0;
+    $attachments = 0;
     foreach ($messages as $m) {
         $role = is_array($m) ? ($m['role'] ?? null) : null;
         $content = is_array($m) ? ($m['content'] ?? null) : null;
-        if (!in_array($role, ['system', 'user', 'assistant'], true)
-            || !is_string($content)) {
+        if (!in_array($role, ['system', 'user', 'assistant'], true)) {
             zuzu_fail(400, 'bad_request', 'A message was malformed.');
         }
-        $chars += mb_strlen($content);
-        $clean[] = ['role' => $role, 'content' => $content];
+        if (is_string($content)) {
+            $chars += mb_strlen($content);
+            $clean[] = ['role' => $role, 'content' => $content];
+            continue;
+        }
+        // Only a user message may carry parts (text + photos/PDFs).
+        if ($role !== 'user' || !is_array($content) || $content === []
+            || !array_is_list($content)) {
+            zuzu_fail(400, 'bad_request', 'A message was malformed.');
+        }
+        $parts = [];
+        foreach ($content as $part) {
+            $parts[] = zuzu_clean_part($part, $chars, $attachments);
+        }
+        $clean[] = ['role' => $role, 'content' => $parts];
     }
     if ($chars > (int)$cfg['max_input_chars']) {
         zuzu_fail(413, 'too_large', 'That conversation is too long.');
     }
+    if ($attachments > (int)$cfg['max_attachments']) {
+        zuzu_fail(413, 'too_large', 'Too many attachments in one go.');
+    }
     return $clean;
+}
+
+/**
+ * One content part, rebuilt from scratch so nothing but the expected keys
+ * reaches OpenAI. Photos and PDFs must be embedded (data: URLs): a remote
+ * URL would make OpenAI fetch whatever a caller points it at, on our bill.
+ */
+function zuzu_clean_part(mixed $part, int &$chars, int &$attachments): array
+{
+    $bad = fn() => zuzu_fail(400, 'bad_request', 'An attachment was malformed.');
+    if (!is_array($part)) {
+        $bad();
+    }
+    switch ($part['type'] ?? null) {
+        case 'text':
+            if (!is_string($part['text'] ?? null)) {
+                $bad();
+            }
+            $chars += mb_strlen($part['text']);
+            return ['type' => 'text', 'text' => $part['text']];
+
+        case 'image_url':
+            $url = $part['image_url']['url'] ?? null;
+            if (!is_string($url) || !zuzu_is_data_url($url,
+                    ['image/png', 'image/jpeg', 'image/webp', 'image/gif'])) {
+                $bad();
+            }
+            $attachments++;
+            return ['type' => 'image_url', 'image_url' => ['url' => $url]];
+
+        case 'file':
+            $name = $part['file']['filename'] ?? null;
+            $data = $part['file']['file_data'] ?? null;
+            if (!is_string($name) || !is_string($data)
+                || !zuzu_is_data_url($data, ['application/pdf'])) {
+                $bad();
+            }
+            $attachments++;
+            return ['type' => 'file', 'file' => [
+                'filename' => mb_substr($name, 0, 200),
+                'file_data' => $data,
+            ]];
+    }
+    $bad();
+}
+
+/**
+ * A base64 data: URL of one of the allowed types. Checked with strspn, not
+ * a regex: a regex over a 13 MB PDF can hit PCRE's backtrack limit and
+ * wrongly reject it.
+ */
+function zuzu_is_data_url(string $url, array $mimes): bool
+{
+    foreach ($mimes as $mime) {
+        $prefix = "data:$mime;base64,";
+        if (str_starts_with($url, $prefix)) {
+            $len = strlen($url) - strlen($prefix);
+            return $len > 0 && strspn($url,
+                'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=',
+                strlen($prefix)) === $len;
+        }
+    }
+    return false;
 }
 
 /** Call OpenAI with OUR key and OUR model. Returns the reply text. */

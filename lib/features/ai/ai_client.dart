@@ -50,7 +50,10 @@ class AiClient {
     return AiMode.unavailable;
   }
 
-  static Future<AiReply> complete(List<Map<String, String>> messages) {
+  /// [messages] use the chat-completions shape. A message's `content` is a
+  /// String, or for a user message with attachments a list of content parts
+  /// (text, image_url, file) - see `ChatAttachment.toContentPart`.
+  static Future<AiReply> complete(List<Map<String, Object>> messages) {
     switch (mode) {
       case AiMode.ownKey:
         return _viaOwnKey(messages);
@@ -63,7 +66,7 @@ class AiClient {
 
   // ── Zuzu server ───────────────────────────────────────────────────────────
 
-  static Future<AiReply> _viaServer(List<Map<String, String>> messages,
+  static Future<AiReply> _viaServer(List<Map<String, Object>> messages,
       {bool retried = false}) async {
     final token = await AuthService.idToken(refresh: retried);
     if (token == null) {
@@ -133,7 +136,7 @@ class AiClient {
 
   // ── The user's own key (unchanged behaviour) ─────────────────────────────
 
-  static Future<AiReply> _viaOwnKey(List<Map<String, String>> messages) async {
+  static Future<AiReply> _viaOwnKey(List<Map<String, Object>> messages) async {
     final key = AppPrefs.aiApiKeySync!;
     final http.Response resp;
     try {
@@ -149,7 +152,8 @@ class AiClient {
               'messages': messages,
             }),
           )
-          .timeout(const Duration(seconds: 60));
+          // Long enough for a model to read a multi-page PDF.
+          .timeout(const Duration(seconds: 100));
     } catch (_) {
       throw const AiError(
           'Could not reach OpenAI - check your internet connection.');

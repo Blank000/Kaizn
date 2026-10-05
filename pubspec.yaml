@@ -93,6 +93,8 @@ dependencies:
   flutter_markdown_plus: ^1.0.7
   speech_to_text: ^7.4.0
   workmanager: ^0.9.2
+  file_picker: ^11.0.3
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:
