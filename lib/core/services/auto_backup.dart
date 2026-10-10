@@ -73,6 +73,14 @@ class AutoBackup {
     }
   }
 
+  /// Stops the nightly job. Used by "Erase all data".
+  static Future<void> cancel() async {
+    if (!_supported) return;
+    try {
+      await Workmanager().cancelByUniqueName(uniqueName);
+    } catch (_) {}
+  }
+
   /// Time from [now] until the next occurrence of [hour]:00. Pure, so the
   /// anchoring maths is testable.
   static Duration delayUntilNext(DateTime now, {required int hour}) {

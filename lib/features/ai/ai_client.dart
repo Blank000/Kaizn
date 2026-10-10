@@ -64,6 +64,54 @@ class AiClient {
     }
   }
 
+  /// Sends a Pico reply the user flagged to Zuzu's server (Google Play's
+  /// AI-content policy requires in-app reporting). Works signed in or not,
+  /// and whichever route produced the reply. Returns false if it couldn't
+  /// be delivered.
+  static Future<bool> report({
+    required String reply,
+    required String reason,
+  }) async {
+    if (kAiProxyUrl.isEmpty) return false;
+    final token = await AuthService.idToken();
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('$kAiProxyUrl?report'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'reason': reason, 'reply': reply}),
+          )
+          .timeout(const Duration(seconds: 20));
+      // 429 means today's reports from this person are already in.
+      return resp.statusCode == 200 || resp.statusCode == 429;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Asks Zuzu's server to forget the signed-in user: daily usage counts,
+  /// cached sign-ins and their reports. Part of "Erase all data". Returns
+  /// true when there was nothing to delete (not signed in, no server).
+  static Future<bool> deleteServerData() async {
+    if (kAiProxyUrl.isEmpty) return true;
+    final token = await AuthService.idToken();
+    if (token == null) return true;
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('$kAiProxyUrl?delete'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 20));
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ── Zuzu server ───────────────────────────────────────────────────────────
 
   static Future<AiReply> _viaServer(List<Map<String, Object>> messages,

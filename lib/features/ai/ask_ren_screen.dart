@@ -50,6 +50,9 @@ class _ChatMsg {
   /// One-shot guard: a plan block can be applied exactly once.
   bool planApplied;
 
+  /// The user reported this reply (this session).
+  bool reported = false;
+
   /// Files, photos and read web pages sent with this message. In memory
   /// only - a thread restored from history keeps just the "📎 names" line
   /// in [content].
@@ -809,6 +812,33 @@ $pack''';
                 ],
               ),
             ),
+          // Google Play requires a way to flag AI replies inside the app.
+          if (!isUser && !m.isError)
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: m.reported
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 0, 0),
+                      child: Text('Reported - thanks',
+                          style: AppTypography.caption.copyWith(
+                              fontSize: 11,
+                              color: context.appTextTertiary)),
+                    )
+                  : TextButton.icon(
+                      onPressed: () => _report(m),
+                      style: TextButton.styleFrom(
+                        foregroundColor: context.appTextTertiary,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: const Size(0, 28),
+                      ),
+                      icon: const Icon(Icons.outlined_flag_rounded, size: 15),
+                      label: Text('Report',
+                          style: AppTypography.caption.copyWith(
+                              fontSize: 11,
+                              color: context.appTextTertiary)),
+                    ),
+            ),
           if (hasPlan)
             Padding(
               padding: const EdgeInsets.only(left: 32, top: 6),
@@ -850,6 +880,65 @@ $pack''';
         ],
       ),
     );
+  }
+
+  static const _reportReasons = [
+    'Offensive or harmful',
+    'Wrong or misleading',
+    'Not appropriate for me',
+    'Something else',
+  ];
+
+  Future<void> _report(_ChatMsg m) async {
+    String? reason;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => StatefulBuilder(
+        builder: (dctx, setDialogState) => AlertDialog(
+          title: const Text('Report this reply'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'The reply and your reason are sent to the Zuzu team so we '
+                'can improve Pico. Nothing else from the chat is included.',
+                style: AppTypography.caption
+                    .copyWith(color: dctx.appTextSecondary),
+              ),
+              const SizedBox(height: 8),
+              for (final r in _reportReasons)
+                RadioListTile<String>(
+                  value: r,
+                  groupValue: reason,
+                  onChanged: (v) => setDialogState(() => reason = v),
+                  title: Text(r, style: AppTypography.body),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dctx).pop(false),
+              child: const Text('CANCEL'),
+            ),
+            ElevatedButton(
+              onPressed:
+                  reason == null ? null : () => Navigator.of(dctx).pop(true),
+              child: const Text('REPORT'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || reason == null) return;
+    final sent = await AiClient.report(reply: m.content, reason: reason!);
+    if (!mounted) return;
+    if (sent) setState(() => m.reported = true);
+    _snack(sent
+        ? 'Thanks - the Zuzu team will review it.'
+        : "Couldn't send the report. Check your connection and try again.");
   }
 
   static IconData _iconFor(AttachmentKind kind) => switch (kind) {

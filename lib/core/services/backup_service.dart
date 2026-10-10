@@ -281,6 +281,14 @@ class BackupService {
 
   /// Download the backup from Drive and overwrite local data. Throws if no
   /// backup exists.
+  /// Deletes the Drive backup, if there is one. Part of "Erase all data".
+  static Future<void> deleteBackup() async {
+    if (AuthService.currentUser == null) return;
+    final api = await _driveApi();
+    final id = await _findBackupFileId(api);
+    if (id != null) await api.files.delete(id);
+  }
+
   static Future<void> restore(AppDatabase db) async {
     final api = await _driveApi();
     final existingId = await _findBackupFileId(api);

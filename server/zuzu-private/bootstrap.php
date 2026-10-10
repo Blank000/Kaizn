@@ -52,6 +52,9 @@ function zuzu_config(): array
         // covers a few photos plus a 10 MB PDF (about 13.5 MB encoded).
         'max_body_bytes' => 30 * 1024 * 1024,
         'max_attachments' => 12,
+        'reports_per_day' => 30,
+        // Optional: where reported replies are emailed. Empty = only stored.
+        'report_email' => '',
         'openai_url' => 'https://api.openai.com/v1/chat/completions',
         'tokeninfo_url' => 'https://oauth2.googleapis.com/tokeninfo',
         'data_dir' => zuzu_default_data_dir(),
@@ -125,6 +128,12 @@ function zuzu_db(): PDO
         PRIMARY KEY (sub, day))');
     $pdo->exec('CREATE TABLE IF NOT EXISTS token_cache (
         hash TEXT PRIMARY KEY, sub TEXT NOT NULL, exp INTEGER NOT NULL)');
+    // Replies a user flagged from the app (Google Play's AI-content policy
+    // requires in-app reporting). The one place message text is stored,
+    // and only because the user chose to send it to us.
+    $pdo->exec('CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, reporter TEXT NOT NULL,
+        created INTEGER NOT NULL, reason TEXT NOT NULL, reply TEXT NOT NULL)');
     return $pdo;
 }
 
@@ -406,6 +415,72 @@ function zuzu_openai(array $messages): ?string
     return is_string($text) && $text !== '' ? $text : null;
 }
 
+function zuzu_bearer(): ?string
+{
+    $auth = $_SERVER['HTTP_AUTHORIZATION']
+        ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    return preg_match('/^Bearer\s+(\S+)$/', $auth, $m) ? $m[1] : null;
+}
+
+/**
+ * POST ?report - a user flags a Pico reply. Works signed in or not (people
+ * using their own OpenAI key may not be), so it is capped per reporter:
+ * the Google account when there is one, else a hash of the IP address.
+ */
+function zuzu_handle_report(): never
+{
+    $cfg = zuzu_config();
+    $raw = file_get_contents('php://input', false, null, 0, 20001);
+    $body = json_decode((string)$raw, true);
+    $reason = is_array($body) ? ($body['reason'] ?? null) : null;
+    $reply = is_array($body) ? ($body['reply'] ?? null) : null;
+    if (!is_string($reason) || !is_string($reply) || trim($reply) === ''
+        || strlen((string)$raw) > 20000) {
+        zuzu_fail(400, 'bad_request', 'The report was malformed.');
+    }
+
+    $token = zuzu_bearer();
+    $reporter = $token !== null
+        ? zuzu_verify_google($token)
+        : 'ip:' . hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? '') . $cfg['openai_api_key']);
+
+    $db = zuzu_db();
+    $since = time() - 86400;
+    $q = $db->prepare('SELECT COUNT(*) FROM reports WHERE reporter = ? AND created > ?');
+    $q->execute([$reporter, $since]);
+    if ((int)$q->fetchColumn() >= (int)$cfg['reports_per_day']) {
+        zuzu_fail(429, 'report_limit', 'Thanks - we already have your reports for today.');
+    }
+
+    $reason = mb_substr(trim($reason), 0, 200);
+    $reply = mb_substr($reply, 0, 8000);
+    $db->prepare('INSERT INTO reports (reporter, created, reason, reply)
+        VALUES (?, ?, ?, ?)')->execute([$reporter, time(), $reason, $reply]);
+    // Reports are kept for 180 days, then dropped.
+    if (random_int(1, 20) === 1) {
+        $db->prepare('DELETE FROM reports WHERE created < ?')
+            ->execute([time() - 180 * 86400]);
+    }
+
+    $to = (string)($cfg['report_email'] ?? '');
+    if ($to !== '' && function_exists('mail')) {
+        @mail($to, 'Zuzu: a Pico reply was reported',
+            "Reason: $reason\n\nReply:\n$reply\n",
+            'Content-Type: text/plain; charset=utf-8');
+    }
+    zuzu_respond(200, ['ok' => true]);
+}
+
+/** POST ?delete - forget everything this server holds about the caller. */
+function zuzu_handle_delete(string $sub): never
+{
+    $db = zuzu_db();
+    $db->prepare('DELETE FROM usage WHERE sub = ?')->execute([$sub]);
+    $db->prepare('DELETE FROM token_cache WHERE sub = ?')->execute([$sub]);
+    $db->prepare('DELETE FROM reports WHERE reporter = ?')->execute([$sub]);
+    zuzu_respond(200, ['ok' => true]);
+}
+
 function zuzu_handle_chat(): never
 {
     // A no-secrets self-check for setup: open /api/chat.php?health in a
@@ -426,13 +501,20 @@ function zuzu_handle_chat(): never
         zuzu_fail(405, 'method', 'Use POST.');
     }
 
-    $auth = $_SERVER['HTTP_AUTHORIZATION']
-        ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('/^Bearer\s+(\S+)$/', $auth, $m)) {
-        zuzu_fail(401, 'auth_missing', 'Please sign in to use Pico.');
+    if (isset($_GET['report'])) {
+        zuzu_handle_report();
     }
 
-    $sub = zuzu_verify_google($m[1]);
+    $token = zuzu_bearer();
+    if ($token === null) {
+        zuzu_fail(401, 'auth_missing', 'Please sign in to use Pico.');
+    }
+    $sub = zuzu_verify_google($token);
+
+    if (isset($_GET['delete'])) {
+        zuzu_handle_delete($sub);
+    }
+
     $messages = zuzu_read_messages();
     $remaining = zuzu_reserve($sub);
 

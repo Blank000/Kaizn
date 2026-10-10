@@ -35,5 +35,9 @@ bool get aiServerEnabled =>
 const String kGoogleServerClientId =
     '1056390719903-9jbv73e6dh6mhia19h5a421dsluc7sgm.apps.googleusercontent.com';
 
+/// Public privacy policy (Google Play requires one). Served by the same
+/// subdomain as the AI server: server/subdomain-root/privacy.html.
+const String kPrivacyPolicyUrl = 'https://zuzu.gateauxdamour.in/privacy';
+
 /// Shown to users; must match `daily_limit` in the server config.
 const int kAiDailyLimit = 50;

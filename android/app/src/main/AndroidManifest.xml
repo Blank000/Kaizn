@@ -5,8 +5,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Required so per-task reminders fire at the exact time the user picked,
          instead of being batched up to hours late by Doze / inexact alarms. -->
+    <!-- Not USE_EXACT_ALARM: Google Play only allows it for alarm-clock and
+         calendar apps. SCHEDULE_EXACT_ALARM is granted by the user; without
+         it reminders fall back to normal (slightly less punctual) timing. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <!-- Pico voice input (speech-to-text). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 

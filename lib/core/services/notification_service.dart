@@ -2,6 +2,7 @@ import 'dart:ui' show Color;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -226,13 +227,40 @@ class NotificationService {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
-      // Android 12+ also gates exact alarms behind a separate user grant; without
-      // this the OS silently downgrades our exactAllowWhileIdle to inexact and
-      // task reminders drift by tens of minutes.
-      await android?.requestExactAlarmsPermission();
+      // Android 12+ gates exact alarms behind a separate user grant (we no
+      // longer declare USE_EXACT_ALARM - Play reserves it for alarm-clock
+      // apps). Asking opens a system settings page, so ask ONCE; if the
+      // user declines, reminders use inexact timing (see _scheduleMode).
+      if (android != null &&
+          !(await android.canScheduleExactNotifications() ?? true)) {
+        final prefs = await SharedPreferences.getInstance();
+        if (!(prefs.getBool(_askedExactAlarmsKey) ?? false)) {
+          await prefs.setBool(_askedExactAlarmsKey, true);
+          await android.requestExactAlarmsPermission();
+        }
+      }
       final ios = _plugin.resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin>();
       await ios?.requestPermissions(alert: true, badge: true, sound: true);
+    }
+  }
+
+  static const _askedExactAlarmsKey = 'notif.askedExactAlarms';
+
+  /// alarmClock when the user allowed exact alarms; otherwise an inexact
+  /// alarm, because alarmClock without the grant throws and the reminder
+  /// would be lost altogether. Inexact can arrive some minutes late.
+  static Future<AndroidScheduleMode> _scheduleMode() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return AndroidScheduleMode.alarmClock;
+    try {
+      final exact = await android.canScheduleExactNotifications() ?? true;
+      return exact
+          ? AndroidScheduleMode.alarmClock
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+    } catch (_) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
     }
   }
 
@@ -266,7 +294,7 @@ class NotificationService {
       // when the app is idle, but they respect `alarmClock` because dropping
       // it would break literal alarm clocks. Trade-off: a small ⏰ icon
       // appears in the status bar while any alarm is queued.
-      androidScheduleMode: AndroidScheduleMode.alarmClock,
+      androidScheduleMode: await _scheduleMode(),
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: payload,
@@ -286,6 +314,9 @@ class NotificationService {
   }
 
   static Future<void> cancel(int id) => _plugin.cancel(id);
+
+  /// Every pending and shown notification. Used by "Erase all data".
+  static Future<void> cancelAll() => _plugin.cancelAll();
 
   /// Everything currently queued in the OS. Used by the in-app notification
   /// diagnostic to confirm task reminders were actually scheduled.
@@ -335,7 +366,7 @@ class NotificationService {
       'Tap to see how your week went — streaks, points & more.',
       _nextSundayAt(20, 0),
       _morningDetails,
-      androidScheduleMode: AndroidScheduleMode.alarmClock,
+      androidScheduleMode: await _scheduleMode(),
       matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zuzu Privacy Policy</title>
+<style>
+  :root { --bg:#fbfaf7; --text:#1d2321; --muted:#5b6461; --line:#e3e0d8; --accent:#03706f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121615; --text:#e8ecea; --muted:#a3ada9; --line:#2a3230; --accent:#5cc8c4; }
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.9rem; line-height:1.2; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .meta { color: var(--muted); margin: 0 0 24px; }
+  table { width:100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align:left; vertical-align:top; padding: 8px 8px 8px 0; border-bottom:1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  a { color: var(--accent); }
+  .wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+<h1>Zuzu Privacy Policy</h1>
+<p class="meta">Last updated: 9 October 2026</p>
+
+<p>Zuzu is a habit and milestone tracker. This page explains what data the
+app handles, where it goes, and how to delete it. In short: <strong>your
+habits, tasks and history stay on your phone</strong> unless you back them up
+to your own Google Drive, and the only things that leave your phone for our
+server are the AI chat messages you choose to send.</p>
+
+<h2>What stays on your phone</h2>
+<p>Your milestones, tasks, completions, points, streaks, rewards, timer
+history, Pico chat history and settings are stored in a database on your
+device. We do not receive or see them.</p>
+
+<h2>What leaves your phone, and why</h2>
+<div class="wrap">
+<table>
+<tr><th>Data</th><th>Sent to</th><th>Why</th></tr>
+<tr><td>Your Google account name, email and profile picture</td>
+    <td>Google (sign-in)</td>
+    <td>To sign you in. Zuzu shows your name in the app.</td></tr>
+<tr><td>A backup copy of your Zuzu data</td>
+    <td>Your own Google Drive, in a hidden app folder only Zuzu can read</td>
+    <td>So you can restore your data on a new phone. Only when you are
+        signed in; automatic backups run about once a day.</td></tr>
+<tr><td>Messages you send to Pico, the in-app assistant, with a summary of
+        your milestones, tasks and stats, and any photos, files or web-page
+        text you attach</td>
+    <td>Zuzu's AI server, which passes them to OpenAI. If you added your own
+        OpenAI key, they go straight to OpenAI instead.</td>
+    <td>To answer you. Nothing is sent until you press send.</td></tr>
+<tr><td>A sign-in token proving which Google account is asking</td>
+    <td>Zuzu's AI server, which checks it with Google</td>
+    <td>So only real Zuzu users can use the free AI allowance, and so it
+        can be counted per person.</td></tr>
+<tr><td>A Pico reply you report, and the reason you give</td>
+    <td>Zuzu's AI server</td>
+    <td>So we can review it and improve the assistant.</td></tr>
+<tr><td>Calendar events (only if you turn on Google Calendar in Settings)</td>
+    <td>Read from and written to your Google Calendar on your phone</td>
+    <td>To show your calendar beside your tasks.</td></tr>
+</table>
+</div>
+<p>Web pages you link in Pico are downloaded by your phone, not by our
+server. Voice input uses your phone's own speech recognition; the audio is
+not sent to Zuzu or OpenAI.</p>
+
+<h2>What Zuzu's AI server keeps</h2>
+<ul>
+  <li><strong>Message content: not stored or logged.</strong> It is passed to
+      OpenAI and the reply is passed back.</li>
+  <li>Your Google account's ID number and how many messages you sent each day,
+      to enforce the daily limit.</li>
+  <li>A fingerprint (hash) of recent sign-in tokens, so Google is not asked
+      on every message. These expire within about an hour.</li>
+  <li>Replies you report, kept for up to 180 days.</li>
+</ul>
+<p>OpenAI processes messages under its
+<a href="https://openai.com/policies/api-data-usage-policies">API data
+policy</a>: API data is not used to train its models by default and is kept
+for up to 30 days for abuse monitoring.</p>
+
+<h2>What we don't do</h2>
+<ul>
+  <li>No ads, and no advertising or analytics trackers.</li>
+  <li>We don't sell or share your data with anyone beyond the services above.</li>
+  <li>No location, contacts or other phone data is collected.</li>
+</ul>
+
+<h2 id="delete">Deleting your data</h2>
+<p>In the app, open <strong>Settings → Erase all data</strong>. This deletes
+everything on your phone, your Drive backup, and everything Zuzu's AI server
+holds about your Google account, then signs you out. It cannot be undone.</p>
+<p>If you no longer have the app, email us from your Google account's address
+at <a href="mailto:CONTACT_EMAIL">CONTACT_EMAIL</a> and we will delete what
+the server holds within 30 days. You can also remove Zuzu's Drive backup
+yourself: Google Drive → Settings → Manage apps → Zuzu → Delete hidden app
+data.</p>
+
+<h2>Children</h2>
+<p>Zuzu is not directed at children under 13 and does not knowingly collect
+data from them.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the date at the top changes too. Significant
+changes will be mentioned in the app.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:CONTACT_EMAIL">CONTACT_EMAIL</a></p>
+</main>
+</body>
+</html>

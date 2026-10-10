@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_prefs.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/constants/ai_config.dart';
 import '../ai/ai_bridge.dart';
 import '../ai/ai_client.dart';
+import 'erase_data.dart';
 import '../../core/services/backup_service.dart';
 import '../../core/services/calendar_service.dart';
 import '../../core/services/cosmetics_service.dart';
@@ -373,12 +375,97 @@ class SettingsScreen extends ConsumerWidget {
                     color: context.appTextSecondary),
                 onTap: () => _showAbout(context),
               ),
+              _Divider(),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: Text('Privacy policy', style: AppTypography.body),
+                trailing: Icon(Icons.open_in_new_rounded,
+                    size: 18, color: context.appTextSecondary),
+                onTap: () => launchUrl(Uri.parse(kPrivacyPolicyUrl),
+                    mode: LaunchMode.externalApplication),
+              ),
+              _Divider(),
+              ListTile(
+                leading: Icon(Icons.delete_forever_outlined,
+                    color: AppColors.missedRed),
+                title: Text('Erase all data',
+                    style: AppTypography.body
+                        .copyWith(color: AppColors.missedRed)),
+                subtitle: Text(
+                  'Delete everything on this phone, your Drive backup and '
+                  'what the AI server holds',
+                  style: AppTypography.caption
+                      .copyWith(color: context.appTextSecondary),
+                ),
+                onTap: () => _confirmErase(context, ref),
+              ),
             ],
           ),
           const SizedBox(height: 24),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmErase(BuildContext context, WidgetRef ref) async {
+    final typed = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => StatefulBuilder(
+        builder: (dctx, setDialogState) => AlertDialog(
+          title: const Text('Erase all data?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This permanently deletes your milestones, tasks, history, '
+                'points, rewards and Pico chats on this phone, your Google '
+                "Drive backup, and your usage record on Zuzu's AI server. "
+                'Then it signs you out.\n\nIt cannot be undone.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: typed,
+                autofocus: true,
+                onChanged: (_) => setDialogState(() {}),
+                decoration:
+                    const InputDecoration(labelText: 'Type ERASE to confirm'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dctx).pop(false),
+              child: const Text('CANCEL'),
+            ),
+            TextButton(
+              onPressed: typed.text.trim().toUpperCase() == 'ERASE'
+                  ? () => Navigator.of(dctx).pop(true)
+                  : null,
+              style:
+                  TextButton.styleFrom(foregroundColor: AppColors.missedRed),
+              child: const Text('ERASE EVERYTHING'),
+            ),
+          ],
+        ),
+      ),
+    );
+    typed.dispose();
+    if (ok != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+        const SnackBar(content: Text('Erasing…'), duration: Duration(seconds: 30)));
+    final problem =
+        await EraseData.eraseEverything(ref.read(databaseProvider));
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      content: Text(problem == null
+          ? 'Everything is erased.'
+          : '$problem Nothing was erased - check your connection and try again.'),
+    ));
+    // On success the sign-out sends the router back to the login screen.
   }
 
   Future<void> _manageAiKey(

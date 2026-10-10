@@ -10,10 +10,12 @@ Header set X-Robots-Tag "noindex, nofollow"
 # Hostinger puts subdomain folders inside the main site's public_html, so a
 # WordPress parent's rules would otherwise apply here. Turning the rewrite
 # engine on in this folder stops the parent's rules being inherited, and
-# everything except the API and robots.txt answers 404.
+# everything except the API, the privacy policy and robots.txt answers 404.
+# /privacy serves privacy.html (Google Play needs a public policy URL).
 <IfModule mod_rewrite.c>
 RewriteEngine On
-RewriteRule !^(api/|robots\.txt$) - [R=404,L]
+RewriteRule ^privacy/?$ privacy.html [L]
+RewriteRule !^(api/|privacy\.html$|robots\.txt$) - [R=404,L]
 </IfModule>
 
 # A WordPress parent may also prepend its Wordfence firewall to every PHP

@@ -276,6 +276,16 @@ class AppDatabase extends _$AppDatabase {
     if (rows.isEmpty) await m.createTable(table);
   }
 
+  /// Deletes every row in every table, leaving the schema in place. For the
+  /// user's own "Erase all data" in Settings - never called by a migration.
+  Future<void> eraseAllRows() => transaction(() async {
+        // Children before parents, as in the original wipe migration.
+        for (final table in allTables.toList().reversed) {
+          await delete(table).go();
+        }
+        await _initStreakSingleton();
+      });
+
   Future<void> _initStreakSingleton() async {
     await into(streakTable).insert(
       StreakTableCompanion.insert(id: const Value(1)),

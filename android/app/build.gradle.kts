@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,9 +7,27 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Google Play upload key. android/key.properties (gitignored) points at a
+// keystore kept OUTSIDE the repo. Losing it means asking Google for an
+// upload-key reset, so it must be backed up.
+val keyProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+// Only Play bundles (`flutter build appbundle`) use the upload key. APKs
+// shared by hand stay on the debug key, so everyone already testing them
+// can keep updating in place - a phone refuses an update signed with a
+// different key unless the old app (and its data) is removed first.
+val buildingBundle = gradle.startParameter.taskNames.any {
+    it.contains("bundle", ignoreCase = true)
+}
+
 android {
     namespace = "com.alokraj.habit_reward_tracker"
-    compileSdk = flutter.compileSdkVersion
+    // Google Play requires new apps to target Android 16 (API 36) since
+    // 31 Aug 2026. Flutter 3.32 defaults to 35.
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -27,7 +47,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // workmanager (nightly Drive backup) needs Android 6.0+.
         minSdk = maxOf(flutter.minSdkVersion, 23)
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -41,11 +61,26 @@ android {
         }
     }
 
+    signingConfigs {
+        if (keyProperties.containsKey("storeFile")) {
+            create("upload") {
+                storeFile = file(keyProperties.getProperty("storeFile"))
+                storePassword = keyProperties.getProperty("storePassword")
+                keyAlias = keyProperties.getProperty("keyAlias")
+                keyPassword = keyProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (buildingBundle) {
+                signingConfigs.findByName("upload")
+                    ?: throw GradleException(
+                        "Play bundles need android/key.properties (the upload key).")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

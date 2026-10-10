@@ -155,5 +155,26 @@ check('a 10 MB PDF is accepted (no regex backtrack limit)',
 check('refused attachments did not use up allowance', $s === 200 && $j['remaining'] === 0,
     json_encode($j));
 
+// Reporting a reply (Play's AI-content policy) and deleting your data.
+[$s, $j] = call('POST', "$base?report", null,
+    ['reason' => 'Offensive', 'reply' => 'a bad reply']);
+check('report works without signing in', $s === 200 && $j['ok'] === true);
+[$s] = call('POST', "$base?report", 'good-erin',
+    ['reason' => 'Wrong', 'reply' => 'another reply']);
+check('report works signed in', $s === 200);
+[$s] = call('POST', "$base?report", null, ['reason' => 'x', 'reply' => '']);
+check('empty report refused', $s === 400);
+[$s] = call('POST', "$base?report", 'garbage', ['reason' => 'x', 'reply' => 'y']);
+check('report with a forged sign-in refused', $s === 401);
+
+[$s] = call('POST', "$base?delete", null, []);
+check('delete needs sign-in', $s === 401);
+call('POST', $base, 'good-erin', msg('use one'));
+[$s, $j] = call('POST', "$base?delete", 'good-erin', []);
+check('delete succeeds', $s === 200 && $j['ok'] === true);
+[$s, $j] = call('POST', $base, 'good-erin', msg('after delete'));
+check('deleting resets that person\'s usage', $s === 200 && $j['remaining'] === 2,
+    json_encode($j));
+
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);
